@@ -6,23 +6,23 @@
 
 상태는 `Pending`(미결정), `Confirmed`(사용자 선택과 날짜·근거 기록), `Deferred`(사용자가 후속 단계로 보류)로 관리한다. 응답이 없었다는 이유로 Confirmed/Deferred로 바꾸지 않는다. Deferred도 해당 기능의 구현 승인은 아니다.
 
-사용자는 예를 들어 `UC-001 A, UC-002 A, UC-003 A`처럼 선택할 수 있다. 조건부 선택·다른 대안도 그대로 기록한다. UC-007은 수치·corpus·예산 입력이 함께 필요하다. 결정 후 영향받는 design/architecture/plan을 함께 갱신해야 한다.
+사용자는 예를 들어 `UC-001 A, UC-002 A, UC-003 A`처럼 선택할 수 있다. 조건부 선택·다른 대안도 그대로 기록한다. UC-007은 수치·corpus·예산 입력이 함께 필요하다. 이번 인터뷰에서는 user-confirm.md만 갱신한다. 영향받는 design/architecture/plan 및 UC-011의 Web UI 시안은 별도 세션에서 동기화한다.
 
 ## 결정 요약
 
 | ID | 주제 | 추천 | 상태 | 차단 범위 |
 |---|---|---|---|---|
-| UC-001 | 제품 방향과 개발 순서 | 측정·기존 도구 비교 후 엔진 여부 결정 | Pending | 비교 결과 이후 구현 경로 |
-| UC-002 | 첫 지원 언어·OS·VCS | C# + Windows + Git, UE5/Perforce 후속 | Pending | 제품·corpus 지원 범위 |
-| UC-003 | Core 언어·배포 | 단일 .NET Core/CLI PoC | Pending | scaffold·package·배포 |
-| UC-004 | 데이터 수명·저장·동시 세션 | 영속 해시 cache + 세션 분리, JSON `.cv` PoC | Pending | store·update·GC |
-| UC-005 | 리뷰 baseline | 명시한 revision/CL과 target | Pending | diff·review |
-| UC-006 | 심볼 깊이·검색·문맥 | L0/L1 전체 접근성, body lazy resolve | Pending | 검색·추출·resolve |
-| UC-007 | 데이터·실험·진행 기준 | 사전 등록한 다조건 paired 실험 | Pending | 실제 로그 분석·모델 실험·Go/No-Go |
-| UC-008 | 프로젝트 실행 신뢰 | syntax-only 기본, semantic load는 명시 trust | Pending | project loader·보안 정책 |
-| UC-009 | Claude 연동 방식 | PoC CLI, 검증 후 MCP stdio + 얇은 훅 | Pending | 플러그인·설치·자동화 |
-| UC-010 | 잘린 원문 추가 입력 | 현재 내용으로 진행, 추가 내용은 별도 반영 | Pending | 누락 내용을 전제한 기능만 |
-| UC-011 | 사람용 검사 화면 | 터미널 text/JSON, GUI 후속 | Pending | GUI·시안·GUI 구현 |
+| UC-001 | 제품 방향과 개발 순서 | 측정·기존 도구 비교 후 엔진 여부 결정 | Confirmed | 비교 결과 이후 구현 경로 |
+| UC-002 | 첫 지원 언어·OS·VCS | C# + Windows + Git, UE5/Perforce 후속 | Confirmed | 제품·corpus 지원 범위 |
+| UC-003 | Core 언어·배포 | 단일 .NET Core/CLI PoC | Confirmed | scaffold·package·배포 |
+| UC-004 | 데이터 수명·저장·동시 세션 | 영속 해시 cache + 세션 분리, JSON `.cv` PoC | Confirmed | store·update·GC |
+| UC-005 | 리뷰 baseline | 명시한 revision/CL과 target | Confirmed | diff·review |
+| UC-006 | 심볼 깊이·검색·문맥 | L0/L1 전체 접근성, body lazy resolve | Confirmed | 검색·추출·resolve |
+| UC-007 | 데이터·실험·진행 기준 | 사전 등록한 다조건 paired 실험 | Confirmed | 실제 로그 분석·모델 실험·Go/No-Go |
+| UC-008 | 프로젝트 실행 신뢰 | syntax-only 기본, semantic load는 명시 trust | Confirmed | project loader·보안 정책 |
+| UC-009 | Claude 연동 방식 | PoC CLI, 검증 후 MCP stdio + 얇은 훅 | Confirmed | 플러그인·설치·자동화 |
+| UC-010 | 잘린 원문 추가 입력 | 현재 내용으로 진행, 추가 내용은 별도 반영 | Confirmed | 누락 내용을 전제한 기능만 |
+| UC-011 | 사람용 검사 화면 | 터미널 text/JSON, GUI 후속 | Confirmed | GUI·시안·GUI 구현 |
 
 ## UC-001 — 제품 방향과 개발 순서
 
@@ -46,9 +46,9 @@ design의 Goals/Features, architecture 전체 경로, TASK-005 이후 작업을 
 
 ### User Decision
 
-- Status: Pending
-- 선택: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 측정 → 기존 도구 비교 → Go/No-Go → C# PoC 또는 얇은 연동.
 
 ## UC-002 — 첫 지원 범위
 
@@ -72,9 +72,9 @@ TASK-002~006의 범위와 architecture adapter·build matrix를 갱신한다. B/
 
 ### User Decision
 
-- Status: Pending
-- 선택 및 지원 OS/VCS: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A (조건부)
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 1차는 Windows + C# + Git. Perforce 지원은 선택적 후보가 아니라 필수 후속 범위이며, C#/Git 결과를 UE5/C++로 일반화하지 않는다.
 
 ## UC-003 — Core 언어와 배포
 
@@ -98,9 +98,9 @@ architecture의 Directory Structure/Build와 TASK-006~015의 예상 경로를 �
 
 ### User Decision
 
-- Status: Pending
-- 선택·실행 파일 형태·배포 대상: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 독립 엔진 구현 시 C#/.NET Core + CLI를 사용한다. UC-001의 Go/No-Go 이후 적용한다.
 
 ## UC-004 — `.cv` 저장과 수명
 
@@ -124,9 +124,9 @@ TASK-008/011/012/016, architecture Data Model/State Management/Directory Structu
 
 ### User Decision
 
-- Status: Pending
-- 선택·retention·용량·purge 범위: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 영속 content/config hash cache + 세션별 metadata 분리. PoC는 JSON manifest/JSONL `.cv` shards로 시작하며 retention·용량·GC 수치는 실측 후 확정한다.
 
 ## UC-005 — diff와 리뷰 기준점
 
@@ -150,9 +150,9 @@ TASK-014/016, architecture BaselineProvider와 design S-04. Perforce 선택 시 
 
 ### User Decision
 
-- Status: Pending
-- 선택·base/target 의미: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: C
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 명시 VCS baseline/target과 세션 시작 snapshot을 모두 지원하며 목적에 따라 선택한다.
 
 ## UC-006 — 심볼 깊이와 문맥 예산
 
@@ -176,9 +176,9 @@ TASK-007/009/010/013, schema·검색 정렬·context expansion 계약. default l
 
 ### User Decision
 
-- Status: Pending
-- 선택·필수 심볼 종류·문맥 정책: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — L0/L1 모든 접근성 선언을 인덱싱하고 원문·주석·body는 lazy resolve한다.
 
 ## UC-007 — 데이터 접근, 실험 예산과 Go/No-Go 기준
 
@@ -216,9 +216,9 @@ TASK-001은 protocol/집계 schema만 준비할 수 있고 실제 로그 접근�
 
 ### User Decision
 
-- Status: Pending
-- 선택 및 위 실행 설정: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 승인된 비식별 로그 + 공개/합성 corpus 기반 paired 실험. 반복 수·효율/품질 기준·예산은 pilot 설계/결과 후 확정한다.
 
 ## UC-008 — 프로젝트 로드와 실행 신뢰
 
@@ -242,9 +242,9 @@ TASK-006/009/012와 architecture Security/Configuration. build output/generated 
 
 ### User Decision
 
-- Status: Pending
-- 선택·신뢰 부여 위치·허용 실행/네트워크: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 기본 syntax-only, 사용자가 명시적으로 신뢰한 workspace에서만 semantic load한다.
 
 ## UC-009 — Claude 연동과 설치 범위
 
@@ -268,9 +268,9 @@ TASK-015, integration contract, package/설치 계획. 전역 설정 변경은 d
 
 ### User Decision
 
-- Status: Pending
-- 선택·global/workspace 설치 선호: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — PoC CLI를 먼저 검증한 뒤 MCP stdio + 얇은 lifecycle hook으로 Claude Code와 연동한다.
 
 ## UC-010 — 원문 말미 누락
 
@@ -293,9 +293,9 @@ A. 누락 내용을 임의로 완성하지 않는다. 현재 작성된 benchmark
 
 ### User Decision
 
-- Status: Pending
-- 선택·추가 내용: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: B
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 잘린 원문을 복구하기 전까지 누락 부분과 관련된 요구사항 확정을 보류한다.
 
 ## UC-011 — cv-inspect의 화면 형태
 
@@ -319,6 +319,6 @@ A. B/C를 선택하면 승인된 화면 범위를 바탕으로 정보 밀도 중
 
 ### User Decision
 
-- Status: Pending
-- 선택: 미정
-- 사용자 확인 근거·일자: 없음
+- Status: Confirmed
+- 선택: A+B
+- 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 터미널 text/JSON과 로컬 Web UI를 모두 제공한다. CLI는 자동화/AI 연동, Web UI는 `.cv`·심볼 관계·diff의 사람용 탐색/검사에 사용한다. IDE/데스크톱 UI는 제외한다.
