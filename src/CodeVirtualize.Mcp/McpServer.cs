@@ -124,7 +124,6 @@ public static class McpServer
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(callCts.Token);
-            timeout.CancelAfter(options.Timeout);
             var operation = Task.Run(() =>
             {
                 var delayText = Environment.GetEnvironmentVariable("CODE_VIRTUALIZE_MCP_TEST_DELAY_MS");
