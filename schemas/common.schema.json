@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/common.schema.json",
+  "title": "Code Virtualize common contracts",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "symbolId": {
+      "type": "string",
+      "pattern": "^sym_[0-9a-f]{64}$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "span": {
+      "type": "object",
+      "description": "Offsets and lengths are zero-based UTF-16 code units. Lines are one-based and inclusive.",
+      "additionalProperties": false,
+      "required": ["start", "length", "startLine", "endLine", "offsetUnit", "lineBase", "endLineInclusive"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 0 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "offsetUnit": { "const": "utf16_code_unit" },
+        "lineBase": { "const": 1 },
+        "endLineInclusive": { "const": true }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "contentHash", "span", "path", "uri"],
+      "properties": {
+        "fileId": { "$ref": "#/$defs/nonEmptyString" },
+        "contentHash": { "$ref": "#/$defs/sha256" },
+        "span": { "$ref": "#/$defs/span" },
+        "path": { "type": ["string", "null"] },
+        "uri": { "type": ["string", "null"] }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "uri": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "path": { "type": "null" },
+            "uri": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "level", "analyzedFiles", "excludedFiles", "failedFiles", "unknownFiles", "failedProjects", "limitations", "truncated"],
+      "properties": {
+        "scope": { "$ref": "#/$defs/nonEmptyString" },
+        "level": { "enum": ["complete_within_scope", "partial", "unknown"] },
+        "analyzedFiles": { "type": "integer", "minimum": 0 },
+        "excludedFiles": { "type": "integer", "minimum": 0 },
+        "failedFiles": { "type": "integer", "minimum": 0 },
+        "unknownFiles": { "type": "integer", "minimum": 0 },
+        "failedProjects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "limitations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["returnedFiles", "workspace"],
+      "properties": {
+        "returnedFiles": { "enum": ["verified", "stale", "unknown", "not_applicable"] },
+        "workspace": { "enum": ["verified", "stale", "unknown", "not_applicable"] }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "provider", "baseId", "targetId", "sessionId", "capturedAt", "inputFingerprint"],
+      "properties": {
+        "kind": { "enum": ["vcs", "session"] },
+        "provider": { "$ref": "#/$defs/nonEmptyString" },
+        "baseId": { "$ref": "#/$defs/nonEmptyString" },
+        "targetId": { "$ref": "#/$defs/nonEmptyString" },
+        "sessionId": { "type": ["string", "null"] },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "inputFingerprint": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "vcs" } } },
+          "then": { "properties": { "sessionId": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "session" } } },
+          "then": {
+            "properties": {
+              "provider": { "const": "session" },
+              "sessionId": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "sourceBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxBytes", "maxLines"],
+      "properties": {
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "maxLines": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "sourceUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "lines"],
+      "properties": {
+        "bytes": { "type": "integer", "minimum": 0 },
+        "lines": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sourceSlice": {
+      "type": "object",
+      "description": "usage.bytes counts UTF-8 bytes of content before JSON escaping; usage.lines counts logical CRLF, LF, or CR lines.",
+      "additionalProperties": false,
+      "required": ["content", "span", "budget", "usage", "truncated", "exhaustedBy"],
+      "properties": {
+        "content": { "type": "string" },
+        "span": { "$ref": "#/$defs/span" },
+        "budget": { "$ref": "#/$defs/sourceBudget" },
+        "usage": { "$ref": "#/$defs/sourceUsage" },
+        "truncated": { "type": "boolean" },
+        "exhaustedBy": { "enum": ["none", "bytes", "lines", "bytes_and_lines"] }
+      }
+    },
+    "parameterIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["typeIdentity", "refKind"],
+      "properties": {
+        "typeIdentity": { "$ref": "#/$defs/nonEmptyString" },
+        "refKind": { "enum": ["none", "ref", "out", "in", "ref_read_only"] }
+      }
+    }
+  }
+}

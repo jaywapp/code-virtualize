@@ -1,0 +1,7 @@
+*
+!.gitignore
+!run-smoke.ps1
+!run-cv-evaluation.ps1
+!CvEvaluationRunner.csproj
+!CvEvaluationRunner.cs
+!packages.lock.json

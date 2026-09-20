@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.local/schemas/benchmark-result-v1.json",
+  "title": "Code-Virtualize benchmark aggregate result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "protocolRevision",
+    "generatedAt",
+    "experimentPhase",
+    "currency",
+    "conditions",
+    "overall",
+    "dataQuality"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "protocolRevision": { "type": "string", "minLength": 1 },
+    "generatedAt": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "experimentPhase": { "enum": ["synthetic_validation", "pilot", "cv_evaluation"] },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "randomizationSeed": { "type": ["integer", "null"] },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/conditionResult" }
+    },
+    "overall": { "$ref": "#/$defs/overall" },
+    "dataQuality": { "$ref": "#/$defs/dataQuality" },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "nonNegativeNumber": { "type": "number", "minimum": 0 },
+    "nullableNonNegativeNumber": { "type": ["number", "null"], "minimum": 0 },
+    "ratio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "value"],
+      "properties": {
+        "numerator": { "$ref": "#/$defs/count" },
+        "denominator": { "$ref": "#/$defs/count" },
+        "value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "denominator": { "const": 0 } }, "required": ["denominator"] },
+          "then": { "properties": { "value": { "type": "null" } } },
+          "else": { "properties": { "value": { "type": "number" } } }
+        }
+      ]
+    },
+    "tokenTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uncachedInput", "cacheReadInput", "cacheWriteInput", "output"],
+      "properties": {
+        "uncachedInput": { "$ref": "#/$defs/count" },
+        "cacheReadInput": { "$ref": "#/$defs/count" },
+        "cacheWriteInput": { "$ref": "#/$defs/count" },
+        "output": { "$ref": "#/$defs/count" }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "tool", "setup", "total", "complete"],
+      "properties": {
+        "model": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "tool": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "setup": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "total": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "complete": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "complete": { "const": true } }, "required": ["complete"] },
+          "then": {
+            "properties": {
+              "model": { "type": "number" },
+              "tool": { "type": "number" },
+              "setup": { "type": "number" },
+              "total": { "type": "number" }
+            }
+          },
+          "else": { "properties": { "total": { "type": "null" } } }
+        }
+      ]
+    },
+    "terminalCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["succeeded", "quality_failed", "tool_failed", "timeout", "budget_stopped", "infra_failed", "cancelled", "invalid"],
+      "properties": {
+        "succeeded": { "$ref": "#/$defs/count" },
+        "quality_failed": { "$ref": "#/$defs/count" },
+        "tool_failed": { "$ref": "#/$defs/count" },
+        "timeout": { "$ref": "#/$defs/count" },
+        "budget_stopped": { "$ref": "#/$defs/count" },
+        "infra_failed": { "$ref": "#/$defs/count" },
+        "cancelled": { "$ref": "#/$defs/count" },
+        "invalid": { "$ref": "#/$defs/count" }
+      }
+    },
+    "conditionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition",
+        "cacheState",
+        "attemptedRunCount",
+        "notStartedRunCount",
+        "terminalCounts",
+        "successRate",
+        "qualityPassRate",
+        "readGrepTokenShare",
+        "fullReadRate",
+        "rereadRate",
+        "commentTokenShare",
+        "primaryToolUseRate",
+        "unknownFullReadCount",
+        "tokens",
+        "cacheAwareCost"
+      ],
+      "properties": {
+        "condition": { "enum": ["A", "B", "C", "D", "E"] },
+        "cacheState": { "enum": ["not_applicable", "cold", "warm", "long"] },
+        "attemptedRunCount": { "$ref": "#/$defs/count" },
+        "notStartedRunCount": { "$ref": "#/$defs/count" },
+        "terminalCounts": { "$ref": "#/$defs/terminalCounts" },
+        "successRate": { "$ref": "#/$defs/ratio" },
+        "qualityPassRate": { "$ref": "#/$defs/ratio" },
+        "readGrepTokenShare": { "$ref": "#/$defs/ratio" },
+        "fullReadRate": { "$ref": "#/$defs/ratio" },
+        "rereadRate": { "$ref": "#/$defs/ratio" },
+        "commentTokenShare": { "$ref": "#/$defs/ratio" },
+        "primaryToolUseRate": { "$ref": "#/$defs/ratio" },
+        "unknownFullReadCount": { "$ref": "#/$defs/count" },
+        "tokens": { "$ref": "#/$defs/tokenTotals" },
+        "cacheAwareCost": { "$ref": "#/$defs/cost" }
+      }
+    },
+    "overall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plannedRunCount", "attemptedRunCount", "notStartedRunCount", "completePairCount", "incompletePairCount"],
+      "properties": {
+        "plannedRunCount": { "$ref": "#/$defs/count" },
+        "attemptedRunCount": { "$ref": "#/$defs/count" },
+        "notStartedRunCount": { "$ref": "#/$defs/count" },
+        "completePairCount": { "$ref": "#/$defs/count" },
+        "incompletePairCount": { "$ref": "#/$defs/count" }
+      }
+    },
+    "dataQuality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duplicateEventCount",
+        "conflictingDuplicateCount",
+        "unknownEventCount",
+        "missingRequiredFieldCount",
+        "invalidUsageCount",
+        "excludedMetricEventCount",
+        "invalidRunCount"
+      ],
+      "properties": {
+        "duplicateEventCount": { "$ref": "#/$defs/count" },
+        "conflictingDuplicateCount": { "$ref": "#/$defs/count" },
+        "unknownEventCount": { "$ref": "#/$defs/count" },
+        "missingRequiredFieldCount": { "$ref": "#/$defs/count" },
+        "invalidUsageCount": { "$ref": "#/$defs/count" },
+        "excludedMetricEventCount": { "$ref": "#/$defs/count" },
+        "invalidRunCount": { "$ref": "#/$defs/count" }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+.code-virtualize/
+raw-benchmarks/
+benchmarks/raw/
+*.raw-benchmark.json

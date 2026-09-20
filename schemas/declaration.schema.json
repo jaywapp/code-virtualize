@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/declaration.schema.json",
+  "title": "Code Virtualize declaration contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["symbolId", "location", "documentKind", "schema", "schemaVersion"],
+  "properties": {
+    "symbolId": { "$ref": "common.schema.json#/$defs/symbolId" },
+    "location": { "$ref": "common.schema.json#/$defs/location" },
+    "documentKind": { "enum": ["source", "generated"] },
+    "schema": { "const": "code-virtualize/declaration" },
+    "schemaVersion": { "const": 1 }
+  }
+}

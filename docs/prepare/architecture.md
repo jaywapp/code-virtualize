@@ -2,8 +2,7 @@
 
 ## 상태와 적용 조건
 
-2026-09-20에 `b16df53`의 11개 사용자 결정을 반영했다. **측정·기존 도구 비교 후 엔진을 선택할 경우 C#/.NET PoC**로 진행한다. cache·L0/L1·trust·두 baseline·CLI+Web UI는 확정됐다. 실험 수치·retention·최종 UI는 [user-confirm.md](user-confirm.md)의 FUP 목록을 따른다. 얇은 연동을 선택하면 Core 경로를 축소하되 Perforce·Web UI 요구를 조용히 삭제하지 않는다.
-
+2026-09-20에 `b16df53`의 11개 사용자 결정, [ADR 001](../decisions/001-product-path.md), [ADR 002](../decisions/002-validation-outcome.md), [ADR 003](../decisions/003-next-step.md)을 반영했다. TASK-006~016의 **독립 C#/.NET engineering prototype**과 재현 가능한 증거는 보존한다. TASK-016은 품질·안전성을 통과했지만 동결된 source-byte 효율 gate에 실패해 최종 **No-Go**다. 신규 제품화는 중단하며 Web UI·Perforce·자동 GC는 요구를 보존한 `Blocked` 상태다. 재개 조건과 남은 FUP는 [user-confirm.md](user-confirm.md)를 따른다.
 ## Architecture Overview
 
 ```mermaid
@@ -56,8 +55,22 @@ Roslyn Workspaces는 solution/project/document 모델과 syntax tree·semantic m
 | Aider repo-map | 토큰 예산 안의 코드 구조 지도 | 대략적 맥락 제공만으로 원문 읽기량이 충분히 줄어드는가? |
 | grep + 범위 읽기 | 현재 사용 도구로 구성할 실험 조건 | 낭비가 도구 부재보다 지시·사용 습관 때문인가? |
 
-근거: [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/), [Serena](https://github.com/oraios/serena), [Aider repo-map](https://aider.chat/docs/repomap.html). 2026-09-19 확인. 기존 도구에 특정 기능이 절대로 없다는 주장은 하지 않는다. 실제 버전별 비교표와 성능 결과는 TASK-003/004의 산출물이다.
+근거: [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/), [Serena](https://github.com/oraios/serena), [Aider repo-map](https://aider.chat/docs/repomap.html). 2026-09-19 확인. 기존 도구에 특정 기능이 절대로 없다는 주장은 하지 않는다. 합성 smoke에서는 C# LSP와 Serena 실행 환경이 없어 C/D가 unavailable이었으므로 독립 엔진의 우위를 비교하지 못했다.
 
+독립 엔진 선택은 제품 가치 입증이 아니라 engineering prototype 구현 승인이었다. TASK-016은 [ADR 001](../decisions/001-product-path.md)의 동결 기준으로 실행됐고 E 품질 `6/6`, recall `27/27`, Critical `0`을 달성했지만 source bytes는 B 대비 NAV `9.75% 감소`, DIFF `1,618.9% 증가`로 두 task 모두 `20% 이상 감소` 기준에 실패했다. 실제 model token은 미측정이므로 token 효율은 별도로 `inconclusive`이며 source bytes/lines로 대체하지 않는다.
+## 경로와 재평가 계약
+
+[ADR 003](../decisions/003-next-step.md)은 TASK-016 **No-Go**를 최종 적용한다. 현재 architecture의 Core·CLI·MCP·Claude adapter는 검증 가능한 기술 prototype으로 남고, 신규 독립 엔진 제품화는 중단한다.
+
+| 대상 | 현재 처리 | 재개 조건 |
+|---|---|---|
+| Core·CLI·MCP prototype | TASK-006~016 산출물과 benchmark artifact 보존 | 유지보수 목적을 벗어난 제품 작업은 새 결정 필요 |
+| TASK-018 Web UI | `Blocked`; 얇은 연동은 사람 중심 UI·로컬 Web 보안/API gap을 충족하지 않음 | 대표 corpus·실제 token·source-byte 계약 개선 및 새 ADR, FUP-006 |
+| TASK-019 Perforce | `Blocked`; 얇은 연동은 CL별 bytes/baseline·mapping gap을 충족하지 않음 | 대표 corpus·실제 token·source-byte 계약 개선 및 새 ADR, FUP-007 |
+| TASK-020 원문 복구 | `Blocked`; 원문을 추정하지 않음 | FUP-005 |
+| TASK-021 retention/GC | `Blocked`; 자동 GC 비활성, no-delete | FUP-004의 실측 수치·명시적 승인; 제품화 재개는 별도 결정 |
+
+실제 승인 로그와 실제 model input/output/cache token·비용은 FUP-001 입력과 측정 전까지 미완이다. 잘린 원문은 FUP-005 전까지 추정하지 않으며 session source, immutable base snapshot과 pin된 generation을 보존한다. 데이터 삭제·설치·게시를 경로 전환의 부수 동작으로 수행하지 않는다.
 ## System Components / Component Responsibilities
 
 | 컴포넌트 | 책임 | 경계 |
@@ -311,7 +324,7 @@ PoC는 로컬 산출물로 배포한다. 전역 설치·PATH 변경·agent 설�
 
 | 위험 | 검증/대응 | 결정 또는 작업 |
 |---|---|---|
-| 기존 도구로 가치 대부분 충족 | 같은 corpus·모델·권한으로 비교 | UC-001, TASK-004/005 |
+| 기존 도구로 가치 대부분 충족 | C/D unavailable을 우위로 해석하지 않고 TASK-016에서 stronger available baseline과 비교 | UC-001, ADR 001, TASK-016 |
 | semantic load 비용이 순이익 상쇄 | cold/warm/long 분리 | UC-007, TASK-016 |
 | 정적 결과의 조용한 누락 | coverage 계약, independent ground truth | TASK-012/013 |
 | 해시 cache key가 semantic 의존성 누락 | project/references/config invalidation | TASK-008/011 |
@@ -321,7 +334,7 @@ PoC는 로컬 산출물로 배포한다. 전역 설치·PATH 변경·agent 설�
 
 ## 조사 범위의 한계
 
-공식 문서는 기능 존재와 선택 이유를 확인하는 용도로 읽었다. 실제 benchmark, Roslyn 대형 솔루션 로드, Claude hook/MCP 호환성 실험, Perforce·UE5 검증은 수행하지 않았다. 원안의 가격·도구명·성능 추정은 현재 환경의 보장으로 승격하지 않았다. 실제 구현 시 지정 버전의 공식 문서와 capability를 다시 확인한다.
+공식 문서는 기능 존재와 선택 이유를 확인하는 용도로 읽었다. TASK-016 합성 small C# corpus에서는 실제 Core·CLI·MCP 경로를 검증했지만, 실제 승인 로그·model token/비용, medium/large corpus, C/D semantic 비교군, Perforce·UE5는 검증하지 않았다. 실제 model token 효율은 `inconclusive`이고 source-byte 결과와 분리한다. 현재 No-Go를 미측정 범위의 성능 결론으로 확장하지 않으며 재개 시 지정 버전의 공식 문서와 capability를 다시 확인한다.
 
 ## VCS / Session baseline 계약
 
@@ -341,7 +354,7 @@ snapshot은 민감한 원문을 포함하므로 session 접근 범위·수명에
 
 ## Perforce 필수 후속 계약
 
-첫 지원은 Windows/C#/Git이지만 Perforce는 필수 후속이다. 얇은 연동 경로에서도 adapter로 요구를 충족하거나 사용자와 범위를 다시 결정한다.
+첫 지원 Windows/C#/Git prototype에서 Perforce 요구는 아직 충족되지 않았다. TASK-019는 No-Go에 따라 `Blocked`이며, 현재 MCP/Claude 연동은 CL별 source/baseline 계약을 대신하지 않는다. 아래 계약은 폐기하지 않고 FUP-007과 공통 제품화 재개 조건이 모두 충족될 때 구현한다.
 
 - `IBaselineProvider` 구현에서 server/client/depot mapping, case handling, revision, digest를 관리한다.
 - submitted/shelved/pending CL의 base와 target bytes를 각각 정의한다. pending은 로컬 unshelved 변경과 서버 상태의 차이를 표시한다.
@@ -353,9 +366,9 @@ snapshot은 민감한 원문을 포함하므로 session 접근 범위·수명에
 
 ## Local Web UI / API
 
-UC-011 A+B의 Web UI는 읽기 중심 로컬 검사 도구다. 검색, snapshot metadata, source/remark, 관계 후보, VCS/Session diff를 제공한다. [시안 3종](samples/index.html)은 합성 prototype이며 실제 engine/API 연결은 이후 제품 작업이다.
+UC-011 A+B의 Web UI는 읽기 중심 로컬 검사 도구다. 검색, snapshot metadata, source/remark, 관계 후보, VCS/Session diff를 제공해야 한다. [시안 3종](samples/index.html)은 합성 prototype이며 현재 MCP/Claude 연동은 이 화면·로컬 API·접근 경계를 충족하지 않는다.
 
-추천 host는 `CodeVirtualize.Web`의 .NET loopback host다. frontend는 FUP-006에서 결정하며 static prototype이 최종 framework 선택을 대신하지 않는다.
+No-Go에 따라 `CodeVirtualize.Web` 구현은 TASK-018 `Blocked`다. Web UI 요구와 아래 API 계약은 유지하며, 공통 제품화 재개 조건과 FUP-006의 최종 방향·frontend stack이 모두 확정된 뒤 새 결정으로 재개한다. static prototype이 최종 framework 선택이나 실제 engine 연결을 대신하지 않는다.
 
 | 요청 계약(제안) | Core 매핑 | 반환·제약 |
 |---|---|---|

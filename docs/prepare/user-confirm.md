@@ -325,23 +325,39 @@ A. B/C를 선택하면 승인된 화면 범위를 바탕으로 정보 밀도 중
 
 ## 후속 입력과 실행 조건
 
-2026-09-20 동기화: 위 11개 결정은 모두 Confirmed이며 다시 선택할 필요가 없다. 아래 Pending은 이미 선택한 방향을 실행하기 위한 구체 입력 또는 결과 기반 판단이다. 미입력 상태를 승인으로 바꾸지 않으며 해당 부분 외의 준비 작업은 계속할 수 있다.
+2026-09-20 동기화: 위 11개 결정은 모두 Confirmed이며 다시 선택할 필요가 없다. 아래 표는 이미 선택한 방향을 실행하기 위한 구체 입력 또는 결과 기반 판단이다. 합성 smoke 완료와 실제 승인 로그·모델 비용 평가를 구분하며, 미입력 상태를 승인으로 바꾸지 않는다.
 
 | ID | 상태 | 필요한 정보/근거 | 영향 TASK |
 |---|---|---|---|
-| FUP-001 | Pending | pilot용 실제 로그 경로·기간·필드, repo/commit, 모델, 횟수·비용/시간 상한·공유 범위. 실제 읽기·실행 전 지정 | TASK-004 |
-| FUP-002 | Pending | pilot 설계/결과 후 본 실험 반복 수·품질 허용 저하·최소 효율 차이·예산 확정. 본 실험 전에 동결 | TASK-005, TASK-016 |
-| FUP-003 | Pending | 기존 도구 비교 결과에 따른 엔진/얇은 연동/중단 판단 | TASK-005 및 모든 제품 구현 |
+| FUP-001 | Partial | 합성 fixture smoke는 2026-09-20 완료. 실제 승인 로그 경로·기간·필드와 실제 모델 token/비용 평가는 미완이며 별도 지정 전 실행하지 않음 | TASK-004 합성 범위 완료; 실제 데이터 평가 |
+| FUP-002 | Complete / Frozen — 2026-09-20 | 품질 저하 0, Critical 0, task·조건별 최소 3회, seed `20260920`, 20% 효율 후보, 유료비용 0, 30분 및 자원 상한. 아래 동결 표와 ADR 001 적용 | TASK-005, TASK-016 |
+| FUP-003 | Complete — 2026-09-20 | 독립 C#/.NET engineering prototype 구현은 완료. TASK-016은 source-byte gate 실패로 최종 No-Go이며 기술 artifact 보존·제품화 자동 진행 중단 | TASK-005~017 완료; TASK-018/019/021 재개 조건부 Blocked |
 | FUP-004 | Pending | 실측에 근거한 retention·용량·GC 수치. 초기에는 자동 파괴적 GC 비활성 | TASK-021 |
 | FUP-005 | Pending | 작성자가 보완한 잘린 원문의 정확한 내용과 출처 | TASK-020, 누락 내용을 전제하는 요구 |
 | FUP-006 | Pending | 시안 3종 중 최종 방향과 frontend stack. CLI+Web 제공 자체는 재논의하지 않음 | TASK-018 |
 | FUP-007 | Pending | Perforce submitted/shelved/pending CL별 base/target 계약과 실제 server/client/CL·허용 read-only 명령 | TASK-019의 실서버 연동 |
 
+### FUP-002 동결 수치
+
+| 항목 | 동결 값 |
+|---|---|
+| 품질 | 독립 fixture 기준 stronger available baseline 대비 허용 저하 `0` |
+| 안전성 | stale 원문 오반환·조용한 partial/coverage 누락 Critical `0` |
+| 반복·순서 | task·조건별 최소 `3회`, 고정 seed `20260920` |
+| 효율 후보 | 품질 통과 stronger available baseline 대비 paired 중앙값 source bytes 또는 실제 input token `20% 이상` 감소 |
+| token 판정 | 실제 input token 미측정이면 token 이득 주장 금지, `inconclusive` |
+| 작은 fixture latency | cold build `60초`, warm query `2초`, incremental update `5초` 이하 |
+| 작은 fixture memory | engine+harness 자식 프로세스 peak working set 합계 `1 GiB` 이하 |
+| 예산 | 외부 유료비용 `0`, fixture 검증·전 조건·집계를 포함한 로컬 wall time `30분` 이하 |
+
+선정·측정 규칙과 상한의 이유는 [ADR 001](../decisions/001-product-path.md)을 따른다. unavailable인 C/D를 0 비용·0 읽기로 대체하지 않으며 실제 승인 로그·실제 모델 비용 평가는 FUP-001의 미완 범위다.
+
 FUP-005 확인: 저장소 원안과 로컬 위키 원본을 2026-09-20 확인했으며 둘 다 `benchmark task/g`에서 끝난다. 복구됐다고 간주하지 않는다. 누락과 무관하게 명시된 요구·시안·프로토콜 설계는 진행한다.
 
 ### 동기화 기록
 
-- 반영 기준: 사용자 인터뷰 기록 커밋 `b16df53`.
-- 이번 작업에서 11개 `User Decision`의 선택·근거·날짜는 변경하지 않았다.
+- 반영 기준: 사용자 인터뷰 기록 커밋 `b16df53`과 2026-09-20 전체 계획 구현 지시.
+- 이번 작업에서 위 11개 `User Decision` 블록의 선택·근거·날짜와 본문은 변경하지 않았다. FUP 표·동결 수치·동기화 기록만 갱신했다.
+- 제품 경로 결정: [ADR 001](../decisions/001-product-path.md)의 prototype 승인, [ADR 002](../decisions/002-validation-outcome.md)의 본 실험 No-Go, [ADR 003](../decisions/003-next-step.md)의 prototype 보존·제품화 자동 진행 중단을 순서대로 적용한다.
 - 최신 적용 문서: [design.md](design.md), [architecture.md](architecture.md), [plan.md](plan.md).
 - UI 비교 자료: [시안 목록](samples/index.html). 시안의 데이터와 동작은 합성이며 제품 구현 결과가 아니다.

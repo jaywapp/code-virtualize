@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore CodeVirtualize.sln --locked-mode
+      - run: dotnet build CodeVirtualize.sln --no-restore --configuration Release
+      - run: dotnet test CodeVirtualize.sln --no-build --configuration Release
+      - run: dotnet run --project tests/Core.Tests/Core.Tests.csproj --no-build --configuration Release
+      - run: dotnet run --project tests/CSharp.Tests/CSharp.Tests.csproj --no-build --configuration Release
+      - run: dotnet run --project tests/Cli.Tests/Cli.Tests.csproj --no-build --configuration Release
+      - run: dotnet run --project tests/Integration.Tests/Integration.Tests.csproj --no-build --configuration Release
+      - run: dotnet run --project src/CodeVirtualize.Cli/CodeVirtualize.Cli.csproj --no-build --configuration Release -- --help
+
