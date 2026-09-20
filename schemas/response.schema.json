@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/response.schema.json",
+  "title": "Code Virtualize CLI response contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requestId", "generationId", "status", "freshness", "coverage", "results", "truncated", "nextCursor", "fallback", "repair", "errors", "source", "baseline", "schema", "schemaVersion"],
+  "properties": {
+    "requestId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "generationId": { "type": ["string", "null"] },
+    "status": { "enum": ["ok", "partial", "not_found", "error"] },
+    "freshness": { "$ref": "common.schema.json#/$defs/freshness" },
+    "coverage": { "$ref": "common.schema.json#/$defs/coverage" },
+    "results": { "type": "array", "items": true },
+    "truncated": {
+      "type": "boolean",
+      "description": "Truncation is independent of freshness and coverage; a truncated response uses partial status."
+    },
+    "nextCursor": { "type": ["string", "null"] },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempted", "reason"],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "repair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": { "enum": ["not_requested", "not_needed", "succeeded", "failed"] },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/error" } },
+    "source": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/sourceSlice" },
+        { "type": "null" }
+      ]
+    },
+    "baseline": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/baseline" },
+        { "type": "null" }
+      ]
+    },
+    "schema": { "const": "code-virtualize/response" },
+    "schemaVersion": { "const": 1 }
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable", "details"],
+      "properties": {
+        "code": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "message": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "retryable": { "type": "boolean" },
+        "details": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/reference.schema.json",
+  "title": "Code Virtualize reference contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["targetSymbolId", "sourceSymbolId", "location", "kind", "provenance", "analysisKey", "coverage", "limitations", "schema", "schemaVersion"],
+  "properties": {
+    "targetSymbolId": { "$ref": "common.schema.json#/$defs/symbolId" },
+    "sourceSymbolId": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/symbolId" },
+        { "type": "null" }
+      ]
+    },
+    "location": { "$ref": "common.schema.json#/$defs/location" },
+    "kind": { "enum": ["static", "lexical_candidate"] },
+    "provenance": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "analysisKey": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "coverage": { "$ref": "common.schema.json#/$defs/coverage" },
+    "limitations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" } },
+    "schema": { "const": "code-virtualize/reference" },
+    "schemaVersion": { "const": 1 }
+  }
+}

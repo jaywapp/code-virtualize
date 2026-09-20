@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/manifest.schema.json",
+  "title": "Code Virtualize generation manifest contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generationId", "workspaceKey", "analysisKey", "createdAt", "adapterVersion", "inputFingerprint", "state", "files", "projects", "shards", "coverage", "schema", "schemaVersion"],
+  "properties": {
+    "generationId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "workspaceKey": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "analysisKey": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "adapterVersion": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "inputFingerprint": { "$ref": "common.schema.json#/$defs/sha256" },
+    "state": { "enum": ["valid", "partial", "failed"] },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "projects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/project" }
+    },
+    "shards": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/shard" }
+    },
+    "coverage": { "$ref": "common.schema.json#/$defs/coverage" },
+    "schema": { "const": "code-virtualize/manifest" },
+    "schemaVersion": { "const": 1 }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "path", "contentHash", "byteLength", "encoding", "newline", "projectIds"],
+      "properties": {
+        "fileId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "path": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "contentHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "encoding": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "newline": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "projectIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectId", "targetFramework", "configuration", "defines", "referencesFingerprint", "loadStatus", "analysisLevel", "limitations"],
+      "properties": {
+        "projectId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "targetFramework": { "type": ["string", "null"] },
+        "configuration": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "defines": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" } },
+        "referencesFingerprint": { "$ref": "common.schema.json#/$defs/sha256" },
+        "loadStatus": { "enum": ["analyzed", "excluded", "failed", "unknown"] },
+        "analysisLevel": { "enum": ["syntax_only", "semantic", "unknown"] },
+        "limitations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" } }
+      }
+    },
+    "shard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "contentHash", "byteLength", "recordCount"],
+      "properties": {
+        "kind": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "path": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "contentHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "recordCount": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

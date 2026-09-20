@@ -4,15 +4,15 @@
 
 - 작성일: 2026-09-19. 사용자 결정 반영: 2026-09-20.
 - 분석 기준: `29374c6f969231d37937328005ee017c985f4d0f`의 `docs/ideas/` 전체 3개 문서.
-- 상태: `b16df53`의 사용자 인터뷰 결정 반영본. 확정 선택과 후속 입력을 구분한다. 기술 세부 제안·UI 최종안·실험 수치는 아직 사용자 승인으로 간주하지 않는다.
+- 상태: `b16df53`의 사용자 인터뷰 결정과 2026-09-20의 [독립 .NET 엔진 경로 결정](../decisions/001-product-path.md)을 반영했다. 확정 선택과 미완 후속 입력을 구분한다.
 - 읽는 순서: 본 문서 → [architecture.md](architecture.md) → [user-confirm.md](user-confirm.md) → [plan.md](plan.md).
-- 이번 산출물은 기획·설계·검증 계획이다. 엔진, 플러그인, 벤치마크 실행 결과는 아직 없다.
+- TASK-001~005와 합성 smoke pilot은 완료됐다. 제품 엔진·플러그인은 아직 없고 실제 승인 로그·외부 모델 token/비용 평가는 수행하지 않았다.
 
 ## Overview
 
 Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한 원문 범위만 읽도록 돕는 독립 Code Context Engine이다. `.cv`는 재생성할 수 있는 탐색용 인덱스이며, 소스코드가 유일한 진실의 원천이다. Claude 연동은 엔진을 호출하는 첫 번째 클라이언트다.
 
-원안의 핵심 가설은 탐색 토큰·읽기량 감소다. 검토 의견은 기존 도구 대비 정확도와 차별성 검증을 먼저 요구한다. UC-001 A에 따라 **기존 탐색 방식 측정 → 기존 도구 비교 → Go/No-Go → C# PoC 또는 얇은 연동**이 확정됐다. 엔진 구축은 비교 결과 이후 선택한다. 첫 범위는 Windows + C# + Git이며 Perforce는 필수 후속 지원이다(UC-002).
+원안의 핵심 가설은 탐색 token·읽기량 감소다. 합성 smoke에서 A/B 품질 통과와 B의 source bytes/lines 약 82% 감소를 관찰했지만 C/D는 unavailable이고 token·비용도 미측정이어서 제품 가치 판정은 `inconclusive`다. 별도로 사용자가 2026-09-20 전체 계획 구현을 지시했으므로 FUP-003은 **독립 C#/.NET engineering prototype 경로 Go**로 확정했다. 첫 범위는 Windows + C# + Git이며 로컬 Web UI와 필수 후속 Perforce를 보존한다.
 
 ## 근거와 결정의 구분
 
@@ -26,7 +26,7 @@ Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한
 
 | 주제 | 원안 | 검토 의견 | 현재 처리 |
 |---|---|---|---|
-| 가치·개발 순서 | 토큰 절감 엔진, C# Symbol PoC부터 | 측정 우선, 차별 기능 또는 얇은 연동 | UC-001 A: 측정 우선; UC-002 A 조건부: Perforce 필수 후속 |
+| 가치·개발 순서 | 토큰 절감 엔진, C# Symbol PoC부터 | 측정 우선, 차별 기능 또는 얇은 연동 | 합성 smoke의 가치는 inconclusive; 2026-09-20 별도 구현 지시로 독립 .NET prototype 진행 |
 | 캐시 | 세션 full build 후 폐기 | 영속 해시 캐시 + 세션 분리 | UC-004 A: 영속 JSON/JSONL cache와 세션 분리 |
 | diff 기준점 | 세션 시작 snapshot | Git revision / Perforce CL 기준 | UC-005 C: VCS/Session 모두 지원 |
 | 심볼 깊이 | visibility별 점진 생성, L0~L3 | private 포함, L2/L3 보류 | UC-006 A: L0/L1 모든 접근성 |
@@ -37,7 +37,7 @@ Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한
 1. 반복 검색·전체 파일 읽기는 관련 없는 코드를 컨텍스트에 넣을 수 있다. 실제 비중과 비용은 미측정이다.
 2. 같은 이름의 심볼, overload, partial 선언을 문자열 검색만으로 구분하기 어렵다.
 3. 오래된 인덱스는 잘못된 원문을 반환할 수 있고, 일부 참조만 반환하는 인덱스는 검증에 성공해도 영향 범위를 누락할 수 있다.
-4. 기존 LSP·Serena와 기능이 겹친다. 별도 엔진이 필요한지는 비교 실험 전에는 알 수 없다.
+4. 기존 LSP·Serena와 기능이 겹친다. 독립 엔진 구현은 승인됐지만 별도 제품의 가치가 있는지는 본 실험 전에는 알 수 없다.
 5. 세션마다 구축하는 비용, 수정 추적, 여러 에이전트의 동시 접근이 절감 효과를 상쇄할 수 있다.
 
 ## Goals
@@ -50,7 +50,7 @@ Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한
 
 ## Non-Goals
 
-- 이번 준비 작업에서 제품 코드, 플러그인 설치, 실제 세션 로그 수집, 유료 모델 실험을 수행하지 않는다.
+- 준비 단계에서는 제품 코드·플러그인 설치·실제 세션 로그 수집·유료 모델 실험을 수행하지 않는다. 합성 smoke만 실행했다.
 - 초기 PoC에 C++/UE5·Blueprint 완전 분석을 넣지 않는다. Perforce는 1차 Git 검증 이후 필수 후속 작업으로 제공한다(UC-002).
 - 인덱스만 보고 안전한 rename·수정·리뷰 완료를 선언하지 않는다. 소스 편집은 에이전트의 기존 도구가 담당한다.
 - LLM/embedding 기반 관련도 점수, L3 expression 인덱스, 클라우드 인덱스 동기화를 초기 필수 기능으로 넣지 않는다.
@@ -117,7 +117,7 @@ flowchart TD
 | 단계 | 기능 | 진입 조건 |
 |---|---|---|
 | 조사 | 세션 탐색 비중, 범위 읽기·LSP·Serena 비교, 정답 corpus | 실험 방향 확정; pilot 실행 설정 FUP-001 |
-| C# PoC 후보 | `cv-build`, `cv-find`, `cv-resolve`, `cv-inspect`, `cv-validate` | 비교 후 엔진 Go 결정 FUP-003 |
+| C# engineering prototype | `cv-build`, `cv-find`, `cv-resolve`, `cv-inspect`, `cv-validate` | FUP-003 완료; TASK-006부터 독립 .NET 경로 |
 | 안정화 | `cv-update`, 동시성·failure injection·구조화 metrics | PoC 검증; GC 수치 FUP-004 |
 | 참조·리뷰 | remark lazy resolve, `cv-impact`, VCS/Session `cv-diff`, Claude 연동 | 단계별 정확도 검증 |
 | 로컬 Web UI | `.cv`·심볼 관계·diff 검사 | UC-011 확정; 시안 선택 FUP-006 |
@@ -147,7 +147,7 @@ flowchart TD
 ## Non-Functional Requirements
 
 - 결정성: 같은 source snapshot·config·query·schema이면 정렬과 ID 생성이 동일하다. 시각·request ID는 예외다.
-- 성능: cold/warm/long 세션을 분리하고 build/update/fallback을 총시간에 포함한다. UC-007에 따라 pilot 설계·결과 후 최종 수치를 정하고 본 실험 전에 동결한다.
+- 성능: cold/warm/long 세션을 분리하고 build/update/fallback을 총시간에 포함한다. 작은 fixture의 상한은 cold build 60초, warm query 2초, incremental update 5초, peak working set 1 GiB이며 상세 판정은 [ADR 001](../decisions/001-product-path.md)을 따른다.
 - 견고성: 잘못된 schema·부분 write·worker crash·파일 잠금에서 기존 generation을 보존한다.
 - 관측성: 결과 없음, 부분 결과, 내부 오류, 미지원 상태를 구분하고 기계가 처리할 수 있어야 한다.
 - 보안: 로컬 읽기 중심, workspace 경계 준수, 원문·시크릿의 자동 외부 전송 없음. 빌드·generator 실행 신뢰 정책은 UC-008.
@@ -155,9 +155,9 @@ flowchart TD
 
 ## Constraints
 
-현재 저장소에는 아이디어·준비 문서와 비교용 UI 시안이 있다. 제품 `.sln`, 제품 테스트, 고정 runtime 버전은 없다. 준비 문서의 directory 구조와 명령은 제안 계약이며 설치 가능한 제품 명령이 아니다.
+현재 저장소에는 아이디어·준비 문서, 비교용 UI 시안, 합성 fixture와 smoke 결과가 있다. 제품 `.sln`, 제품 테스트, 고정 runtime 버전은 아직 없다. 준비 문서의 directory 구조와 명령은 제안 계약이며 설치 가능한 제품 명령이 아니다.
 
-원안의 `.cv` 확장자·독립 엔진·CLI `cv-*` 접두사·원본 우선 원칙은 보존한다. 영속 JSON/JSONL 저장·L0/L1·CLI 후 MCP 연동은 확정됐다. 상세 schema·retention 수치·실험 실행 설정·최종 UI는 후속 확정 대상이다.
+원안의 `.cv` 확장자·독립 엔진·CLI `cv-*` 접두사·원본 우선 원칙은 보존한다. 영속 JSON/JSONL 저장·L0/L1·CLI 후 MCP 연동과 독립 .NET prototype 경로는 확정됐다. 상세 schema·retention 수치·실제 데이터 입력·최종 UI는 후속 확정 대상이다.
 
 ## Edge Cases
 
@@ -199,4 +199,4 @@ UC-011 A+B에 따라 터미널 text/JSON과 로컬 Web UI를 모두 제공한다
 4. 복구 안전성: stale source를 검증된 결과로 반환하는 사례와 조용한 부분 결과를 failure injection으로 찾는다.
 5. 반복성: task·repository별 편차와 비교군의 실제 도구 사용률을 공개한다.
 
-원안의 `-42%`, `94% → 95%`, `1.8s`는 예시이며 실제 결과·목표치로 재사용하지 않는다. UC-007의 실험 방향은 확정됐다. pilot 실행 범위·비용 상한은 실행 전에 지정하고(FUP-001), pilot 설계·결과로 본 실험 표본·품질 허용 저하·최소 효율 차이를 정한 뒤 고정한다(FUP-002). 누락 원문 관련 요구는 FUP-005로 보류한다.
+원안의 `-42%`, `94% → 95%`, `1.8s`는 예시이며 실제 결과·목표치로 재사용하지 않는다. FUP-002는 [ADR 001](../decisions/001-product-path.md)에 품질 저하 0, stale/조용한 partial Critical 0, task·조건별 최소 3회, seed `20260920`, stronger available baseline 대비 source bytes 또는 실제 input token 20% 이상 감소, 유료 외부 비용 0, 전체 30분으로 동결했다. token 미측정이면 token 이득은 `inconclusive`다. 실제 승인 로그·실제 모델 비용은 FUP-001의 미완 범위이고 누락 원문 관련 요구는 FUP-005로 보류한다.

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CodeVirtualize.Core\CodeVirtualize.Core.csproj" />
+    <ProjectReference Include="..\CodeVirtualize.CSharp\CodeVirtualize.CSharp.csproj" />
+  </ItemGroup>
+</Project>
+
+

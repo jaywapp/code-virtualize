@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/diff.schema.json",
+  "title": "Code Virtualize diff contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseline", "entries", "coverage", "limitations", "truncated", "nextCursor", "schema", "schemaVersion"],
+  "properties": {
+    "baseline": { "$ref": "common.schema.json#/$defs/baseline" },
+    "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } },
+    "coverage": { "$ref": "common.schema.json#/$defs/coverage" },
+    "limitations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" } },
+    "truncated": { "type": "boolean" },
+    "nextCursor": { "type": ["string", "null"] },
+    "schema": { "const": "code-virtualize/diff" },
+    "schemaVersion": { "const": 1 }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "textualHunk", "baseContentHash", "targetContentHash"],
+      "properties": {
+        "kind": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "textualHunk": { "type": ["string", "null"] },
+        "baseContentHash": {
+          "oneOf": [
+            { "$ref": "common.schema.json#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "targetContentHash": {
+          "oneOf": [
+            { "$ref": "common.schema.json#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "baseSymbolId", "targetSymbolId", "baseLocations", "targetLocations", "evidence", "matchConfidence"],
+      "properties": {
+        "kind": { "enum": ["added", "deleted", "renamed", "rename_candidate", "signature_changed", "body_changed", "remark_changed", "formatting_only"] },
+        "baseSymbolId": {
+          "oneOf": [
+            { "$ref": "common.schema.json#/$defs/symbolId" },
+            { "type": "null" }
+          ]
+        },
+        "targetSymbolId": {
+          "oneOf": [
+            { "$ref": "common.schema.json#/$defs/symbolId" },
+            { "type": "null" }
+          ]
+        },
+        "baseLocations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/location" } },
+        "targetLocations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/location" } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+        "matchConfidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

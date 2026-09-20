@@ -1,0 +1,357 @@
+{
+  "schemaVersion": "1.0.0",
+  "protocolRevision": "task-016-v1",
+  "generatedAt": "2026-09-20T12:19:14.2498117+00:00",
+  "experimentPhase": "cv_evaluation",
+  "currency": "USD",
+  "randomizationSeed": 20260920,
+  "conditions": [
+    {
+      "condition": "A",
+      "cacheState": "not_applicable",
+      "attemptedRunCount": 6,
+      "notStartedRunCount": 0,
+      "terminalCounts": {
+        "succeeded": 6,
+        "quality_failed": 0,
+        "tool_failed": 0,
+        "timeout": 0,
+        "budget_stopped": 0,
+        "infra_failed": 0,
+        "cancelled": 0,
+        "invalid": 0
+      },
+      "successRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "qualityPassRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "readGrepTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "fullReadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "rereadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "commentTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUseRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "unknownFullReadCount": 0,
+      "tokens": {
+        "uncachedInput": 0,
+        "cacheReadInput": 0,
+        "cacheWriteInput": 0,
+        "output": 0
+      },
+      "cacheAwareCost": {
+        "model": null,
+        "tool": null,
+        "setup": null,
+        "total": null,
+        "complete": false
+      }
+    },
+    {
+      "condition": "B",
+      "cacheState": "not_applicable",
+      "attemptedRunCount": 6,
+      "notStartedRunCount": 0,
+      "terminalCounts": {
+        "succeeded": 6,
+        "quality_failed": 0,
+        "tool_failed": 0,
+        "timeout": 0,
+        "budget_stopped": 0,
+        "infra_failed": 0,
+        "cancelled": 0,
+        "invalid": 0
+      },
+      "successRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "qualityPassRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "readGrepTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "fullReadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "rereadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "commentTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUseRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "unknownFullReadCount": 0,
+      "tokens": {
+        "uncachedInput": 0,
+        "cacheReadInput": 0,
+        "cacheWriteInput": 0,
+        "output": 0
+      },
+      "cacheAwareCost": {
+        "model": null,
+        "tool": null,
+        "setup": null,
+        "total": null,
+        "complete": false
+      }
+    },
+    {
+      "condition": "C",
+      "cacheState": "not_applicable",
+      "attemptedRunCount": 6,
+      "notStartedRunCount": 0,
+      "terminalCounts": {
+        "succeeded": 0,
+        "quality_failed": 0,
+        "tool_failed": 0,
+        "timeout": 0,
+        "budget_stopped": 0,
+        "infra_failed": 6,
+        "cancelled": 0,
+        "invalid": 0
+      },
+      "successRate": {
+        "numerator": 0,
+        "denominator": 6,
+        "value": 0
+      },
+      "qualityPassRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "readGrepTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "fullReadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "rereadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "commentTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUseRate": {
+        "numerator": 0,
+        "denominator": 6,
+        "value": 0
+      },
+      "unknownFullReadCount": 0,
+      "tokens": {
+        "uncachedInput": 0,
+        "cacheReadInput": 0,
+        "cacheWriteInput": 0,
+        "output": 0
+      },
+      "cacheAwareCost": {
+        "model": null,
+        "tool": null,
+        "setup": null,
+        "total": null,
+        "complete": false
+      }
+    },
+    {
+      "condition": "D",
+      "cacheState": "not_applicable",
+      "attemptedRunCount": 6,
+      "notStartedRunCount": 0,
+      "terminalCounts": {
+        "succeeded": 0,
+        "quality_failed": 0,
+        "tool_failed": 0,
+        "timeout": 0,
+        "budget_stopped": 0,
+        "infra_failed": 6,
+        "cancelled": 0,
+        "invalid": 0
+      },
+      "successRate": {
+        "numerator": 0,
+        "denominator": 6,
+        "value": 0
+      },
+      "qualityPassRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "readGrepTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "fullReadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "rereadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "commentTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUseRate": {
+        "numerator": 0,
+        "denominator": 6,
+        "value": 0
+      },
+      "unknownFullReadCount": 0,
+      "tokens": {
+        "uncachedInput": 0,
+        "cacheReadInput": 0,
+        "cacheWriteInput": 0,
+        "output": 0
+      },
+      "cacheAwareCost": {
+        "model": null,
+        "tool": null,
+        "setup": null,
+        "total": null,
+        "complete": false
+      }
+    },
+    {
+      "condition": "E",
+      "cacheState": "long",
+      "attemptedRunCount": 6,
+      "notStartedRunCount": 0,
+      "terminalCounts": {
+        "succeeded": 6,
+        "quality_failed": 0,
+        "tool_failed": 0,
+        "timeout": 0,
+        "budget_stopped": 0,
+        "infra_failed": 0,
+        "cancelled": 0,
+        "invalid": 0
+      },
+      "successRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "qualityPassRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "readGrepTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "fullReadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "rereadRate": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "commentTokenShare": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUseRate": {
+        "numerator": 6,
+        "denominator": 6,
+        "value": 1
+      },
+      "unknownFullReadCount": 0,
+      "tokens": {
+        "uncachedInput": 0,
+        "cacheReadInput": 0,
+        "cacheWriteInput": 0,
+        "output": 0
+      },
+      "cacheAwareCost": {
+        "model": null,
+        "tool": null,
+        "setup": null,
+        "total": null,
+        "complete": false
+      }
+    }
+  ],
+  "overall": {
+    "plannedRunCount": 30,
+    "attemptedRunCount": 30,
+    "notStartedRunCount": 0,
+    "completePairCount": 0,
+    "incompletePairCount": 6
+  },
+  "dataQuality": {
+    "duplicateEventCount": 0,
+    "conflictingDuplicateCount": 0,
+    "unknownEventCount": 0,
+    "missingRequiredFieldCount": 30,
+    "invalidUsageCount": 0,
+    "excludedMetricEventCount": 30,
+    "invalidRunCount": 0
+  },
+  "notes": [
+    "Actual model token and provider cost events were unavailable; zero token fields are schema-required empty event sums, not measured zero-token agent runs.",
+    "C and D unavailable cells remain attempted infra_failed runs and are not treated as zero-cost or zero-result successes.",
+    "Source-byte, latency, memory, index-size, tool-use, recall, and false-positive metrics are recorded in cv-run-manifest.json.",
+    "The overall outcome is No-Go because E fails the frozen zero-quality-degradation and 20% source-byte efficiency gates; token efficiency remains inconclusive."
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-virtualize.dev/schemas/symbol.schema.json",
+  "title": "Code Virtualize symbol contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["symbolId", "projectId", "analysisKey", "kind", "name", "qualifiedName", "signature", "accessibility", "containerId", "genericArity", "identityQuality", "parameters", "explicitInterface", "declarations", "limitations", "schema", "schemaVersion"],
+  "properties": {
+    "symbolId": { "$ref": "common.schema.json#/$defs/symbolId" },
+    "projectId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "analysisKey": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "kind": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "name": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "qualifiedName": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "signature": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "accessibility": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "containerId": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/symbolId" },
+        { "type": "null" }
+      ]
+    },
+    "genericArity": { "type": "integer", "minimum": 0 },
+    "identityQuality": { "enum": ["semantic", "syntactic"] },
+    "parameters": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/parameterIdentity" }
+    },
+    "explicitInterface": { "type": ["string", "null"] },
+    "declarations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "declaration.schema.json" }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+    "schema": { "const": "code-virtualize/symbol" },
+    "schemaVersion": { "const": 1 }
+  }
+}

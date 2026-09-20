@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\CodeVirtualize.Core\CodeVirtualize.Core.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="[5.3.0]" />
+  </ItemGroup>
+</Project>
+

@@ -2,50 +2,45 @@
 
 ## 기준과 현재 상태
 
-작성일: 2026-09-20. 모델 배정과 서브에이전트 실행 방식 갱신: 2026-09-20. [design.md](design.md), [architecture.md](architecture.md), [user-confirm.md](user-confirm.md)의 확정 결정과 [UI 시안 3종](samples/index.html)을 종합했다. 기준은 사용자 인터뷰 커밋 `b16df53`이다. 이 계획은 실제 엔진 구현·실험 결과가 아니라 후속 에이전트의 작업 지침이다.
+작성일: 2026-09-20. 모델 배정과 서브에이전트 실행 방식 갱신: 2026-09-20. [design.md](design.md), [architecture.md](architecture.md), [user-confirm.md](user-confirm.md)의 확정 결정과 [UI 시안 3종](samples/index.html)을 종합했다. 기준은 사용자 인터뷰 커밋 `b16df53`, [ADR 001](../decisions/001-product-path.md), [ADR 002](../decisions/002-validation-outcome.md), [ADR 003](../decisions/003-next-step.md)이다. TASK-001~016 구현·검증과 TASK-017의 최종 No-Go 후속 결정을 반영했다.
 
 - UC-001~011은 모두 Confirmed다. 다시 선택을 요구하지 않는다.
-- UC-001 A: 측정·기존 도구 비교 후 Go/No-Go. 아직 엔진을 만들기로 결정한 것은 아니다.
-- 첫 범위는 Windows/C#/Git, 엔진을 만들면 C#/.NET, 영속 JSON/JSONL cache, L0/L1 전체 접근성, syntax-only 기본이다.
-- VCS와 Session baseline, CLI text/JSON과 로컬 Web UI는 모두 구현 범위다.
-- Perforce는 필수 후속이며 C++/UE5와 구분한다. IDE/데스크톱 전용 UI는 제외한다.
-- UI 시안은 준비 완료다. 최종안 선택과 제품 frontend stack은 FUP-006이다.
-- 원안이 잘린 부분의 요구 확정은 복구 전 보류한다(UC-010 B/FUP-005). 명시된 기존 요구의 작업은 계속할 수 있다.
+- TASK-006~016의 Windows/C#/Git 기술 prototype, Core·CLI·MCP·Claude adapter와 benchmark artifact는 보존한다.
+- TASK-016에서 E 품질 `6/6`, recall `27/27`, Critical `0`을 확인했지만 source bytes가 NAV `9.75% 감소`, DIFF `1,618.9% 증가`로 동결된 `20% 이상 감소` gate에 실패했다.
+- 실제 model token 효율은 `inconclusive`이며 source bytes/lines와 분리한다. C/D는 unavailable이다.
+- 제품화 자동 진행은 중단한다. 로컬 Web UI와 Perforce 요구는 폐기하지 않고 재개 조건부 `Blocked`로 보존한다.
+- 자동 GC는 FUP-004 승인 전 비활성인 no-delete 상태다. 잘린 원문은 FUP-005 전까지 추정하지 않는다.
 
 ## 실행 상태와 gate
 
-`Ready`는 추가 결정과 독립적으로 준비할 수 있는 작업, `Blocked`는 명시된 입력·결과가 필요한 작업, `Conditional`은 독립 엔진 경로를 선택한 뒤 의존 순서대로 진행할 작업이다. 선행 작업이 차단되면 종속 작업도 차단된다. 모든 작업은 이 준비 산출물 이후 수행할 예정이며 완료 상태가 아니다.
+`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐고 TASK-018~021은 아래 이유와 재개 조건이 있는 `Blocked` 상태다.
 
-| Gate | 조건 | 영향 |
+| Gate | 결과·조건 | 영향 |
 |---|---|---|
-| Pilot 실행 | FUP-001의 데이터·실행량·비용/시간 상한 지정 | TASK-004 |
-| 제품 경로 | pilot 결과와 본 실험 기준을 검토하고 Go/No-Go 결정 | TASK-005, FUP-002/003 |
-| 정확성 | stale 원문·조용한 partial·원문/세션 데이터 훼손 결함 해결 | TASK-012 이후 기능 |
-| 본 실험 | pilot 설계/결과로 정한 기준·반복·예산을 실행 전 동결 | TASK-016 |
-| UI 제품화 | 시안·frontend stack 선택 | TASK-018 |
-| 필수 Perforce | CL별 계약·승인된 환경 입력 | TASK-019 |
-| 자동 GC | 실측 후 retention/용량 수치 확정 | TASK-021 |
+| Pilot 실행 | 합성 smoke 완료; 실제 로그·model token/비용은 FUP-001 미완 | TASK-004 합성 범위 Complete |
+| Prototype 구현 | 별도 전체 구현 지시로 TASK-006~015 완료 | 기술 artifact 보존; 제품 가치 Go 주장 금지 |
+| 본 실험 | 품질 6/6·recall 27/27·Critical 0, source-byte 20% gate 실패, token inconclusive, C/D unavailable | TASK-016 Complete — No-Go |
+| 후속 결정 | 기술 prototype 보존, 독립 엔진 제품화 자동 진행 중단 | TASK-017 Complete |
+| UI 제품화 | 공통 재개 증거·새 ADR와 FUP-006 필요 | TASK-018 Blocked |
+| 필수 Perforce | 공통 재개 증거·새 ADR와 FUP-007 필요 | TASK-019 Blocked |
+| 원문 복구 | FUP-005 원문 필요 | TASK-020 Blocked |
+| 자동 GC | FUP-004 실측 수치·승인 전 no-delete | TASK-021 Blocked |
 
 ```mermaid
 flowchart TD
-    P[TASK-001 프로토콜] --> E[TASK-004 pilot]
-    C[TASK-002 정답 corpus] --> E
-    R[TASK-003 기존 도구] --> E
-    E --> G[TASK-005 경로 선택]
-    G -->|엔진| F[TASK-006~010 CSharp PoC]
-    F --> S[TASK-011~012 증분과 정확성]
-    S --> D[TASK-013~015 참조 / 두 diff / 연동]
-    D --> B[TASK-016 본 실험]
-    D --> U[TASK-018 로컬 Web UI]
-    D --> V[TASK-019 필수 Perforce]
-    S --> K[TASK-021 실측 GC]
-    G -->|얇은 연동 또는 중단| N[TASK-017 계획 전환]
-    B --> N
-    O[TASK-020 원문 복구] --> H[누락 요구만 별도 보완]
+    P[TASK-001~005 준비 / 경로 선택] --> F[TASK-006~015 engineering prototype]
+    F --> B[TASK-016 본 실험]
+    B -->|No-Go| N[TASK-017 최종 disposition]
+    N --> A[prototype과 benchmark 보존]
+    N --> U[TASK-018 Web UI Blocked]
+    N --> V[TASK-019 Perforce Blocked]
+    N --> K[TASK-021 GC Blocked / no-delete]
+    O[TASK-020 원문 복구 Blocked] -->|FUP-005 제공 시| H[누락 요구만 별도 보완]
+    R[대표 corpus / 실제 token / source-byte 개선 / 새 ADR] --> U
+    R --> V
 ```
 
-TASK-001/002/003은 독립적인 준비 작업이다. 실제 로그 수집·도구 설치·모델 실험을 이 Ready 범위에 섞지 않는다. 제품 구현에서 공통 schema·브랜치를 공유하는 변경은 의존 순서를 지킨다. 원문 복구가 전체 작업의 불필요한 선행 조건이 되지 않게 한다.
-
+TASK-001/002/003은 독립적인 준비 작업이었다. 완료된 prototype과 재현 artifact는 보존한다. 원문 복구가 전체 작업의 불필요한 선행 조건이 되지 않게 하며, No-Go 후속 제품 작업은 새 증거·입력·결정을 갖추기 전 실행하지 않는다.
 ## Agent / Model 배정
 
 계획의 모든 TASK는 표에 지정한 모델과 추론 수준을 명시한 Codex 서브에이전트에 배정한다. 사용 모델은 `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`다. 복합 설계·검토·통합 판단은 Sol High, 명확한 구현·분석은 Sol/Terra Medium 또는 High, 제한된 출처 수집은 Luna Low다. 기존 상위 모델 배정은 검증 범위를 유지한 채 Sol High로 통일했다. 불필요하게 높은 추론 수준을 쓰지 않는다.
@@ -84,9 +79,9 @@ small/medium/large를 LOC뿐 아니라 file/symbol/project/reference 수로 정�
 
 ### Pilot와 본 실험의 구분
 
-UC-007은 실험 방향을 확정하고 수치는 pilot 설계/결과 후 확정하도록 했다. 따라서 준비 단계에서 144회 같은 예시를 승인된 실행량으로 쓰지 않는다. TASK-001이 후보를 만들고 FUP-001에 **실제 pilot의 로그/모델/횟수·비용 상한**을 기록한 후 TASK-004를 실행한다.
+UC-007에 따라 TASK-001이 프로토콜을 고정하고 TASK-004에서 합성 fixture 전용 smoke를 실행했다. A/B는 품질을 통과했고 C/D는 unavailable이었으며 token·비용은 미측정이다. 실제 승인 로그·실제 모델 token/비용 평가는 FUP-001의 미완 범위이며 합성 결과로 대체하지 않는다.
 
-pilot은 분산과 실행 가능성 파악용이다. 그 설계·결과를 통해 본 실험의 반복 수, 품질 허용 저하 `deltaQuality`, 최소 실용 효율 차이 `minEfficiency`, latency/memory 상한·예산을 FUP-002에 확정한다. 최종 판정 데이터를 보기 전에 기준과 분석 규칙을 동결하며, pilot의 작은 성공률 차이를 확정 이득으로 주장하지 않는다.
+본 실험 기준은 FUP-002와 ADR 001에 동결했다: 품질 저하 0, stale/조용한 partial Critical 0, task·조건별 최소 3회, seed `20260920`, stronger available baseline 대비 source bytes 또는 실제 input token 20% 이상 감소, cold/warm/update 60/2/5초, peak working set 1 GiB, 외부 유료비용 0, 전체 30분이다. token이 미측정이면 token 이득은 `inconclusive`다.
 
 ### 측정과 판정
 
@@ -131,7 +126,7 @@ Read/Grep 비중·전체 읽기율·재읽기율·주석 비율, cache-aware 비
 없음
 
 ### Status
-Ready
+Complete — 2026-09-20
 
 ## TASK-002 — 독립 정답 fixture와 corpus 후보
 
@@ -161,7 +156,7 @@ source와 정답 위치를 독립 대조한다. CV 또는 같은 Roslyn query를
 없음; 실제 corpus 실행은 FUP-001
 
 ### Status
-Ready
+Complete — 2026-09-20
 
 ## TASK-003 — 기존 도구 capability 조사
 
@@ -191,7 +186,7 @@ LSP·Serena·범위 읽기와 CV의 중복·차별 가설을 확인한다.
 없음; 실제 설치·모델 실행 제외
 
 ### Status
-Ready
+Complete — 2026-09-20
 
 ## TASK-004 — 승인된 데이터로 pilot 실행
 
@@ -218,10 +213,10 @@ TASK-001, TASK-002, TASK-003
 | Reason | 실험 조건·개인정보·비용 집계를 함께 통제한다. |
 
 ### Blocked By
-FUP-001
-
+없음 — 합성 smoke 완료; 실제 승인 로그·모델 token/비용 평가는 FUP-001 미완
 ### Status
-Blocked
+Complete — 2026-09-20 (합성 smoke 범위)
+
 
 ## TASK-005 — Go/No-Go와 본 실험 기준 확정
 
@@ -248,10 +243,10 @@ TASK-004
 | Reason | 제품 가치와 실험 불확실성을 통합하는 판단이다. |
 
 ### Blocked By
-FUP-002, FUP-003
-
+없음 — FUP-002/003 완료
 ### Status
-Blocked
+Complete — 2026-09-20
+
 
 ## TASK-006 — .NET solution과 trust 경계
 
@@ -278,10 +273,10 @@ restore/build/test와 CLI help를 실행한다. trust 없는 프로젝트의 gen
 | Reason | 확정한 단일 runtime 구조의 정형 구현이다. |
 
 ### Blocked By
-FUP-003 (엔진 Go 전)
-
+없음 — FUP-003 완료
 ### Status
-Conditional
+Complete — 2026-09-20
+
 
 ## TASK-007 — .cv schema와 CLI 응답 계약
 
@@ -311,7 +306,7 @@ round-trip·unknown schema 거부, not_found/partial/truncated/error 필드, cur
 없음; 선행 제품 경로 gate 적용
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-008 — Immutable generation store
 
@@ -341,7 +336,7 @@ JSON manifest/JSONL shards, digest·schema·크기 검증, 임시 generation pub
 없음; 자동 GC 수치는 FUP-004로 별도
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-009 — C# 구축·검색
 
@@ -371,7 +366,7 @@ Roslyn syntax/semantic 경로, partial 선언 병합, overload/generic ID, inven
 없음; workspace semantic load는 명시 trust 적용
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-010 — 원문 resolve·validate·터미널 inspect
 
@@ -401,7 +396,7 @@ CRLF/LF/BOM·한글/emoji·same mtime/size 변경·오래된 span에서 정확�
 없음; Web UI 선택과 독립
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-011 — 증분·복구·동시 세션과 시작 snapshot
 
@@ -431,7 +426,7 @@ cv-update·신규/삭제/rename reconciliation, semantic 종속 invalidation, bo
 없음; 자동 GC는 TASK-021
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-012 — 장애 주입·보안·정확성 검증
 
@@ -461,7 +456,7 @@ JSON 결과를 실제 source/독립 정답과 대조한다. stale source 오반�
 없음; Critical/High 미해결 결함은 다음 단계 차단
 
 ### Status
-Conditional
+Complete — 2026-09-20 (PoC gate PASS)
 
 ## TASK-013 — 주석과 영향 후보
 
@@ -491,7 +486,7 @@ remark 위치·hash·원문, 정적 참조·caller expansion, lexical 후보 pro
 없음; 측정 예산은 UC-007 후속 조건 적용
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-014 — VCS/Session 심볼 diff
 
@@ -521,7 +516,7 @@ dirty-start 변경은 VCS에 포함·Session에서 제외됨을 검증한다. �
 없음; Perforce는 TASK-019
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-015 — Claude MCP·lifecycle 연동
 
@@ -551,7 +546,7 @@ cv_find/cv_get 및 구현된 cv_impact를 stdio로 노출하고 세션 시작/�
 실제 client 설치 범위·UC-007 실행 예산 지정
 
 ### Status
-Conditional
+Complete — 2026-09-20
 
 ## TASK-016 — CV 포함 본 실험·가치 재평가
 
@@ -578,40 +573,40 @@ A/B/C/D에 E(CV)를 추가하고 cold/warm/long·규모별 실험을 수행한�
 | Reason | 정확도·비용·통계적 불확실성을 통합해 판단한다. |
 
 ### Blocked By
-FUP-002와 승인된 본 실험 데이터·예산
-
+없음 — TASK-012~015 완료; 합성/로컬 corpus로 실행하고 실제 로그·token 미측정은 결과에 명시
 ### Status
-Blocked
+Complete — 2026-09-20 (No-Go; token efficiency inconclusive)
+
 
 ## TASK-017 — 범위 전환·진행 또는 종료 기록
 
 ### Goal
-선택한 결과에 맞춰 다음 작업을 완결된 계획으로 정리한다.
+TASK-016 No-Go에 맞춰 다음 작업을 완결된 계획으로 정리한다.
 
 ### Dependencies
-TASK-005 또는 TASK-016의 사용자 판단
+TASK-016 결과, ADR 001/002, 사용자 확정 결정
 
 ### Scope
-얇은 연동이면 gap·도구 버전·Web UI·Perforce 충족 계약을 재설계한다. 중단이면 이유와 재검토 조건을 기록한다. 성공이면 필수 후속/제품화 작업을 유지한다.
+TASK-016의 최종 No-Go를 적용한다. 완료된 TASK-006~016과 재현 가능한 artifact는 기술 prototype으로 보존하고 신규 독립 엔진 제품화는 중단한다. 얇은 MCP/Claude 연동이 Web UI와 Perforce 계약을 충족하지 않는 gap을 명시하고, 대표 corpus·실제 model token·source-byte 계약 개선·새 ADR 및 FUP-006/007을 재개 조건으로 고정한다. 잘린 원문과 retention 차단, session/base source 보존을 유지한다.
 
 ### Files
 `docs/decisions/003-next-step.md` / `docs/prepare/architecture.md` / `docs/prepare/plan.md`
 
 ### Validation
-선택과 남은 작업이 일치하고 중단 기능이 무심코 실행되지 않는지 검토한다. 데이터 삭제·게시·설치를 자동 수행하지 않는다.
+선택과 남은 작업, 링크와 수치가 일치하고 11개 User Decision 원문이 바뀌지 않았는지 검토한다. source bytes와 token을 분리하고 데이터 삭제·게시·설치를 수행하지 않는다.
 
 | 배정 | 값 |
 |---|---|
 | Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | Medium |
-| Reason | 근거가 확정된 선택을 실행 범위로 정리하는 문서 작업이다. |
+| Reason | 확정된 실험 근거를 terminal 계획으로 정리하는 문서 작업이다. |
 
 ### Blocked By
-FUP-003의 경로 선택 또는 후속 평가 결과
+없음 — TASK-016 No-Go와 ADR 003 terminal disposition 반영 완료
 
 ### Status
-Conditional
+Complete — 2026-09-20 (No-Go: prototype 보존, 제품화 자동 진행 중단)
 
 ## TASK-018 — 선택한 로컬 Web UI 제품 구현
 
@@ -619,10 +614,10 @@ Conditional
 선택된 시안을 실제 `.cv` 조회 API에 연결한다.
 
 ### Dependencies
-TASK-010, TASK-013, TASK-014; engine/adapter 경로 확정
+TASK-010, TASK-013, TASK-014; TASK-017의 제품화 재개 결정; FUP-006
 
 ### Scope
-.NET loopback host·frontend 선택, 검색→source/remark/관계/diff, freshness/coverage·VCS/Session 표시, paging·취소·오래된 응답 폐기, 키보드·mobile·theme를 구현한다. 로컬 접근 인증·Host/Origin·CSP·no-store를 적용한다.
+.NET loopback host·frontend 선택, 검색→source/remark/관계/diff, freshness/coverage·VCS/Session 표시, paging·취소·오래된 응답 폐기, 키보드·mobile·theme를 구현한다. 로컬 접근 인증·Host/Origin·CSP·no-store를 적용한다. 현재 얇은 MCP/Claude 연동에는 이 사람 중심 화면과 로컬 Web API/보안 경계가 없어 UC-011을 충족하지 않는다. 계약과 시안은 보존하지만 No-Go 상태에서 구현하지 않는다.
 
 ### Files
 `src/CodeVirtualize.Web/` / `tests/Integration.Tests/Web/` / `docs/ui/` / `선택 frontend build 설정`
@@ -638,10 +633,10 @@ CLI와 같은 query/generation의 결과가 일치해야 한다. 실제 source e
 | Reason | 선택된 UX와 민감한 로컬 source 접근 경계를 함께 구현한다. |
 
 ### Blocked By
-FUP-006; FUP-003 이전 제품 구현 금지
+TASK-016 No-Go; 대표 corpus·실제 model token·source-byte 계약 개선을 검증한 새 ADR; FUP-006
 
 ### Status
-Blocked
+Blocked — 제품화 자동 진행 중단; 요구와 시안은 보존하며 공통 재개 조건과 FUP-006 충족 전 실행하지 않음
 
 ## TASK-019 — 필수 Perforce adapter
 
@@ -649,10 +644,10 @@ Blocked
 필수 후속 Perforce source/baseline/diff를 제공한다.
 
 ### Dependencies
-TASK-014, TASK-012; 얇은 연동이면 TASK-017의 대응 계약
+TASK-012, TASK-014; TASK-017의 제품화 재개 결정; FUP-007
 
 ### Scope
-submitted/shelved/pending별 base/target, server/client/depot mapping, have/head 차이, rename/delete/binary·권한/오프라인을 구현한다. 합성 fixture 후 지정한 실제 환경에서 read-only 검증한다.
+submitted/shelved/pending별 base/target, server/client/depot mapping, have/head 차이, rename/delete/binary·권한/오프라인을 구현한다. 현재 얇은 연동은 CL별 bytes/baseline과 mapping 의미를 제공하지 않아 UC-002를 충족하지 않는다. 계약은 보존하지만 No-Go 상태에서 구현하지 않는다.
 
 ### Files
 `src/CodeVirtualize.Perforce/` / `tests/Integration.Tests/Perforce/` / `docs/integrations/perforce.md`
@@ -668,10 +663,10 @@ file revision과 반환 bytes·diff를 독립 대조한다. sync/submit/revert/s
 | Reason | VCS 의미·workspace mapping·접근 경계를 다루는 필수 통합이다. |
 
 ### Blocked By
-FUP-007; FUP-003 이전 제품 구현 금지
+TASK-016 No-Go; 대표 corpus·실제 model token·source-byte 계약 개선을 검증한 새 ADR; FUP-007
 
 ### Status
-Blocked
+Blocked — 제품화 자동 진행 중단; 필수 후속 계약은 보존하며 공통 재개 조건과 FUP-007 충족 전 실행하지 않음
 
 ## TASK-020 — 잘린 원문 복구와 요구 보완
 
@@ -701,7 +696,7 @@ Blocked
 FUP-005
 
 ### Status
-Blocked
+Blocked — 복구 원문 부재; 누락 내용을 추정하지 않음
 
 ## TASK-021 — 실측 기반 cache 한도·GC 확정
 
@@ -709,10 +704,10 @@ Blocked
 사용자 결정대로 실측 후 retention/용량/GC 정책을 정한다.
 
 ### Dependencies
-TASK-011의 측정 자료; TASK-016 결과가 있으면 함께 사용
+TASK-011 측정 자료와 TASK-016 No-Go; FUP-004의 승인된 retention·용량 수치
 
 ### Scope
-크기·session 수·warm 이득·disk 압박을 기록해 수치 후보를 제시한다. 승인 후만 자동 GC를 활성화하고 active reader/session/base snapshot을 보호한다.
+크기·session 수·warm 이득·disk 압박을 기록해 수치 후보를 제시한다. 승인 후만 자동 GC를 활성화하고 active reader/session/base snapshot을 보호한다. 승인 전 terminal disposition은 자동 삭제를 수행하지 않는 no-delete이며 prototype 보존 데이터를 임의 정리하지 않는다.
 
 ### Files
 `docs/decisions/004-cache-policy.md` / `src/CodeVirtualize.Core/Storage/` / `tests/Integration.Tests/Storage/`
@@ -728,11 +723,10 @@ TASK-011의 측정 자료; TASK-016 결과가 있으면 함께 사용
 | Reason | 실측 정책과 삭제·동시성 안전성의 결합이다. |
 
 ### Blocked By
-FUP-004
+FUP-004의 실측 retention·용량 수치와 명시적 승인; 제품화 범위 재개 시 새 ADR
 
 ### Status
-Blocked
-
+Blocked — 승인 전 자동 GC 비활성/no-delete; active reader·session·base snapshot 보존
 ## 요구사항과 결정 추적
 
 | 요구 | 작업 |
@@ -751,12 +745,12 @@ Blocked
 | FR-11 두 baseline / UC-005 | TASK-011, TASK-014, TASK-019 |
 | FR-12 agent 연동 / UC-009 | TASK-015~016 |
 | FR-13 remark | TASK-013 |
-| FR-14 Web UI / UC-011 | 이번 시안 3종, TASK-018 |
-| FR-15 필수 Perforce / UC-002 조건 | TASK-019 |
+| FR-14 Web UI / UC-011 | 시안 3종 보존, TASK-018 Blocked — No-Go 재개 조건과 FUP-006 필요 |
+| FR-15 필수 Perforce / UC-002 조건 | 계약 보존, TASK-019 Blocked — No-Go 재개 조건과 FUP-007 필요 |
 | UC-003 .NET | TASK-006 이후 |
 | UC-010 원문 보완 보류 | TASK-020 |
 
-FUP 상태와 입력 내용은 [user-confirm.md](user-confirm.md)의 후속 입력 표가 기준이다. FUP-004는 자동 GC만, FUP-005는 누락 관련 요구만 차단한다. 이미 확정된 선택을 다시 Pending으로 되돌리지 않는다.
+FUP 상태와 입력 내용은 [user-confirm.md](user-confirm.md)의 후속 입력 표가 기준이다. FUP-004는 자동 GC를 no-delete 상태로, FUP-005는 누락 관련 요구만 차단한다. FUP-006/007은 공통 제품화 재개 증거와 새 ADR을 대신하지 않는다. 이미 확정된 11개 선택을 다시 Pending으로 되돌리지 않는다.
 
 ## Prepare 완료 검증
 
@@ -767,6 +761,8 @@ FUP 상태와 입력 내용은 [user-confirm.md](user-confirm.md)의 후속 입�
 - 시안의 원문·hash·revision·관계·diff는 합성이며 실제 제품 분석 결과가 아니다.
 - 이 plan은 기획·설계·결정·시안·검증 기록 이후 마지막에 작성했다.
 - 모든 TASK는 목표·의존·범위·예상 파일·검증·Agent·Model·Reasoning Level·배정 이유·Blocked By를 갖는다.
-- 실제 엔진·플러그인·실험을 완료하지 않았으며 prepare 단계에서는 제품 구현·배포를 수행하지 않았다.
+- TASK-001~017을 완료했다. TASK-006~015 기술 prototype과 TASK-016 재현 실험을 보존하며, TASK-016은 source-byte gate 실패로 No-Go다.
+- 실제 model token·비용과 C/D 비교는 미완이며 source-byte 결과로 대체하지 않는다.
+- TASK-018~021은 모두 구체적인 재개 조건이 있는 Blocked다. 자동 GC는 승인 전 비활성이고 데이터·session/base snapshot을 삭제하지 않는다.
 
-메인 에이전트는 TASK-001~003의 Ready 준비를 지정 모델의 서브에이전트에 우선 배정하고, 결과를 통합·검증한다. 이후 FUP 입력·제품 경로 결정을 반영해 실행 가능한 TASK만 의존 순서대로 배정한다.
+현재 plan의 terminal disposition은 기술 prototype 보존과 제품화 자동 진행 중단이다. Blocked TASK는 새 근거·입력·결정을 문서화하기 전 스폰하거나 구현하지 않으며 미제공 입력을 성공으로 가장하지 않는다.

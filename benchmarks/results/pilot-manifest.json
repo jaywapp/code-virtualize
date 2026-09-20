@@ -1,0 +1,203 @@
+{
+  "schemaVersion": "pilot-manifest-v1",
+  "protocolRevision": "task-001-v1",
+  "generatedAt": "2026-09-20T05:54:51.7528187+00:00",
+  "experimentPhase": "pilot",
+  "scope": {
+    "corpus": "repository synthetic fixtures only",
+    "personalOrExistingSessionLogs": "denied",
+    "network": "not_used",
+    "packageInstallation": "denied",
+    "paidModelOrApi": "denied",
+    "resultSharing": "aggregates and synthetic metadata only"
+  },
+  "repository": {
+    "alias": "code-virtualize-local-synthetic",
+    "commit": "b59670139de6d759ba79a315f893bb5241e9d79e",
+    "startDirty": true,
+    "fixtureDigestAlgorithm": "sha256(sorted(relative-path NUL file-sha256) LF)",
+    "fixtureDigest": "b0fb86a76e3de47ffb38dc3541e0d613f34e0c2e54956622bd304fa1a9744a2e"
+  },
+  "randomizationSeed": 20260920,
+  "wallTimeLimitSeconds": 1200,
+  "actualHarnessWallTimeMs": 784.854,
+  "conditionOrders": {
+    "pair-1-nav": [
+      "D",
+      "B",
+      "C",
+      "A"
+    ],
+    "pair-2-diff": [
+      "B",
+      "D",
+      "A",
+      "C"
+    ]
+  },
+  "conditions": [
+    {
+      "condition": "A",
+      "attempted": 2,
+      "succeeded": 2,
+      "infraFailed": 0,
+      "qualityPassed": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "primaryToolUsed": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "toolCalls": 13,
+      "readCalls": 10,
+      "grepCalls": 1,
+      "otherCalls": 2,
+      "fullReadCalls": 10,
+      "partialReadCalls": 0,
+      "sourceBytes": 2650,
+      "sourceLines": 152,
+      "wallTimeMs": 83.602,
+      "modelTokens": null,
+      "cost": null
+    },
+    {
+      "condition": "B",
+      "attempted": 2,
+      "succeeded": 2,
+      "infraFailed": 0,
+      "qualityPassed": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "primaryToolUsed": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "toolCalls": 9,
+      "readCalls": 3,
+      "grepCalls": 4,
+      "otherCalls": 2,
+      "fullReadCalls": 0,
+      "partialReadCalls": 3,
+      "sourceBytes": 459,
+      "sourceLines": 27,
+      "wallTimeMs": 139.883,
+      "modelTokens": null,
+      "cost": null
+    },
+    {
+      "condition": "C",
+      "attempted": 2,
+      "succeeded": 0,
+      "infraFailed": 2,
+      "qualityPassed": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUsed": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "toolCalls": 0,
+      "readCalls": 0,
+      "grepCalls": 0,
+      "otherCalls": 0,
+      "fullReadCalls": 0,
+      "partialReadCalls": 0,
+      "sourceBytes": 0,
+      "sourceLines": 0,
+      "wallTimeMs": 1.518,
+      "modelTokens": null,
+      "cost": null,
+      "errorCategory": "primary_tool_unavailable"
+    },
+    {
+      "condition": "D",
+      "attempted": 2,
+      "succeeded": 0,
+      "infraFailed": 2,
+      "qualityPassed": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "primaryToolUsed": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "toolCalls": 0,
+      "readCalls": 0,
+      "grepCalls": 0,
+      "otherCalls": 0,
+      "fullReadCalls": 0,
+      "partialReadCalls": 0,
+      "sourceBytes": 0,
+      "sourceLines": 0,
+      "wallTimeMs": 3.733,
+      "modelTokens": null,
+      "cost": null,
+      "errorCategory": "primary_tool_unavailable"
+    }
+  ],
+  "overall": {
+    "planned": 8,
+    "attempted": 8,
+    "notStarted": 0,
+    "succeeded": 4,
+    "infraFailed": 4,
+    "completePairCount": 0,
+    "incompletePairCount": 2
+  },
+  "dataQuality": {
+    "rawEventCount": 24,
+    "runStartedCount": 8,
+    "runFinishedCount": 8,
+    "qualityResultCount": 4,
+    "unknownEventCount": 4,
+    "missingRequiredFieldCount": 4,
+    "excludedMetricEventCount": 4,
+    "duplicateEventCount": 0,
+    "conflictingDuplicateCount": 0,
+    "invalidRunCount": 0
+  },
+  "toolAvailability": {
+    "C": {
+      "status": "unavailable",
+      "checked": [
+        "csharp-ls",
+        "OmniSharp",
+        "Microsoft.CodeAnalysis.LanguageServer",
+        "global dotnet tools"
+      ]
+    },
+    "D": {
+      "status": "unavailable",
+      "checked": [
+        "serena",
+        "serena-mcp-server",
+        "active harness tools"
+      ]
+    }
+  },
+  "measurementAvailability": {
+    "modelTokens": "unavailable",
+    "providerCost": "unavailable",
+    "toolResultContentTokens": "unavailable",
+    "sourceBytesAndLines": "measured",
+    "wallTime": "measured"
+  },
+  "versions": {
+    "powershell": "5.1.26100.9444",
+    "ripgrep": "ripgrep 15.2.0 (rev e89fff89ac)",
+    "git": "git version 2.50.1.windows.1",
+    "dotnet": "10.0.400"
+  }
+}
