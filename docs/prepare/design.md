@@ -2,9 +2,9 @@
 
 ## 문서 상태와 읽는 순서
 
-- 작성일: 2026-09-19.
+- 작성일: 2026-09-19. 사용자 결정 반영: 2026-09-20.
 - 분석 기준: `29374c6f969231d37937328005ee017c985f4d0f`의 `docs/ideas/` 전체 3개 문서.
-- 상태: 구현 준비 초안. **이 문서의 추천안은 사용자 승인으로 간주하지 않는다.**
+- 상태: `b16df53`의 사용자 인터뷰 결정 반영본. 확정 선택과 후속 입력을 구분한다. 기술 세부 제안·UI 최종안·실험 수치는 아직 사용자 승인으로 간주하지 않는다.
 - 읽는 순서: 본 문서 → [architecture.md](architecture.md) → [user-confirm.md](user-confirm.md) → [plan.md](plan.md).
 - 이번 산출물은 기획·설계·검증 계획이다. 엔진, 플러그인, 벤치마크 실행 결과는 아직 없다.
 
@@ -12,7 +12,7 @@
 
 Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한 원문 범위만 읽도록 돕는 독립 Code Context Engine이다. `.cv`는 재생성할 수 있는 탐색용 인덱스이며, 소스코드가 유일한 진실의 원천이다. Claude 연동은 엔진을 호출하는 첫 번째 클라이언트다.
 
-원안의 핵심 가설은 탐색 토큰·읽기량 감소다. 검토 의견은 기존 도구 대비 정확도와 차별성 검증을 먼저 요구한다. 어느 쪽이 최종 제품 방향인지는 미확정이며 UC-001로 관리한다. **추천 경로는 기존 탐색 방식 측정 → 기존 도구 비교 → 필요할 때 C# PoC → 결과에 따라 후속 투자 결정**이다.
+원안의 핵심 가설은 탐색 토큰·읽기량 감소다. 검토 의견은 기존 도구 대비 정확도와 차별성 검증을 먼저 요구한다. UC-001 A에 따라 **기존 탐색 방식 측정 → 기존 도구 비교 → Go/No-Go → C# PoC 또는 얇은 연동**이 확정됐다. 엔진 구축은 비교 결과 이후 선택한다. 첫 범위는 Windows + C# + Git이며 Perforce는 필수 후속 지원이다(UC-002).
 
 ## 근거와 결정의 구분
 
@@ -22,15 +22,15 @@ Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한
 | [아이디어 원안](../ideas/code-virtualize.md) | 1~15절 전체 | 원본 우선, `.cv`, CLI, 독립 엔진, C# PoC, 벤치마크 | 명시 원칙과 제안을 구분 |
 | [Claude 검토 의견](../ideas/code-virtualize-feedback-claude.md) | 전체 | 기존 도구 비교, 부분 누락, 캐시·동시성, freshness, VCS 기준점 | 검토자의 권고이며 사용자 확정 아님 |
 
-원안 15절은 실제로 `benchmark task/g`에서 끝난다. 잘린 내용을 복원하거나 위키의 이후 내용을 원안에 섞지 않았다. 필요한 추가 입력은 UC-010에 기록한다.
+원안 15절은 실제로 `benchmark task/g`에서 끝난다. 잘린 내용을 복원하거나 위키의 이후 내용을 원안에 섞지 않았다. UC-010 B에 따라 원문 복구 전까지 누락 부분 관련 요구 확정을 보류한다. 로컬 위키 원본도 같은 지점에서 잘려 있음을 2026-09-20 확인했다.
 
 | 주제 | 원안 | 검토 의견 | 현재 처리 |
 |---|---|---|---|
-| 가치·개발 순서 | 토큰 절감 엔진, C# Symbol PoC부터 | 측정 우선, 차별 기능 또는 얇은 연동 | UC-001, UC-002 |
-| 캐시 | 세션 full build 후 폐기 | 영속 해시 캐시 + 세션 분리 | UC-004 |
-| diff 기준점 | 세션 시작 snapshot | Git revision / Perforce CL 기준 | UC-005 |
-| 심볼 깊이 | visibility별 점진 생성, L0~L3 | private 포함, L2/L3 보류 | UC-006 |
-| runtime·배포 | npm launcher + 언어별 worker 검토 | PoC에 앞선 다중 runtime 지양 | UC-003 |
+| 가치·개발 순서 | 토큰 절감 엔진, C# Symbol PoC부터 | 측정 우선, 차별 기능 또는 얇은 연동 | UC-001 A: 측정 우선; UC-002 A 조건부: Perforce 필수 후속 |
+| 캐시 | 세션 full build 후 폐기 | 영속 해시 캐시 + 세션 분리 | UC-004 A: 영속 JSON/JSONL cache와 세션 분리 |
+| diff 기준점 | 세션 시작 snapshot | Git revision / Perforce CL 기준 | UC-005 C: VCS/Session 모두 지원 |
+| 심볼 깊이 | visibility별 점진 생성, L0~L3 | private 포함, L2/L3 보류 | UC-006 A: L0/L1 모든 접근성 |
+| runtime·배포 | npm launcher + 언어별 worker 검토 | PoC에 앞선 다중 runtime 지양 | UC-003 A: 엔진 선택 시 .NET |
 
 ## Problem
 
@@ -51,10 +51,10 @@ Code-Virtualize는 코드베이스를 심볼 중심으로 탐색하고 필요한
 ## Non-Goals
 
 - 이번 준비 작업에서 제품 코드, 플러그인 설치, 실제 세션 로그 수집, 유료 모델 실험을 수행하지 않는다.
-- 초기 PoC에 C++/UE5, Blueprint·리플렉션 완전 분석, Perforce 운영 연동을 모두 넣지 않는다. 이 범위는 UC-002 대상이다.
+- 초기 PoC에 C++/UE5·Blueprint 완전 분석을 넣지 않는다. Perforce는 1차 Git 검증 이후 필수 후속 작업으로 제공한다(UC-002).
 - 인덱스만 보고 안전한 rename·수정·리뷰 완료를 선언하지 않는다. 소스 편집은 에이전트의 기존 도구가 담당한다.
 - LLM/embedding 기반 관련도 점수, L3 expression 인덱스, 클라우드 인덱스 동기화를 초기 필수 기능으로 넣지 않는다.
-- 웹 대시보드·데스크톱 앱·시각적 그래프 편집기를 제품 요구로 추가하지 않는다.
+- IDE/데스크톱 전용 앱과 source/graph 편집 기능은 제외한다. 로컬 Web UI의 읽기 중심 `.cv`·관계·diff 검사는 확정 범위다(UC-011 A+B).
 
 ## Target Users
 
@@ -89,7 +89,7 @@ CV의 추가 가치는 **검증된 증분 캐시, 명시적인 coverage 계약, 
 
 ### S-04 — 이미 수정된 작업 공간의 리뷰
 
-사용자가 base revision과 target을 명시한다. 세션 시작 이전 변경도 textual diff에 들어간다. 삭제된 심볼은 base 원문에서 읽는다. base가 없으면 추측하지 않고 `BASE_REQUIRED`를 반환한다. 세션 diff는 선택한 경우에만 별도의 의미로 제공한다.
+사용자가 `VCS` 또는 `Session` 모드를 선택한다. VCS는 명시 revision/CL과 target을 비교해 세션 이전 변경도 포함한다. Session은 시작 당시 dirty 상태를 포함한 immutable snapshot과 현재를 비교하며 세션 이전 변경을 포함하지 않는다. 두 모드를 모두 구현하고 제목·API·내보내기에 모드를 유지한다. 필요한 base/session snapshot이 없으면 `BASE_REQUIRED`/`SESSION_BASE_MISSING`을 반환한다. 삭제된 심볼도 선택한 base의 원문을 읽는다.
 
 ### S-05 — 두 세션이 동시에 사용
 
@@ -116,11 +116,13 @@ flowchart TD
 
 | 단계 | 기능 | 진입 조건 |
 |---|---|---|
-| 조사 | 세션 탐색 비중, 범위 읽기·LSP·Serena 비교, 정답 corpus | UC-007 데이터·예산 범위 승인 후 실제 실행 |
-| C# PoC 후보 | `cv-build`, `cv-find`, `cv-resolve`, `cv-inspect`, `cv-validate` | UC-001~004, UC-006, UC-008 결정 및 비교 결과 |
-| 안정화 후보 | `cv-update`, 동시성·failure injection·구조화 metrics | PoC 계약과 데이터 수명 확정 |
-| 참조·리뷰 후보 | remark lazy resolve, `cv-impact`, `cv-diff`, Claude 연동 | UC-005, UC-009 및 단계별 결과 |
-| 후속 | Perforce, C++/UE5, Codex 연동, npm 배포, GUI | UC-002, UC-003, UC-011의 별도 승인 |
+| 조사 | 세션 탐색 비중, 범위 읽기·LSP·Serena 비교, 정답 corpus | 실험 방향 확정; pilot 실행 설정 FUP-001 |
+| C# PoC 후보 | `cv-build`, `cv-find`, `cv-resolve`, `cv-inspect`, `cv-validate` | 비교 후 엔진 Go 결정 FUP-003 |
+| 안정화 | `cv-update`, 동시성·failure injection·구조화 metrics | PoC 검증; GC 수치 FUP-004 |
+| 참조·리뷰 | remark lazy resolve, `cv-impact`, VCS/Session `cv-diff`, Claude 연동 | 단계별 정확도 검증 |
+| 로컬 Web UI | `.cv`·심볼 관계·diff 검사 | UC-011 확정; 시안 선택 FUP-006 |
+| 필수 후속 | Perforce baseline·target·원문·diff | Git 검증 후 CL 계약·환경 입력 FUP-007 |
+| 별도 후보 | C++/UE5, Codex 연동, npm 배포 | 필요성과 호환성을 별도 결정 |
 
 ## Functional Requirements
 
@@ -139,21 +141,23 @@ flowchart TD
 | FR-11 | 변경 비교 | 명시 base/target, 추가·삭제·본문·signature 변화, textual diff 연결 |
 | FR-12 | 연동 | 도구 장애가 기존 검색·원문 읽기를 막지 않으며 훅을 freshness의 유일한 근거로 삼지 않음 |
 | FR-13 | 주석 lazy resolve | 현재 source에서 주석·XML 문서를 읽고 원문 위치·fingerprint 제공 |
+| FR-14 | 로컬 Web UI | 검색→심볼→원문/관계/diff, freshness·coverage·baseline 구분, CLI와 결과 일치 |
+| FR-15 | 필수 Perforce 후속 | read-only CL/revision provider, pending/shelved/submitted 의미·권한 오류 검증 |
 
 ## Non-Functional Requirements
 
 - 결정성: 같은 source snapshot·config·query·schema이면 정렬과 ID 생성이 동일하다. 시각·request ID는 예외다.
-- 성능: cold/warm/long 세션을 분리하고 build/update/fallback을 총시간에 포함한다. 목표 숫자는 UC-007 승인 전 고정하지 않는다.
+- 성능: cold/warm/long 세션을 분리하고 build/update/fallback을 총시간에 포함한다. UC-007에 따라 pilot 설계·결과 후 최종 수치를 정하고 본 실험 전에 동결한다.
 - 견고성: 잘못된 schema·부분 write·worker crash·파일 잠금에서 기존 generation을 보존한다.
 - 관측성: 결과 없음, 부분 결과, 내부 오류, 미지원 상태를 구분하고 기계가 처리할 수 있어야 한다.
 - 보안: 로컬 읽기 중심, workspace 경계 준수, 원문·시크릿의 자동 외부 전송 없음. 빌드·generator 실행 신뢰 정책은 UC-008.
-- 호환성: Windows·PowerShell 사용 환경을 우선 검증한다. 지원 OS와 SDK 버전은 UC-002/003 이후 고정한다.
+- 호환성: Windows·PowerShell 사용 환경을 우선 검증한다. Windows는 확정 범위이며 구체적 SDK 버전은 구현 시 고정한다.
 
 ## Constraints
 
-현재 저장소에는 아이디어 문서만 있다. `.sln`, package manifest, 제품 테스트, 고정 runtime 버전은 없다. 준비 문서의 directory 구조와 명령은 제안 계약이며 설치 가능한 제품 명령이 아니다.
+현재 저장소에는 아이디어·준비 문서와 비교용 UI 시안이 있다. 제품 `.sln`, 제품 테스트, 고정 runtime 버전은 없다. 준비 문서의 directory 구조와 명령은 제안 계약이며 설치 가능한 제품 명령이 아니다.
 
-원안의 `.cv` 확장자·독립 엔진·CLI `cv-*` 접두사·원본 우선 원칙은 보존한다. 저장 방식, 출력 스키마, 자동화 범위, retention, 지원 깊이는 아직 확정되지 않았다.
+원안의 `.cv` 확장자·독립 엔진·CLI `cv-*` 접두사·원본 우선 원칙은 보존한다. 영속 JSON/JSONL 저장·L0/L1·CLI 후 MCP 연동은 확정됐다. 상세 schema·retention 수치·실험 실행 설정·최종 UI는 후속 확정 대상이다.
 
 ## Edge Cases
 
@@ -171,9 +175,15 @@ flowchart TD
 
 ## UI 필요 여부
 
-기존 문서는 CLI, 에이전트 도구, 사람이 보는 `cv-inspect`만 요구한다. `cv-inspect`는 구조화 JSON과 비대화형 터미널 표로 목적을 충족할 수 있다. 현재 준비 범위에서 그래픽 UI가 필수라는 근거는 없다.
+UC-011 A+B에 따라 터미널 text/JSON과 로컬 Web UI를 모두 제공한다. `impeccable` Operate 기준과 `design-taste-frontend`의 적용 가능한 원칙으로 [시안 목록](samples/index.html)을 제공한다.
 
-따라서 스킬의 UI 생략 조건을 적용하여 `samples/` 3종은 생성하지 않는다. 터미널 출력은 [architecture.md](architecture.md)의 Interfaces에 예시를 제공한다. GUI로 확장할 경우 UC-011 결정 후 `impeccable`·`design-taste-frontend`를 사용하여 정보 구조가 다른 시안 3종을 먼저 만든다.
+| 시안 | 정보 구조 | 사용 맥락 |
+|---|---|---|
+| [sample1](samples/sample1/index.html) | 검색 목록·원문·상태를 나란히 보는 분할 화면 | 반복 탐색·높은 정보 밀도 |
+| [sample2](samples/sample2/index.html) | 심볼 선택 뒤 필요한 문맥을 단계적으로 펼침 | 낮은 인지 부담·원문 이해 |
+| [sample3](samples/sample3/index.html) | 관계·변경 중심으로 원문 증거 확인 | 영향 범위·리뷰 |
+
+시안은 합성 데이터로 조작 가능한 비교 prototype이며 engine 결과가 아니다. 최종 UI·frontend stack은 아직 선택되지 않았다(FUP-006). loading/empty/error/stale/partial, baseline 모드와 정적/추정 참조 구분을 공통 검토한다. 로컬 API·접근 제어는 architecture에서 정의한다.
 
 ## Success Criteria
 
@@ -189,4 +199,4 @@ flowchart TD
 4. 복구 안전성: stale source를 검증된 결과로 반환하는 사례와 조용한 부분 결과를 failure injection으로 찾는다.
 5. 반복성: task·repository별 편차와 비교군의 실제 도구 사용률을 공개한다.
 
-원안의 `-42%`, `94% → 95%`, `1.8s`는 예시이며 실제 결과·목표치로 재사용하지 않는다. 표본·허용 품질 저하·효율 최소 차이·예산·Go/No-Go 기준은 UC-007에서 사전 확정한다.
+원안의 `-42%`, `94% → 95%`, `1.8s`는 예시이며 실제 결과·목표치로 재사용하지 않는다. UC-007의 실험 방향은 확정됐다. pilot 실행 범위·비용 상한은 실행 전에 지정하고(FUP-001), pilot 설계·결과로 본 실험 표본·품질 허용 저하·최소 효율 차이를 정한 뒤 고정한다(FUP-002). 누락 원문 관련 요구는 FUP-005로 보류한다.

@@ -2,7 +2,7 @@
 
 ## 상태와 적용 조건
 
-이 문서는 **C# Roslyn PoC를 진행할 경우의 추천 설계**다. UC-001에서 기존 도구 연동만 선택하면 해당 경로로 다시 줄여야 한다. 원안 대비 변경은 [user-confirm.md](user-confirm.md)에서 승인받으며, 승인 전 구현 기준으로 확정하지 않는다.
+2026-09-20에 `b16df53`의 11개 사용자 결정을 반영했다. **측정·기존 도구 비교 후 엔진을 선택할 경우 C#/.NET PoC**로 진행한다. cache·L0/L1·trust·두 baseline·CLI+Web UI는 확정됐다. 실험 수치·retention·최종 UI는 [user-confirm.md](user-confirm.md)의 FUP 목록을 따른다. 얇은 연동을 선택하면 Core 경로를 축소하되 Perforce·Web UI 요구를 조용히 삭제하지 않는다.
 
 ## Architecture Overview
 
@@ -21,12 +21,14 @@ flowchart LR
     F --> P
     Q --> M[Local metrics]
     L --> M
-    B[VCS baseline provider] --> D[Symbol diff]
+    U[Local Web UI] --> A[Loopback read-only API]
+    A --> Q
+    B[VCS / Session baseline provider] --> D[Symbol diff]
     W --> D
     D --> Q
 ```
 
-기본 프로세스 경계는 단일 .NET 실행 파일 + 라이브러리다(UC-003). CLI와 향후 MCP host가 동일한 Core 계약을 호출한다. 처음부터 npm launcher·C# worker IPC·C++ worker를 동시에 구현하지 않는 안을 추천한다. 외부 compiler backend를 도입할 때에만 worker protocol을 설계한다.
+기본 프로세스 경계는 단일 .NET 실행 파일 + 라이브러리다(UC-003). CLI와 향후 MCP host가 동일한 Core 계약을 호출한다. UC-003 A에 따라 초기 npm launcher·C# worker IPC·C++ worker 동시 구현은 제외한다. 외부 compiler backend를 도입할 때에만 worker protocol을 설계한다.
 
 ## Technology Stack
 
@@ -38,6 +40,7 @@ flowchart LR
 | 검색 | snapshot별 정규화 이름·ID의 메모리 인덱스 | 결정적인 조회, 원문 body는 저장하지 않음 | UC-006 |
 | 변경 감지 | 훅/파일 watcher + 조회 시 hash 검증 + inventory reconciliation | 이벤트 유실에 대비; 이벤트는 최적화 힌트 | UC-004 |
 | 외부 노출 | CLI JSON, 이후 MCP stdio | 독립 Core 유지; 훅은 lifecycle만 담당 | UC-009 |
+| 로컬 Web UI | .NET loopback host + 정적 frontend 제안 | Core 재사용; frontend 최종 stack은 시안 선택 후 | UC-011, FUP-006 |
 | 테스트 | .NET 테스트 프로젝트 + golden fixtures + integration process tests | 파서/저장/CLI/동시성 책임을 나눠 검증 | UC-003 |
 
 Roslyn Workspaces는 solution/project/document 모델과 syntax tree·semantic model 접근을 제공한다. 이는 C# 선택의 기술적 근거일 뿐, 대형 솔루션의 속도나 정확도를 보증하지 않는다. [Microsoft 문서](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/work-with-workspace).
@@ -67,9 +70,10 @@ Roslyn Workspaces는 solution/project/document 모델과 syntax tree·semantic m
 | UpdateCoordinator | 변경 병합, semantic 무효화, 단일 writer | 모든 변경을 해당 파일 하나만 갱신하면 끝난다고 가정하지 않음 |
 | FallbackService | 원문 후보 검색, repair 요청, 제한·원인 보고 | 텍스트 일치 결과를 semantic 참조로 승격 금지 |
 | ReferenceService | 정적 참조와 텍스트 후보의 구분·coverage | 전체 runtime 참조 완전성 보장 금지 |
-| BaselineProvider / DiffService | 명시 VCS base 읽기, snapshot 비교, textual hunk 연결 | checkout·sync·source 수정 없이 동작 |
+| BaselineProvider / DiffService | VCS revision/CL 및 immutable session snapshot, textual hunk 연결 | checkout·sync·source 수정 없이 동작 |
 | AgentAdapter | CLI/MCP 매핑, lifecycle hook, 장애 시 기존 탐색 안내 | 엔진을 Claude 전용으로 종속시키지 않음 |
 | MetricsWriter | 제한된 구조화 이벤트 | 원문·프롬프트·비밀 기본 기록 금지 |
+| LocalWebHost | loopback API·session 인증·정적 UI | 임의 경로·원격 바인딩·source 편집 금지 |
 
 ## Data Flow
 
@@ -102,8 +106,10 @@ code-virtualize/
     CodeVirtualize.Core/
     CodeVirtualize.CSharp/
     CodeVirtualize.Cli/
-    CodeVirtualize.Mcp/            # UC-009 이후
-  integrations/claude/            # UC-009 이후
+    CodeVirtualize.Mcp/            # CLI 검증 후
+    CodeVirtualize.Web/            # loopback host + 선택한 frontend
+    CodeVirtualize.Perforce/       # 필수 후속 adapter
+  integrations/claude/            # CLI 검증 후
   schemas/
   tests/
     Core.Tests/
@@ -121,9 +127,9 @@ code-virtualize/
   CodeVirtualize.sln
 ```
 
-원안의 `packages/`는 runtime 선택 전 초안이었다. 이 구조는 .NET 선택 시 대안이며, TS 선택 시 UC-003에서 architecture/plan의 파일 경로를 같이 수정한다.
+UC-003 A에 맞춰 단일 .NET solution으로 구체화한다. frontend 파일 구조는 FUP-006에서 선택 후 고정한다.
 
-### Workspace runtime 제안 — UC-004 승인 조건
+### Workspace runtime — UC-004 A 반영
 
 ```text
 .code-virtualize/
@@ -138,12 +144,13 @@ code-virtualize/
     writer.lock
   sessions/<session-id>/
     session.json
-    baseline.json                # 선택한 revision·snapshot 의미
+    baseline.json                # VCS/session 구분 및 immutable 참조
+    baseline-source/              # 세션 시작 source의 content-addressed snapshot
     diff/current.diff.cv
   metrics/<session-id>.jsonl
 ```
 
-영속 캐시 안을 세션과 분리하는 안이다. 세션 폐기를 선택하면 generation을 각 session 아래 두되 immutable publish·검증 계약은 유지한다. workspace key에는 실제 경로·worktree identity를 반영하여 서로 다른 checkout을 혼용하지 않는다. `.code-virtualize/`는 VCS 제외 대상이다. 삭제 가능한 cache와 사용자 config를 구분하여 cache GC가 config를 지우지 않게 한다.
+UC-004 A에 따라 영속 캐시와 세션 metadata를 분리한다. 종료 시 전체 인덱스를 폐기하는 수명은 기본 경로에서 제외한다. workspace key에는 실제 경로·worktree identity를 반영하여 서로 다른 checkout을 혼용하지 않는다. `.code-virtualize/`는 VCS 제외 대상이다. 삭제 가능한 cache와 사용자 config를 구분하여 cache GC가 config를 지우지 않게 한다.
 
 ## Data Model
 
@@ -194,7 +201,7 @@ ID는 `project identity + 분석 구성 + symbol kind + qualified metadata signa
 
 ## Interfaces
 
-아래는 구현할 계약 예시이며 지금 실행 가능한 명령이 아니다. `cv-*` 이름을 기본으로 하고 단일 `cv` 실행 파일의 subcommand/alias 제공 방식은 UC-003에서 정한다.
+아래는 구현할 계약이며 지금 실행 가능한 명령이 아니다. `cv-*` 이름을 보존하고 단일 .NET CLI의 subcommand/alias 방식은 TASK-006에서 정한다.
 
 | 명령 | 입력 | 결과·오류 |
 |---|---|---|
@@ -205,7 +212,8 @@ ID는 `project identity + 분석 구성 + symbol kind + qualified metadata signa
 | `cv-validate` | scope files/workspace, generation | mismatch·missing·schema 오류, 원문 수정 없음 |
 | `cv-update` | changed paths 또는 reconcile, session | 새로운 generation, invalidated project 범위 |
 | `cv-impact` | symbol IDs, depth, budget, text candidates | 정적 참조와 lexical 후보·한계·paging |
-| `cv-diff` | base, target, baseline-kind | symbol 변경·textual hunk·매칭 근거 |
+| `cv-diff` | baseline-kind=vcs/session, base/target 또는 session ID | symbol 변경·textual hunk·모드·근거 |
+| `cv-inspect --web` | workspace/session, loopback port | 해당 workspace에 제한한 읽기용 UI |
 
 검색은 exact qualified name → exact simple name → prefix → substring 순, 동률은 project/path/line/ID의 ordinal 순을 제안한다. fuzzy·LLM relevance는 초기 계약에서 제외한다(UC-006). 기본 source 반환은 선언 header·containing type·using을 요청 가능한 section으로 나누고, body/full file 확장은 명시 요청과 반환 예산을 따른다.
 
@@ -227,12 +235,12 @@ Limitation    dynamic references are not covered
 Next action   inspect failed project diagnostics; use source search
 ```
 
-GUI 대신 사용할 비대화형 텍스트 계약이다. 색상만으로 상태를 표현하지 않으며 pipe·`--json`·좁은 터미널에서도 의미가 보존되어야 한다.
+확정된 Web UI와 함께 제공할 비대화형 텍스트 계약이다. 색상만으로 상태를 표현하지 않으며 pipe·`--json`·좁은 터미널에서도 의미가 보존되어야 한다.
 
 ## External Dependencies
 
 - .NET SDK/Roslyn·MSBuild 관련 package: 솔루션 로딩의 실제 지원 범위는 spike로 검증한다.
-- Git: base source와 textual diff를 read-only로 읽는다. Perforce는 UC-002/005 후 별도 adapter다.
+- Git: base source와 textual diff를 read-only로 읽는다. Perforce는 UC-002에 따라 필수 후속 adapter다. CL별 source mapping·환경 입력은 FUP-007에서 확정한다.
 - `rg`: fallback 후보 도구. 설치 여부를 검사하고 없으면 파일 scan 대안 또는 `CAPABILITY_UNAVAILABLE`을 명시한다.
 - Claude/MCP: 초기 연동 후보이며 Core 필수 의존성이 아니다. 공식 plugin 문서는 MCP/LSP와 lifecycle hook 연동을 설명한다. [Claude plugin reference](https://code.claude.com/docs/en/plugins-reference), [hook reference](https://code.claude.com/docs/en/hooks).
 - 원격 서비스·벡터 DB·LLM API는 Core 실행에 필수로 두지 않는다.
@@ -243,7 +251,7 @@ generation: `building → valid | partial | failed`. session: `starting → acti
 
 writer는 workspace/analysis key별 하나이며 competing writer는 bounded wait 또는 `BUSY`로 응답한다. reader는 generation을 pin하고 manifest가 가리킨 shard만 읽는다. GC는 active reader/session이 참조하는 generation을 제거하지 않는다. crash lock 회수는 PID만이 아니라 host/process start identity와 lease를 검사한다. 강제 종료·재부팅 후 복구를 테스트한다.
 
-한 세션 종료는 자신의 pin만 해제한다. 영속 cache retention/용량은 UC-004 결정 후 설정한다. session mode에서도 다른 session 데이터와 사용자 설정은 삭제하지 않는다.
+한 세션 종료는 자신의 pin만 해제한다. retention/용량/GC 수치는 실측 후 FUP-004에서 정한다. 확정 전 자동 파괴적 GC를 켜지 않고 측정·수동 후보 보고만 제공한다. Session baseline source도 pin 대상으로 유지하며 다른 session 데이터와 사용자 설정은 삭제하지 않는다.
 
 ## Error Handling
 
@@ -252,7 +260,8 @@ writer는 workspace/analysis key별 하나이며 competing writer는 bounded wai
 | `SCHEMA_UNSUPPORTED` | 알 수 없는 major schema | read 중단, 재구축 안내 |
 | `STALE_SYMBOL` | 해시·identity 불일치 | 제한 재파싱, 실패 시 source fallback |
 | `COVERAGE_PARTIAL` | 프로젝트 로드 실패·미분석 참조 | 결과+실패 범위, 완전 분석으로 위장 금지 |
-| `BASE_REQUIRED` | 리뷰 base 미지정 | diff 실행 전 입력 요구 |
+| `BASE_REQUIRED` | VCS 모드의 base 미지정 | diff 실행 전 입력 요구 |
+| `SESSION_BASE_MISSING` | Session 시작 snapshot 없음 | 현재 source로 재구성하지 않고 오류 반환 |
 | `PATH_OUTSIDE_WORKSPACE` | traversal·symlink/junction 이탈 | 읽기 전에 거부 |
 | `BUDGET_EXCEEDED` | timeout·result/source 제한 | 잘림·cursor·가능한 재시도 정보 |
 | `BUSY` | writer lock 경합 | 기존 generation 조회 또는 명시 재시도 |
@@ -275,7 +284,7 @@ workspace 설정은 untrusted 입력이다. 전역 trust 정책을 완화하거�
 ## Security Considerations
 
 - 실제 root 경계를 resolve한 뒤 경로를 검증한다. junction/symlink, case normalization, UNC, drive 변경을 포함한다.
-- build system·project evaluation·analyzer/source generator는 코드를 실행할 수 있는 경계로 취급한다. 신뢰되지 않은 프로젝트에서는 syntax-only와 명시적인 degraded coverage를 제공하는 안을 추천한다(UC-008).
+- build system·project evaluation·analyzer/source generator는 코드를 실행할 수 있는 경계로 취급한다. UC-008 A에 따라 기본 syntax-only와 degraded coverage를 제공한다. 사용자 trust가 있는 workspace에서만 semantic load한다.
 - 자동 restore·network·build는 기본적으로 수행하지 않는 안이며, semantic workspace load 전에 trust와 필요 도구를 확인한다.
 - `.cv`의 signature·경로·주석도 민감할 수 있다. disposable이라는 이유로 공개하거나 다른 workspace와 공유하지 않는다.
 - cache 입력은 크기·중첩·record count·checksum을 검증한다. deserialization으로 코드나 타입을 임의 활성화하지 않는다.
@@ -294,7 +303,7 @@ workspace 설정은 untrusted 입력이다. 전역 trust 정책을 완화하거�
 
 ## Build / Deployment
 
-UC-003 이후 단일 solution의 restore/build/test와 CLI subprocess smoke test를 CI로 구성한다. 의존성은 lock·SDK pin으로 재현하고 Windows를 첫 검증 환경으로 제안한다. 다른 OS는 UC-002에서 support matrix를 결정한다.
+단일 solution의 restore/build/test와 CLI subprocess smoke test를 CI로 구성한다. 의존성은 lock·SDK pin으로 재현하며 Windows를 1차 지원으로 고정한다. Web host/frontend는 선택 후 동일 배포 산출물로 묶고 브라우저에서 기능·접근 경계를 검증한다.
 
 PoC는 로컬 산출물로 배포한다. 전역 설치·PATH 변경·agent 설정 수정·npm/.NET package 게시·release는 이번 준비 범위 밖이며 별도 작업이다. 설치 프로그램을 구현한다면 dry-run, 설정 병합, 중복 방지, uninstall 복원을 수용 조건으로 둔다.
 
@@ -313,3 +322,57 @@ PoC는 로컬 산출물로 배포한다. 전역 설치·PATH 변경·agent 설�
 ## 조사 범위의 한계
 
 공식 문서는 기능 존재와 선택 이유를 확인하는 용도로 읽었다. 실제 benchmark, Roslyn 대형 솔루션 로드, Claude hook/MCP 호환성 실험, Perforce·UE5 검증은 수행하지 않았다. 원안의 가격·도구명·성능 추정은 현재 환경의 보장으로 승격하지 않았다. 실제 구현 시 지정 버전의 공식 문서와 capability를 다시 확인한다.
+
+## VCS / Session baseline 계약
+
+UC-005 C에 따라 두 모드는 동등한 지원 대상이다. 한 모드를 다른 모드로 자동 대체하지 않는다.
+
+| 모드 | base | target | 차이 |
+|---|---|---|---|
+| VCS / Git | 명시 immutable commit/tree | revision 또는 working-tree snapshot | 세션 이전 변경 포함; staged-only는 별도 target |
+| VCS / Perforce | 명시 file revision 집합/기준 CL | submitted/shelved/pending CL의 정의된 file 집합 | CL만으로 파일별 base를 추측하지 않음 |
+| Session | 시작 시 bytes·inventory·config snapshot | 안정화한 현재 snapshot | 시작 당시 dirty 변경은 이번 diff에서 제외 |
+
+Session 기준에는 원문 bytes가 필요하다. signature와 hash만 있으면 수정/삭제 후 base source를 복원할 수 없다. 시작 시 분석 범위 source를 content-addressed snapshot으로 저장하고 hash/encoding/inventory를 고정한다. 생성 중 input이 변하면 재검증하고 안정성을 확인하지 못하면 `SOURCE_UNSTABLE`을 반환한다. 원자적 filesystem snapshot 없이 모든 동시 편집을 완벽히 동결했다고 주장하지 않는다.
+
+snapshot은 민감한 원문을 포함하므로 session 접근 범위·수명에 묶고 metrics/export에는 복사하지 않는다. pin한 base가 없으면 현재 파일로 대체하지 않는다. base는 immutable snapshot digest, current는 현재 source freshness를 검증한다.
+
+응답 `baseline`에는 `kind/provider/baseId/targetId/sessionId/capturedAt/inputFingerprint`를 포함한다. GUI 모드 전환 시 selection·source·diff query key·cursor를 무효화하여 이전 모드의 응답을 덮어쓰지 않는다.
+
+## Perforce 필수 후속 계약
+
+첫 지원은 Windows/C#/Git이지만 Perforce는 필수 후속이다. 얇은 연동 경로에서도 adapter로 요구를 충족하거나 사용자와 범위를 다시 결정한다.
+
+- `IBaselineProvider` 구현에서 server/client/depot mapping, case handling, revision, digest를 관리한다.
+- submitted/shelved/pending CL의 base와 target bytes를 각각 정의한다. pending은 로컬 unshelved 변경과 서버 상태의 차이를 표시한다.
+- have revision과 head revision은 다를 수 있다. sync로 맞추지 않고 명시 base를 읽는다.
+- move/add·move/delete·delete·binary·잠금·권한 부족·오프라인·미매핑 파일의 지원 표와 오류를 정의한다.
+- read-only source/diff 조회만 제공한다. sync/submit/revert/shelve·ticket 출력/저장은 역할에 포함하지 않는다.
+- 합성 CLI 응답 fixture로 먼저 검증한다. 실제 server/client/CL·명령 allowlist·권한은 FUP-007에서 지정한다.
+- 구현 시 공식 문서로 CLI/API·서버 버전을 확인한다. 현재는 실서버 검증 전 설계다.
+
+## Local Web UI / API
+
+UC-011 A+B의 Web UI는 읽기 중심 로컬 검사 도구다. 검색, snapshot metadata, source/remark, 관계 후보, VCS/Session diff를 제공한다. [시안 3종](samples/index.html)은 합성 prototype이며 실제 engine/API 연결은 이후 제품 작업이다.
+
+추천 host는 `CodeVirtualize.Web`의 .NET loopback host다. frontend는 FUP-006에서 결정하며 static prototype이 최종 framework 선택을 대신하지 않는다.
+
+| 요청 계약(제안) | Core 매핑 | 반환·제약 |
+|---|---|---|
+| GET /api/session | Session/Store | session·generation·scope, secret 제외 |
+| GET /api/symbols | QueryService | query/filter/cursor, coverage 계약 |
+| GET /api/symbols/{id}/source | SourceResolver | generation·part·byte budget |
+| GET /api/symbols/{id}/references | ReferenceService | static/lexical provenance·depth budget |
+| GET /api/diff | DiffService | baseline-kind·base/target/session |
+| GET /api/diagnostics | Validator/Store | 상태·실패 범위, source 본문 제외 |
+
+repair가 발생하면 기존 Core의 제한·single writer 계약을 따른다. source 편집·임의 path read·command 실행 endpoint는 제공하지 않는다. cancellation·paging·graph node 상한으로 대형 결과를 제한한다. UI는 selected symbol/generation/baseline/query/expanded sections를 관리하고 오래된 비동기 응답을 폐기한다.
+
+### 로컬 접근 경계
+
+- loopback IP만 listen하고 remote binding을 기본 금지한다. 정확한 Host/Origin 검증으로 외부 페이지와 DNS rebinding의 접근을 막는다.
+- 실행별 capability 인증을 사용한다. URL·localStorage·access log에 장기 token을 남기지 않으며 cookie/handshake 방식과 CSRF 방어를 구현 시 검증한다.
+- wildcard CORS를 켜지 않는다. 상태 변경 경로 추가 시 인증·Origin·CSRF 검증을 적용한다.
+- source·symbol name·comment는 HTML이 아닌 text로 렌더한다. CSP를 적용하고 외부 CDN/font/telemetry 의존성을 기본 제거한다.
+- source 응답은 `Cache-Control: no-store`, byte/result 제한·root/junction 검증을 적용한다. 종료 session의 source 요청을 거부한다.
+- 제품 검증은 same-origin 성공, remote Origin/Host 거부, XSS fixture, 경계 이탈, session 종료, budget, generation 전환을 포함한다. 시안 서버는 제품 인증 구현의 증거가 아니다.

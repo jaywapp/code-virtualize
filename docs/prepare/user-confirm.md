@@ -2,27 +2,27 @@
 
 ## 사용 방법
 
-아래는 문서 간 충돌이나 비용·범위·보안에 영향을 주는 결정이다. **추천안은 아직 사용자 결정이 아니다.** 이번 준비 문서 작성은 이 항목들의 응답을 기다리지 않고 완료하되, 후속 구현은 [plan.md](plan.md)의 `Blocked By`를 따른다.
+아래 11개 선택은 사용자 인터뷰로 확정됐다. Options/Recommendation은 당시 검토 기록이며 최신 기준은 각 User Decision이다. 남은 구체 입력은 문서 끝의 FUP 목록과 [plan.md](plan.md)의 Blocked By를 따른다.
 
 상태는 `Pending`(미결정), `Confirmed`(사용자 선택과 날짜·근거 기록), `Deferred`(사용자가 후속 단계로 보류)로 관리한다. 응답이 없었다는 이유로 Confirmed/Deferred로 바꾸지 않는다. Deferred도 해당 기능의 구현 승인은 아니다.
 
-사용자는 예를 들어 `UC-001 A, UC-002 A, UC-003 A`처럼 선택할 수 있다. 조건부 선택·다른 대안도 그대로 기록한다. UC-007은 수치·corpus·예산 입력이 함께 필요하다. 이번 인터뷰에서는 user-confirm.md만 갱신한다. 영향받는 design/architecture/plan 및 UC-011의 Web UI 시안은 별도 세션에서 동기화한다.
+사용자는 예를 들어 `UC-001 A, UC-002 A, UC-003 A`처럼 선택할 수 있다. 조건부 선택·다른 대안도 그대로 기록한다. UC-007은 수치·corpus·예산 입력이 함께 필요하다. 2026-09-20 계속 작업에서 design/architecture/plan과 UC-011의 Web UI 시안을 동기화한다. 이미 답한 항목을 재질문하지 않는다.
 
 ## 결정 요약
 
-| ID | 주제 | 추천 | 상태 | 차단 범위 |
+| ID | 주제 | 사용자 선택 | 상태 | 남은 조건 |
 |---|---|---|---|---|
-| UC-001 | 제품 방향과 개발 순서 | 측정·기존 도구 비교 후 엔진 여부 결정 | Confirmed | 비교 결과 이후 구현 경로 |
-| UC-002 | 첫 지원 언어·OS·VCS | C# + Windows + Git, UE5/Perforce 후속 | Confirmed | 제품·corpus 지원 범위 |
-| UC-003 | Core 언어·배포 | 단일 .NET Core/CLI PoC | Confirmed | scaffold·package·배포 |
-| UC-004 | 데이터 수명·저장·동시 세션 | 영속 해시 cache + 세션 분리, JSON `.cv` PoC | Confirmed | store·update·GC |
-| UC-005 | 리뷰 baseline | 명시한 revision/CL과 target | Confirmed | diff·review |
-| UC-006 | 심볼 깊이·검색·문맥 | L0/L1 전체 접근성, body lazy resolve | Confirmed | 검색·추출·resolve |
-| UC-007 | 데이터·실험·진행 기준 | 사전 등록한 다조건 paired 실험 | Confirmed | 실제 로그 분석·모델 실험·Go/No-Go |
-| UC-008 | 프로젝트 실행 신뢰 | syntax-only 기본, semantic load는 명시 trust | Confirmed | project loader·보안 정책 |
-| UC-009 | Claude 연동 방식 | PoC CLI, 검증 후 MCP stdio + 얇은 훅 | Confirmed | 플러그인·설치·자동화 |
-| UC-010 | 잘린 원문 추가 입력 | 현재 내용으로 진행, 추가 내용은 별도 반영 | Confirmed | 누락 내용을 전제한 기능만 |
-| UC-011 | 사람용 검사 화면 | 터미널 text/JSON, GUI 후속 | Confirmed | GUI·시안·GUI 구현 |
+| UC-001 | 제품 방향 | A: 측정·비교 후 Go/No-Go | Confirmed | FUP-003 결과 기반 경로 선택 |
+| UC-002 | 지원 범위 | A 조건부: Windows/C#/Git 먼저, Perforce 필수 후속 | Confirmed | FUP-007 Perforce 계약·환경 |
+| UC-003 | Core | A: 엔진 선택 시 C#/.NET CLI | Confirmed | 엔진 Go 이후 적용 |
+| UC-004 | 저장·수명 | A: 영속 JSON/JSONL cache + 세션 metadata | Confirmed | FUP-004 retention·용량·GC 실측 |
+| UC-005 | baseline | C: VCS와 Session 모두 제공 | Confirmed | 별도 추가 선택 불필요 |
+| UC-006 | 심볼 | A: L0/L1 전체 접근성, 원문 lazy resolve | Confirmed | 상세 반환 예산은 구현 계약 |
+| UC-007 | 실험 | A: 승인 비식별 로그 + 공개/합성 paired 실험 | Confirmed | FUP-001/002 실행 설정·최종 수치 |
+| UC-008 | trust | A: syntax-only 기본, 명시 trust 시 semantic | Confirmed | workspace별 trust 적용 |
+| UC-009 | 연동 | A: CLI 검증 후 MCP stdio + 얇은 훅 | Confirmed | 실제 설치는 별도 실행 범위 |
+| UC-010 | 잘린 원문 | B: 복구 전 관련 요구 확정 보류 | Confirmed | FUP-005 원문 보완 |
+| UC-011 | 검사 화면 | A+B: CLI text/JSON + 로컬 Web UI | Confirmed | FUP-006 시안·frontend 선택 |
 
 ## UC-001 — 제품 방향과 개발 순서
 
@@ -42,7 +42,7 @@ A. 비교 단계에서 엔진을 만들지 않는 결론도 허용한다. 토큰
 
 ### Impact
 
-design의 Goals/Features, architecture 전체 경로, TASK-005 이후 작업을 변경한다. A에서 기존 도구가 충분하면 TASK-006~016의 독립 엔진 경로를 실행하지 않고 TASK-017로 계획을 축소한다.
+TASK-005에서 비교 결과를 바탕으로 경로를 선택한다(FUP-003). 얇은 연동/중단이면 TASK-017에서 계획을 조정한다. Web UI와 필수 Perforce 요구는 변경 동의 없이 삭제하지 않는다.
 
 ### User Decision
 
@@ -68,7 +68,7 @@ A. SDK, framework·solution 종류, generated code, 프로젝트 크기를 지�
 
 ### Impact
 
-TASK-002~006의 범위와 architecture adapter·build matrix를 갱신한다. B/C 선택 시 C++ compile database·UHT·Blueprint·Perforce 권한과 baseline 정의를 별도 설계한 뒤 작업을 추가한다.
+1차 Windows/C#/Git을 TASK-002~016의 기준으로 삼고 Perforce는 TASK-019로 필수 후속 배정한다. C#/Git 실험을 UE5/C++ 효과로 일반화하지 않는다.
 
 ### User Decision
 
@@ -94,7 +94,7 @@ UC-001에서 엔진을 선택하면 A, 얇은 연동이면 C. `cv-*` 명령 이�
 
 ### Impact
 
-architecture의 Directory Structure/Build와 TASK-006~015의 예상 경로를 갱신한다. 최초 package registry 게시와 전역 설치는 별도 승인 대상이며 이 선택만으로 게시하지 않는다.
+독립 엔진을 선택하면 TASK-006부터 .NET solution 구조를 적용한다. executable/alias·SDK 버전은 구현 계약으로 고정하며 실제 package 게시는 별도 요청이다.
 
 ### User Decision
 
@@ -120,7 +120,7 @@ A를 PoC 후보로 두고 B와 cold/warm 차이를 측정한다. 저장 포맷�
 
 ### Impact
 
-TASK-008/011/012/016, architecture Data Model/State Management/Directory Structure. 선택 시 retention 기간, 최대 용량, 활성 session pin, 수동 purge 범위를 함께 정한다. GC가 config·원본·다른 session을 삭제해서는 안 된다.
+TASK-008/011에서 영속 cache·세션 분리·pin을 구현한다. retention/용량/GC 수치는 실측 후 TASK-021과 FUP-004로 확정하며 그 전 자동 파괴적 GC는 활성화하지 않는다.
 
 ### User Decision
 
@@ -146,7 +146,7 @@ A. 기본 base를 추측하지 않는다. B가 필요한 경우 `baselineKind=se
 
 ### Impact
 
-TASK-014/016, architecture BaselineProvider와 design S-04. Perforce 선택 시 submitted/shelved/pending CL별 base file revision과 target 읽기 방법을 구현 전에 따로 확정한다.
+TASK-014에서 VCS/Session 두 모드를 모두 구현한다. Session은 시작 당시 source bytes를 보존하고, Perforce VCS 의미는 TASK-019/FUP-007에서 구체화한다.
 
 ### User Decision
 
@@ -172,7 +172,7 @@ A. exact/prefix/substring 결정적 검색과 pagination을 먼저 제공한다.
 
 ### Impact
 
-TASK-007/009/010/013, schema·검색 정렬·context expansion 계약. default limit·max bytes/lines·timeout은 TASK-007에서 후보를 제시하고 UC-007 실험 전 고정한다.
+TASK-007/009/010/013의 schema·검색·원문/주석 resolve에 L0/L1 전체 접근성을 적용한다. source/result 예산은 계약에 후보를 기록하고 실험에서 검증한다.
 
 ### User Decision
 
@@ -212,7 +212,7 @@ A를 기본으로 하고 B는 별도 지정한다. 원문 로그를 자동 수�
 
 ### Impact
 
-TASK-001은 protocol/집계 schema만 준비할 수 있고 실제 로그 접근은 TASK-004의 차단 조건이다. TASK-004/005/016/017 및 성공 기준을 갱신한다. 근거가 부족하면 결론을 `inconclusive`로 내며 작은 성공률 차이를 확정 이득으로 주장하지 않는다.
+실험 방향은 확정됐다. TASK-001에서 pilot을 설계하고 실제 로그/실행은 FUP-001 지정 후 TASK-004에서 수행한다. pilot 결과로 본 실험 수치(FUP-002)를 고정한 뒤 TASK-016에서 CV를 평가한다.
 
 ### User Decision
 
@@ -238,7 +238,7 @@ A. trust는 workspace 설정이 스스로 부여하지 못하게 한다. network
 
 ### Impact
 
-TASK-006/009/012와 architecture Security/Configuration. build output/generated code가 없어지는 coverage 영향도 문서화한다.
+TASK-006/009/012에서 syntax-only 기본과 명시 trust 경계를 구현·검증한다. workspace 설정이 스스로 trust를 부여할 수 없게 한다.
 
 ### User Decision
 
@@ -264,7 +264,7 @@ A. `cv_find`, `cv_get`부터, reference 구현 후 `cv_impact`를 노출한다. 
 
 ### Impact
 
-TASK-015, integration contract, package/설치 계획. 전역 설정 변경은 dry-run·병합·uninstall 계약을 준비한 뒤 실제 설치 시 별도로 요청한다. 이번 선택은 설치 실행 권한이 아니다.
+TASK-015에서 CLI 검증 후 MCP stdio·얇은 lifecycle hook을 구현한다. 기존 설정 병합·dry-run·uninstall 복원을 검증하고 실제 설치 범위는 실행 시 지정한다.
 
 ### User Decision
 
@@ -289,7 +289,7 @@ A. 누락 내용을 임의로 완성하지 않는다. 현재 작성된 benchmark
 
 ### Impact
 
-준비 문서·synthetic corpus·기존 도구 조사는 차단하지 않는다. 새 정보가 들어오면 TASK-005에서 영향 분석하고 design/architecture/plan을 개정한다. 누락된 요구가 이미 결정됐다고 가정하는 구현은 금지한다.
+TASK-020에서 복구 근거를 확인한다. FUP-005는 누락 부분 관련 요구만 차단하며 기존에 명시된 설계·시안·프로토콜 준비를 막지 않는다.
 
 ### User Decision
 
@@ -315,10 +315,33 @@ A. B/C를 선택하면 승인된 화면 범위를 바탕으로 정보 밀도 중
 
 ### Impact
 
-현재의 CLI 계약·TASK-001~017을 막지 않는다. GUI는 TASK-018이 차단되며 B/C 결정 후 `impeccable`과 `design-taste-frontend`를 읽고 design/architecture/plan에 신규 UI 범위를 반영한다. 현재 시안이 존재하거나 GUI가 확정됐다고 보고하지 않는다.
+이번 prepare에서 세 시안을 생성한다. 제품 로컬 Web UI는 TASK-018, 최종 시안/frontend 선택은 FUP-006에 연결한다. CLI는 TASK-010, IDE/데스크톱 UI는 제외한다.
 
 ### User Decision
 
 - Status: Confirmed
 - 선택: A+B
 - 사용자 확인 근거·일자: 2026-09-19 인터뷰 — 터미널 text/JSON과 로컬 Web UI를 모두 제공한다. CLI는 자동화/AI 연동, Web UI는 `.cv`·심볼 관계·diff의 사람용 탐색/검사에 사용한다. IDE/데스크톱 UI는 제외한다.
+
+## 후속 입력과 실행 조건
+
+2026-09-20 동기화: 위 11개 결정은 모두 Confirmed이며 다시 선택할 필요가 없다. 아래 Pending은 이미 선택한 방향을 실행하기 위한 구체 입력 또는 결과 기반 판단이다. 미입력 상태를 승인으로 바꾸지 않으며 해당 부분 외의 준비 작업은 계속할 수 있다.
+
+| ID | 상태 | 필요한 정보/근거 | 영향 TASK |
+|---|---|---|---|
+| FUP-001 | Pending | pilot용 실제 로그 경로·기간·필드, repo/commit, 모델, 횟수·비용/시간 상한·공유 범위. 실제 읽기·실행 전 지정 | TASK-004 |
+| FUP-002 | Pending | pilot 설계/결과 후 본 실험 반복 수·품질 허용 저하·최소 효율 차이·예산 확정. 본 실험 전에 동결 | TASK-005, TASK-016 |
+| FUP-003 | Pending | 기존 도구 비교 결과에 따른 엔진/얇은 연동/중단 판단 | TASK-005 및 모든 제품 구현 |
+| FUP-004 | Pending | 실측에 근거한 retention·용량·GC 수치. 초기에는 자동 파괴적 GC 비활성 | TASK-021 |
+| FUP-005 | Pending | 작성자가 보완한 잘린 원문의 정확한 내용과 출처 | TASK-020, 누락 내용을 전제하는 요구 |
+| FUP-006 | Pending | 시안 3종 중 최종 방향과 frontend stack. CLI+Web 제공 자체는 재논의하지 않음 | TASK-018 |
+| FUP-007 | Pending | Perforce submitted/shelved/pending CL별 base/target 계약과 실제 server/client/CL·허용 read-only 명령 | TASK-019의 실서버 연동 |
+
+FUP-005 확인: 저장소 원안과 로컬 위키 원본을 2026-09-20 확인했으며 둘 다 `benchmark task/g`에서 끝난다. 복구됐다고 간주하지 않는다. 누락과 무관하게 명시된 요구·시안·프로토콜 설계는 진행한다.
+
+### 동기화 기록
+
+- 반영 기준: 사용자 인터뷰 기록 커밋 `b16df53`.
+- 이번 작업에서 11개 `User Decision`의 선택·근거·날짜는 변경하지 않았다.
+- 최신 적용 문서: [design.md](design.md), [architecture.md](architecture.md), [plan.md](plan.md).
+- UI 비교 자료: [시안 목록](samples/index.html). 시안의 데이터와 동작은 합성이며 제품 구현 결과가 아니다.

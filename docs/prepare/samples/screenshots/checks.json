@@ -1,0 +1,20 @@
+[
+  {
+    "sample": 1,
+    "errors": [],
+    "overflow": false,
+    "interaction": "passed"
+  },
+  {
+    "sample": 2,
+    "errors": [],
+    "overflow": false,
+    "interaction": "passed"
+  },
+  {
+    "sample": 3,
+    "errors": [],
+    "overflow": false,
+    "interaction": "passed"
+  }
+]
