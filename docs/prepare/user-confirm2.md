@@ -57,40 +57,45 @@ TASK-018~021은 계획에 따라 `Blocked`다. 이 상태에서는 새 서브에
 | FUP-001 | Partial | 실제 승인 로그의 경로·기간·필드, 실제 모델·token·비용 측정 설정. 지정 전 실제 로그를 읽거나 유료 실행하지 않음 | 실제 데이터 평가 |
 | FUP-002 | Complete / Frozen | 품질 저하 0, Critical 0, 최소 3회, seed `20260920`, 20% 효율 후보, 30분·1 GiB·latency 상한 | TASK-005·016 기준 유지 |
 | FUP-003 | Complete | 독립 C#/.NET prototype 완료; TASK-016 No-Go 후 자동 제품화 중단 | TASK-017 후속 결정 유지 |
-| FUP-004 | Pending | retention 기간, cache 용량, GC 트리거와 삭제 승인 범위에 대한 실측 수치·승인 | TASK-021 |
-| FUP-005 | Pending | `benchmark task/g` 뒤에 이어지는 정확한 원문과 출처(파일·리비전·URL 등) | TASK-020 |
-| FUP-006 | Pending | 세 UI 시안 중 최종 방향과 frontend stack. CLI+Web 제공 결정 자체는 이미 확정 | TASK-018 |
-| FUP-007 | Pending | submitted/shelved/pending CL별 base·target 계약, 실제 Perforce server/client/CL, 허용 read-only 명령 | TASK-019 |
+| FUP-004 | Confirmed | 기간/용량 기반 GC를 모두 제공하고 config에서 `age`/`capacity`/`hybrid`를 선택. 활성 generation 보호·dry-run 지원. 기본 retention/용량 수치는 실측 후 확정 | TASK-021 |
+| FUP-005 | Complete / Obsolete | 잘린 원문 복구 요구를 폐기. 누락 사실과 사용자 결정을 코멘트로 보존하고 현재 benchmark 설계·구현을 기준으로 진행 | TASK-020 |
+| FUP-006 | Confirmed | Sample 1 + Blazor/ASP.NET Core. CLI+Web을 유지하고 로컬 Web UI는 .NET stack으로 통일 | TASK-018 |
+| FUP-007 | Confirmed / Environment Pending | CL 중심 read-only adapter. submitted/pending/shelved CL 및 workspace 상태를 지원하고 변경 명령은 자동 실행하지 않음. 실제 server/client/CL은 통합 테스트 시 제공 | TASK-019 |
 
 ### 입력 양식
 
 아래 형식으로 필요한 항목만 채워서 회신할 수 있다. 비어 있는 항목은 계속 `Pending`으로 둔다.
 
 ```text
-FUP-004
-- retention: <기간>
-- cache capacity: <용량 또는 산정식>
-- GC trigger: <조건>
-- destructive delete approved: <yes/no 및 범위>
+FUP-004 — Confirmed (2026-09-21)
+- modes: age / capacity / hybrid
+- retention: config로 관리; 기본값은 실측 후 확정
+- cache capacity: config로 관리; 기본값은 실측 후 확정
+- GC trigger: 선택한 mode에 따라 기간/용량/혼합 기준
+- safety: 활성 generation 보호, dry-run 지원
+- destructive delete approved: 위 cache GC 범위 내에서만 허용
 
-FUP-005
-- source: <파일·리비전·URL>
-- missing text: <원문 또는 보완 문서>
+FUP-005 — Complete / Obsolete (2026-09-21)
+- decision: 잘린 `benchmark task/g...` 원문은 복구하지 않는다.
+- comment: 원문 누락 사실과 복구하지 않기로 한 사용자 결정을 추적 정보로 남긴다.
+- baseline: 현재 benchmark 설계·구현을 이후 기준으로 사용한다.
 
-FUP-006
-- selected mock: <시안 식별자>
-- frontend stack: <framework / language / build>
+FUP-006 — Confirmed (2026-09-21)
+- selected mock: Sample 1
+- frontend stack: Blazor / ASP.NET Core / .NET
+- intent: CLI 자동화 인터페이스와 로컬 Web 검사 UI를 함께 제공한다.
 
-FUP-007
-- server/client/workspace/CL: <값>
-- base-target contract: <submitted/shelved/pending별 규칙>
-- allowed read-only commands: <목록>
+FUP-007 — Confirmed / Environment Pending (2026-09-21)
+- server/client/workspace/CL: 실제 통합 테스트 시 제공
+- base-target contract: CL 중심. submitted CL은 depot revision 기준, pending CL은 해당 CL의 opened workspace 파일, shelved CL은 shelf revision, 현재 workspace는 have revision + local opened 상태를 사용
+- allowed read-only commands: `p4 info`, `p4 client`, `p4 opened`, `p4 changes`, `p4 describe`, `p4 files`, `p4 fstat`, `p4 print`, `p4 have`, `p4 where` 등 조회 계열
+- prohibited automatic mutations: `sync`, `edit`, `revert`, `submit`, `unshelve` 등 workspace/depot 변경 명령
 ```
 
 ## 안전한 현재 기본값
 
-- 자동 파괴적 GC는 승인 전까지 비활성화하고 삭제하지 않는다.
-- FUP-005가 없으면 잘린 원문을 추정하지 않는다.
+- GC는 config의 `age`/`capacity`/`hybrid` 정책으로 동작하며 활성 generation을 보호하고 dry-run을 제공한다. 기본 retention/용량 수치는 실측 후 확정한다.
+- 잘린 `benchmark task/g...` 원문은 복구하지 않으며, 누락 사실과 해당 결정을 코멘트로 보존한다.
 - `p4` 실행 환경과 실제 Perforce 계약이 없으면 adapter를 만들거나 성공으로 표시하지 않는다.
 - TASK-016 결과만으로 Web UI·Perforce 제품화를 자동 재개하지 않는다.
 - 실제 로그·원문·시크릿은 외부로 보내지 않으며, 보고서에는 승인된 비식별 집계만 남긴다.
