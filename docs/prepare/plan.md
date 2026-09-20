@@ -2,7 +2,7 @@
 
 ## 기준과 현재 상태
 
-작성일: 2026-09-20. [design.md](design.md), [architecture.md](architecture.md), [user-confirm.md](user-confirm.md)의 확정 결정과 [UI 시안 3종](samples/index.html)을 종합했다. 기준은 사용자 인터뷰 커밋 `b16df53`이다. 이 계획은 실제 엔진 구현·실험 결과가 아니라 후속 에이전트의 작업 지침이다.
+작성일: 2026-09-20. 모델 배정과 서브에이전트 실행 방식 갱신: 2026-09-20. [design.md](design.md), [architecture.md](architecture.md), [user-confirm.md](user-confirm.md)의 확정 결정과 [UI 시안 3종](samples/index.html)을 종합했다. 기준은 사용자 인터뷰 커밋 `b16df53`이다. 이 계획은 실제 엔진 구현·실험 결과가 아니라 후속 에이전트의 작업 지침이다.
 
 - UC-001~011은 모두 Confirmed다. 다시 선택을 요구하지 않는다.
 - UC-001 A: 측정·기존 도구 비교 후 Go/No-Go. 아직 엔진을 만들기로 결정한 것은 아니다.
@@ -48,9 +48,19 @@ TASK-001/002/003은 독립적인 준비 작업이다. 실제 로그 수집·도�
 
 ## Agent / Model 배정
 
-현재 세션에서 실제 사용 가능하다고 명시된 Codex 모델 `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`를 작업 성격에 맞게 지정했다. 복합 설계·검토는 Astra High, 명확한 구현·분석은 Sol/Terra Medium 또는 High, 제한된 출처 수집은 Luna Low다. 불필요한 최고 추론을 쓰지 않는다.
+계획의 모든 TASK는 표에 지정한 모델과 추론 수준을 명시한 Codex 서브에이전트에 배정한다. 사용 모델은 `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`다. 복합 설계·검토·통합 판단은 Sol High, 명확한 구현·분석은 Sol/Terra Medium 또는 High, 제한된 출처 수집은 Luna Low다. 기존 상위 모델 배정은 검증 범위를 유지한 채 Sol High로 통일했다. 불필요하게 높은 추론 수준을 쓰지 않는다.
 
 전역 역할 규칙의 Claude 설계·교차 리뷰 선호는 유지한다. 이 세션에서 특정 Claude 모델의 실행 가능성이 확인되지 않았으므로 계획에 호출 불가능한 모델명을 기입하지 않았다. 실제 Claude 환경을 확인하면 해당 작업을 동등 역할로 재배정하고 모델·추론 수준을 갱신한다. 모델 배정은 계획이며 유료 agent 실행 권한·실험 예산의 대체물이 아니다.
+
+## 서브에이전트 실행 방식
+
+- 메인 에이전트는 dispatcher와 integrator 역할을 맡는다. TASK의 `Dependencies`, `Blocked By`, `Status`를 확인하고 실행 가능한 TASK만 서브에이전트에 전달한다.
+- TASK 하나를 기본 작업 단위로 사용한다. 서브에이전트 프롬프트에는 Goal, Dependencies, Scope, Files, Validation, 확정된 UC/FUP 입력, 브랜치와 금지 범위를 포함한다.
+- 각 서브에이전트 호출에는 TASK 표의 `Model`과 `Reasoning Level`을 명시한다. 모델을 상속에 맡기거나 실행 중 임의로 낮추지 않는다.
+- 의존성이 없고 파일·외부 상태를 공유하지 않는 TASK만 병렬 실행한다. TASK-001/002/003처럼 독립적인 준비 작업은 함께 실행할 수 있다. 같은 schema·브랜치·실험 데이터·생성 파일을 수정하는 TASK는 순차 실행하거나 격리된 worktree를 사용한다.
+- 서브에이전트는 자신의 TASK 산출물과 검증 결과를 반환한다. 메인 에이전트가 diff, 요구사항 추적, 테스트, 보안 경계와 다음 TASK의 준비 상태를 직접 확인한 뒤 통합한다.
+- `Blocked`와 아직 gate를 통과하지 않은 `Conditional` TASK는 스폰하지 않는다. 필요한 FUP 입력이나 Go/No-Go 결정이 확보되면 문서 상태를 먼저 갱신한다.
+- 서브에이전트는 커밋·push·PR·병합을 수행하지 않는다. 통합 검증이 끝난 뒤 메인 에이전트가 사용자 승인 범위에서 Git 작업을 처리한다.
 
 ## 실험 프로토콜
 
@@ -112,7 +122,7 @@ Read/Grep 비중·전체 읽기율·재읽기율·주석 비율, cache-aware 비
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | Medium |
 | Reason | 측정 계약과 집계의 오류를 검토하면서 작은 산출물로 나눈다. |
@@ -142,7 +152,7 @@ source와 정답 위치를 독립 대조한다. CV 또는 같은 Roslyn query를
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-terra |
 | Reasoning Level | Medium |
 | Reason | 기준이 명확한 테스트 자료 제작이다. |
@@ -172,7 +182,7 @@ LSP·Serena·범위 읽기와 CV의 중복·차별 가설을 확인한다.
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-luna |
 | Reasoning Level | Low |
 | Reason | 한정된 기능 목록과 출처 수집이다. |
@@ -202,7 +212,7 @@ TASK-001, TASK-002, TASK-003
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 실험 조건·개인정보·비용 집계를 함께 통제한다. |
@@ -232,8 +242,8 @@ TASK-004
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 제품 가치와 실험 불확실성을 통합하는 판단이다. |
 
@@ -262,7 +272,7 @@ restore/build/test와 CLI help를 실행한다. trust 없는 프로젝트의 gen
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-terra |
 | Reasoning Level | Medium |
 | Reason | 확정한 단일 runtime 구조의 정형 구현이다. |
@@ -292,8 +302,8 @@ round-trip·unknown schema 거부, not_found/partial/truncated/error 필드, cur
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 모든 후속 작업에 영향을 미치는 계약 정합성을 결정한다. |
 
@@ -322,7 +332,7 @@ JSON manifest/JSONL shards, digest·schema·크기 검증, 임시 generation pub
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 원자적 발행·복구의 오류는 데이터 정확성에 직접 영향을 준다. |
@@ -352,7 +362,7 @@ Roslyn syntax/semantic 경로, partial 선언 병합, overload/generic ID, inven
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 파서·binding과 coverage를 함께 다루는 구현이다. |
@@ -382,7 +392,7 @@ CRLF/LF/BOM·한글/emoji·same mtime/size 변경·오래된 span에서 정확�
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | Medium |
 | Reason | 계약이 정해진 원문 추출·CLI 표시 작업이다. |
@@ -412,8 +422,8 @@ cv-update·신규/삭제/rename reconciliation, semantic 종속 invalidation, bo
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 동시성·semantic invalidation·원문 보존의 복합 구현이다. |
 
@@ -442,8 +452,8 @@ JSON 결과를 실제 source/독립 정답과 대조한다. stale source 오반�
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 작성자의 성공 경로와 독립적으로 안전성·정확성 가정을 검토한다. |
 
@@ -472,7 +482,7 @@ remark 위치·hash·원문, 정적 참조·caller expansion, lexical 후보 pro
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 참조 누락과 잘못된 완전성 주장을 막는 semantic 구현이다. |
@@ -502,8 +512,8 @@ dirty-start 변경은 VCS에 포함·Session에서 제외됨을 검증한다. �
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | revision 의미와 identity 변화·원문 증거의 정확성이 핵심이다. |
 
@@ -532,7 +542,7 @@ cv_find/cv_get 및 구현된 cv_impact를 stdio로 노출하고 세션 시작/�
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | Medium |
 | Reason | 확정 Core 계약을 외부 client와 연결하는 작업이다. |
@@ -562,8 +572,8 @@ A/B/C/D에 E(CV)를 추가하고 cold/warm/long·규모별 실험을 수행한�
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 정확도·비용·통계적 불확실성을 통합해 판단한다. |
 
@@ -592,7 +602,7 @@ TASK-005 또는 TASK-016의 사용자 판단
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | Medium |
 | Reason | 근거가 확정된 선택을 실행 범위로 정리하는 문서 작업이다. |
@@ -622,8 +632,8 @@ CLI와 같은 query/generation의 결과가 일치해야 한다. 실제 source e
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 선택된 UX와 민감한 로컬 source 접근 경계를 함께 구현한다. |
 
@@ -652,8 +662,8 @@ file revision과 반환 bytes·diff를 독립 대조한다. sync/submit/revert/s
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
-| Model | gpt-6-astra |
+| Agent | Codex subagent |
+| Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | VCS 의미·workspace mapping·접근 경계를 다루는 필수 통합이다. |
 
@@ -682,7 +692,7 @@ Blocked
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | Medium |
 | Reason | 원문 증거와 확정 요구의 충돌을 제한된 문서 범위에서 검토한다. |
@@ -712,7 +722,7 @@ TASK-011의 측정 자료; TASK-016 결과가 있으면 함께 사용
 
 | 배정 | 값 |
 |---|---|
-| Agent | Codex |
+| Agent | Codex subagent |
 | Model | gpt-5.6-sol |
 | Reasoning Level | High |
 | Reason | 실측 정책과 삭제·동시성 안전성의 결합이다. |
@@ -757,6 +767,6 @@ FUP 상태와 입력 내용은 [user-confirm.md](user-confirm.md)의 후속 입�
 - 시안의 원문·hash·revision·관계·diff는 합성이며 실제 제품 분석 결과가 아니다.
 - 이 plan은 기획·설계·결정·시안·검증 기록 이후 마지막에 작성했다.
 - 모든 TASK는 목표·의존·범위·예상 파일·검증·Agent·Model·Reasoning Level·배정 이유·Blocked By를 갖는다.
-- 실제 엔진·플러그인·실험을 완료하지 않았으며 본 작업에서 commit/push/배포는 수행하지 않았다.
+- 실제 엔진·플러그인·실험을 완료하지 않았으며 prepare 단계에서는 제품 구현·배포를 수행하지 않았다.
 
-후속 에이전트는 TASK-001~003의 Ready 준비부터 진행하고, FUP 입력·제품 경로 결정을 반영해 의존 순서대로 구현한다.
+메인 에이전트는 TASK-001~003의 Ready 준비를 지정 모델의 서브에이전트에 우선 배정하고, 결과를 통합·검증한다. 이후 FUP 입력·제품 경로 결정을 반영해 실행 가능한 TASK만 의존 순서대로 배정한다.
