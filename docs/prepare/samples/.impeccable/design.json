@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-20T08:37:59.5065751+09:00",
+  "title": "Design System: Code Virtualize UI 비교 시안 (최종 선택 전)",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Workspace Canvas", "canonical": "#f5f6f4", "tonalRamp": ["oklch(15% 0.006 155)", "oklch(26% 0.006 155)", "oklch(38% 0.006 155)", "oklch(50% 0.006 155)", "oklch(62% 0.006 155)", "oklch(74% 0.006 155)", "oklch(86% 0.006 155)", "oklch(95% 0.006 155)"] },
+      "surface": { "role": "neutral", "displayName": "Inspection Surface", "canonical": "#ffffff", "tonalRamp": ["#262626", "#424242", "#616161", "#7d7d7d", "#9b9b9b", "#bababa", "#dedede", "#ffffff"] },
+      "panel": { "role": "neutral", "displayName": "Quiet Panel", "canonical": "#eef1ef", "tonalRamp": ["oklch(15% 0.008 155)", "oklch(26% 0.008 155)", "oklch(38% 0.008 155)", "oklch(50% 0.008 155)", "oklch(62% 0.008 155)", "oklch(74% 0.008 155)", "oklch(86% 0.008 155)", "oklch(95% 0.008 155)"] },
+      "ink": { "role": "neutral", "displayName": "Primary Ink", "canonical": "#202d2b", "tonalRamp": ["oklch(15% 0.018 175)", "oklch(26% 0.018 175)", "oklch(38% 0.018 175)", "oklch(50% 0.018 175)", "oklch(62% 0.018 175)", "oklch(74% 0.018 175)", "oklch(86% 0.018 175)", "oklch(95% 0.018 175)"] },
+      "muted": { "role": "neutral", "displayName": "Evidence Muted", "canonical": "#526660", "tonalRamp": ["oklch(15% 0.025 165)", "oklch(26% 0.025 165)", "oklch(38% 0.025 165)", "oklch(50% 0.025 165)", "oklch(62% 0.025 165)", "oklch(74% 0.025 165)", "oklch(86% 0.025 165)", "oklch(95% 0.025 165)"] },
+      "line": { "role": "neutral", "displayName": "Structural Line", "canonical": "#cbd5d0", "tonalRamp": ["oklch(15% 0.012 160)", "oklch(26% 0.012 160)", "oklch(38% 0.012 160)", "oklch(50% 0.012 160)", "oklch(62% 0.012 160)", "oklch(74% 0.012 160)", "oklch(86% 0.012 160)", "oklch(95% 0.012 160)"] },
+      "accent": { "role": "primary", "displayName": "Verification Teal", "canonical": "#12685c", "tonalRamp": ["oklch(15% 0.065 175)", "oklch(26% 0.065 175)", "oklch(38% 0.065 175)", "oklch(50% 0.065 175)", "oklch(62% 0.065 175)", "oklch(74% 0.065 175)", "oklch(86% 0.065 175)", "oklch(95% 0.065 175)"] },
+      "accent-soft": { "role": "primary", "displayName": "Selection Teal Wash", "canonical": "#e0efea", "tonalRamp": ["oklch(15% 0.025 165)", "oklch(26% 0.025 165)", "oklch(38% 0.025 165)", "oklch(50% 0.025 165)", "oklch(62% 0.025 165)", "oklch(74% 0.025 165)", "oklch(86% 0.025 165)", "oklch(95% 0.025 165)"] },
+      "warning": { "role": "secondary", "displayName": "Coverage Ochre", "canonical": "#805115", "tonalRamp": ["oklch(15% 0.075 75)", "oklch(26% 0.075 75)", "oklch(38% 0.075 75)", "oklch(50% 0.075 75)", "oklch(62% 0.075 75)", "oklch(74% 0.075 75)", "oklch(86% 0.075 75)", "oklch(95% 0.075 75)"] },
+      "warning-soft": { "role": "secondary", "displayName": "Coverage Paper", "canonical": "#fbefd9", "tonalRamp": ["oklch(15% 0.035 75)", "oklch(26% 0.035 75)", "oklch(38% 0.035 75)", "oklch(50% 0.035 75)", "oklch(62% 0.035 75)", "oklch(74% 0.035 75)", "oklch(86% 0.035 75)", "oklch(95% 0.035 75)"] },
+      "error": { "role": "tertiary", "displayName": "Failure Red", "canonical": "#a32e35", "tonalRamp": ["oklch(15% 0.11 25)", "oklch(26% 0.11 25)", "oklch(38% 0.11 25)", "oklch(50% 0.11 25)", "oklch(62% 0.11 25)", "oklch(74% 0.11 25)", "oklch(86% 0.11 25)", "oklch(95% 0.11 25)"] },
+      "error-soft": { "role": "tertiary", "displayName": "Failure Blush", "canonical": "#fff0ef", "tonalRamp": ["oklch(15% 0.03 25)", "oklch(26% 0.03 25)", "oklch(38% 0.03 25)", "oklch(50% 0.03 25)", "oklch(62% 0.03 25)", "oklch(74% 0.03 25)", "oklch(86% 0.03 25)", "oklch(95% 0.03 25)"] },
+      "code-surface": { "role": "neutral", "displayName": "Code Surface", "canonical": "#f7f9f7", "tonalRamp": ["oklch(15% 0.004 155)", "oklch(26% 0.004 155)", "oklch(38% 0.004 155)", "oklch(50% 0.004 155)", "oklch(62% 0.004 155)", "oklch(74% 0.004 155)", "oklch(86% 0.004 155)", "oklch(95% 0.004 155)"] },
+      "diff-delete": { "role": "tertiary", "displayName": "Diff Delete", "canonical": "#8d3439", "tonalRamp": ["oklch(15% 0.09 25)", "oklch(26% 0.09 25)", "oklch(38% 0.09 25)", "oklch(50% 0.09 25)", "oklch(62% 0.09 25)", "oklch(74% 0.09 25)", "oklch(86% 0.09 25)", "oklch(95% 0.09 25)"] },
+      "diff-add": { "role": "tertiary", "displayName": "Diff Add", "canonical": "#16694c", "tonalRamp": ["oklch(15% 0.07 155)", "oklch(26% 0.07 155)", "oklch(38% 0.07 155)", "oklch(50% 0.07 155)", "oklch(62% 0.07 155)", "oklch(74% 0.07 155)", "oklch(86% 0.07 155)", "oklch(95% 0.07 155)"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "작업 제목", "purpose": "시안 제목과 선택 심볼의 최상위 heading." },
+      "title": { "displayName": "구획 제목", "purpose": "sidebar, graph, inspector의 짧은 heading." },
+      "body": { "displayName": "검사 본문", "purpose": "조작 설명과 상태 안내." },
+      "label": { "displayName": "근거 Label", "purpose": "field label, 상태명, metadata." },
+      "code": { "displayName": "원문 Mono", "purpose": "C# source, diff, signature, path, 관계 위치." }
+    },
+    "themeMappings": {
+      "light": { "bg": "#f5f6f4", "surface": "#ffffff", "panel": "#eef1ef", "ink": "#202d2b", "muted": "#526660", "line": "#cbd5d0", "accent": "#12685c", "active": "#e0efea", "warn": "#805115", "warnBg": "#fbefd9", "error": "#a32e35", "errorBg": "#fff0ef", "code": "#f7f9f7", "delete": "#8d3439", "add": "#16694c" },
+      "dark": { "bg": "#17201e", "surface": "#202b28", "panel": "#18231f", "ink": "#e4ebe6", "muted": "#afc2b8", "line": "#40544b", "accent": "#91d6c2", "active": "#2c4b40", "warn": "#ecc385", "warnBg": "#403622", "error": "#ffb0b3", "errorBg": "#452b2b", "code": "#1b2521", "delete": "#ffb1b5", "add": "#99ddbb" }
+    },
+    "shadows": [
+      { "name": "selected-graph-node", "value": "0 5px 15px #122b231a", "purpose": "선택된 graph node를 관계선 위에서 구조적으로 분리한다." }
+    ],
+    "motion": [
+      { "name": "synthetic-loading-pulse", "value": "pulse 0.7s alternate infinite", "purpose": "550ms 합성 복구 진행 상태를 알린다. reduced motion에서는 제거한다." },
+      { "name": "reduced-motion", "value": "animation: none; transition: none; scroll-behavior: auto", "purpose": "prefers-reduced-motion 요청을 모든 시안에 적용한다." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "700px" },
+      { "name": "compact-desktop", "value": "1100px" },
+      { "name": "wide-desktop", "value": "1600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Recovery Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "stale, empty, error 상태에서 합성 복구를 시작한다.",
+      "html": "<button class=\"ds-btn-primary\">예제 snapshot 재검증</button>",
+      "css": ".ds-btn-primary{min-height:36px;padding:6px 12px;border:1px solid var(--accent);border-radius:5px;background:var(--accent);color:var(--surface);font:inherit;cursor:pointer}.ds-btn-primary:hover{filter:brightness(.94)}.ds-btn-primary:active{transform:translateY(1px)}.ds-btn-primary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.ds-btn-primary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Symbol Search",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "이름 또는 파일 경로로 현재 symbol list를 좁힌다.",
+      "html": "<label class=\"ds-field\" for=\"ds-search\">이름 또는 파일 경로 검색</label><input class=\"ds-search\" id=\"ds-search\" type=\"search\" placeholder=\"Checkout, PricePolicy…\">",
+      "css": ".ds-field{display:block;color:var(--muted);font:600 12px/1.5 'Segoe UI',Arial,sans-serif}.ds-search{display:block;width:100%;min-height:36px;margin-top:5px;padding:8px 10px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink);font:400 14px/1.5 'Segoe UI',Arial,sans-serif}.ds-search:hover{border-color:var(--muted)}.ds-search:focus-visible{outline:3px solid var(--accent);outline-offset:3px}"
+    },
+    {
+      "name": "Selected Symbol Row",
+      "kind": "nav",
+      "refersTo": "symbol-selected",
+      "description": "kind, name, 접근성, 파일명과 현재 선택을 한 button에 담는다.",
+      "html": "<button class=\"ds-symbol\" aria-pressed=\"true\"><span class=\"ds-symbol-name\"><span class=\"ds-symbol-kind\">method</span>Checkout</span><span class=\"ds-symbol-meta\">public · CheckoutHandler.cs</span></button>",
+      "css": ".ds-symbol{display:block;width:100%;min-height:36px;padding:10px;text-align:left;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--ink);font-family:'Segoe UI',Arial,sans-serif;cursor:pointer}.ds-symbol:hover{background:var(--panel)}.ds-symbol[aria-pressed=true]{background:var(--active);border-color:var(--accent)}.ds-symbol:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.ds-symbol-name{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere}.ds-symbol-kind{display:inline-block;min-width:45px;color:var(--accent);font-size:11px}.ds-symbol-meta{display:block;margin-top:4px;color:var(--muted);font-size:11px}"
+    },
+    {
+      "name": "Source Tab",
+      "kind": "nav",
+      "refersTo": "button-secondary",
+      "description": "source, remark, diff 가운데 현재 panel을 선택한다.",
+      "html": "<div class=\"ds-tabs\" role=\"group\" aria-label=\"심볼 정보\"><button class=\"ds-tab\" aria-pressed=\"true\">원문</button><button class=\"ds-tab\" aria-pressed=\"false\">주석</button><button class=\"ds-tab\" aria-pressed=\"false\">변경</button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.ds-tab{min-height:36px;padding:8px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font:inherit;cursor:pointer}.ds-tab:hover{background:var(--panel)}.ds-tab[aria-pressed=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}.ds-tab:focus-visible{outline:3px solid var(--accent);outline-offset:3px}"
+    },
+    {
+      "name": "Static Evidence Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "합성 semantic fixture에서 해석한 관계임을 표시한다.",
+      "html": "<span class=\"ds-pill ds-pill-static\">정적 해석 · 호출</span>",
+      "css": ".ds-pill{display:inline-block;padding:1px 6px;border:1px solid var(--line);border-radius:4px;font:400 11px/1.5 'Segoe UI',Arial,sans-serif;white-space:nowrap}.ds-pill-static{background:var(--active);color:var(--accent)}"
+    },
+    {
+      "name": "Textual Candidate Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "접근성과 receiver를 확인하지 않은 이름 일치 후보를 구분한다.",
+      "html": "<span class=\"ds-pill ds-pill-textual\">텍스트 추정 · 이름 일치</span>",
+      "css": ".ds-pill{display:inline-block;padding:1px 6px;border:1px solid var(--line);border-radius:4px;font:400 11px/1.5 'Segoe UI',Arial,sans-serif;white-space:nowrap}.ds-pill-textual{background:var(--warn-bg);color:var(--warn)}"
+    },
+    {
+      "name": "Source Panel",
+      "kind": "card",
+      "refersTo": "code-panel",
+      "description": "합성 C# exact slice를 줄 번호와 함께 표시한다.",
+      "html": "<pre class=\"ds-code\" tabindex=\"0\" aria-label=\"합성 C# 원문\"><code><span class=\"ds-code-line\"><span class=\"ds-ln\">18</span>public Receipt Checkout(Cart cart)</span><span class=\"ds-code-line\"><span class=\"ds-ln\">19</span>{</span></code></pre>",
+      "css": ".ds-code{overflow:auto;margin:0;padding:16px 0;border:1px solid var(--line);border-radius:6px;background:var(--code);color:var(--ink);font:13px/1.8 Consolas,'Cascadia Code',monospace;tab-size:4}.ds-code:hover{border-color:var(--muted)}.ds-code:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.ds-code-line{display:block;padding:0 16px;white-space:pre}.ds-ln{display:inline-block;width:33px;color:var(--muted);user-select:none}"
+    },
+    {
+      "name": "Partial Coverage Notice",
+      "kind": "card",
+      "refersTo": "button-secondary",
+      "description": "원문은 최신이지만 일부 참조 분석이 실패한 상태와 복구 action을 함께 보여준다.",
+      "html": "<div class=\"ds-state-tip\">원문 hash는 일치합니다. PricePolicy 분석 결과가 없어 일부 참조를 숨겼습니다. 결과 없음이 참조 없음을 뜻하지 않습니다. <button class=\"ds-inline-action\">실패한 분석 재시도</button></div>",
+      "css": ".ds-state-tip{padding:10px 24px;background:var(--warn-bg);color:var(--warn);font:400 12px/1.5 'Segoe UI',Arial,sans-serif}.ds-inline-action{min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}.ds-inline-action:hover{background:var(--panel)}.ds-inline-action:focus-visible{outline:3px solid var(--accent);outline-offset:3px}"
+    },
+    {
+      "name": "Selected Graph Node",
+      "kind": "custom",
+      "refersTo": "symbol-selected",
+      "description": "관계 그래프에서 현재 검사 대상을 선택한다.",
+      "html": "<button class=\"ds-node\" aria-pressed=\"true\" aria-label=\"Checkout 심볼 선택\"><code>Checkout</code><small>CheckoutHandler.cs</small></button>",
+      "css": ".ds-node{min-height:60px;width:145px;padding:9px;border:1px solid var(--accent);border-radius:6px;background:var(--active);color:var(--ink);box-shadow:0 5px 15px #122b231a;text-align:left;font:400 12px/1.5 'Segoe UI',Arial,sans-serif;cursor:pointer}.ds-node:hover{filter:brightness(.98)}.ds-node:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.ds-node code{display:block;overflow-wrap:anywhere;font-family:Consolas,'Cascadia Code',monospace}.ds-node small{display:block;margin-top:4px;color:var(--muted);font-size:10px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "검증 가능한 로컬 검사대 (비교 시안 공통어, 최종 제품 방향 아님)",
+    "overview": "세 시안은 Windows에서 C# workspace를 다루는 개발자와 리뷰어가 심볼, 원문, 관계, 변경 근거를 차분하게 확인하는 도구를 가정한다. 밝은 중립 표면과 절제된 teal을 공통으로 사용하고, native control과 명확한 경계로 조작 가능성과 상태를 드러낸다. 장식보다 출처, 범위, baseline, 실패 이유를 우선한다.\n\n이 시각 언어는 CLI와 함께 제공될 로컬 Web UI의 비교 재료다. Git의 명시 revision과 세션 시작 snapshot을 모두 표현하며, Perforce는 제품의 필수 후속 범위로 남는다. 화면의 source, hash, 관계, diff는 모두 합성 fixture이고 실제 엔진 결과가 아니다.",
+    "keyCharacteristics": [
+      "최종 선택 전의 세 방향이 하나의 토큰, fixture, 상태 용어를 공유한다.",
+      "원문 최신성과 참조 coverage를 서로 다른 상태 줄로 항상 분리한다.",
+      "시스템 sans는 조작과 설명에, Consolas 계열 mono는 경로, signature, source, diff에 쓴다.",
+      "라이트와 다크 테마 모두 중립 표면의 경계와 teal 강조를 유지한다.",
+      "loading, empty, stale, partial, error를 정상적인 제품 상태로 다룬다."
+    ],
+    "rules": [
+      { "name": "The Meaning Before Hue Rule", "body": "teal은 선택·실행·최신, ochre는 불완전·추정, red는 실패·삭제 의미를 유지한다. 색만으로 상태를 전달하지 않고 항상 텍스트를 함께 둔다.", "section": "colors" },
+      { "name": "The Freshness Is Not Coverage Rule", "body": "최신 teal과 부분 coverage ochre가 같은 화면에 동시에 나타날 수 있어야 한다.", "section": "colors" },
+      { "name": "The Source Stays Source Rule", "body": "XML 주석과 source는 AI 요약체로 바꾸지 않고 mono 원문으로 표시한다.", "section": "typography" },
+      { "name": "The Three Structures Rule", "body": "세 시안은 색상 변형이 아니라 탐색 밀도, 정보 공개 순서, 주요 조작의 차이를 비교한다.", "section": "layout" },
+      { "name": "The Evidence Does Not Move Rule", "body": "모바일에서도 freshness, coverage, baseline 의미를 숨기지 않는다. sidebar만 명시적인 control로 접는다.", "section": "layout" },
+      { "name": "The Flat Evidence Rule", "body": "card를 띄워 중요도를 연출하지 않는다. 경계, 배경 tone, 문서 순서로 정보 관계를 설명한다.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 최종 선택 전 3종 비교 시안이라는 상태와 합성 데이터임을 제목, 고지, 설명에 유지한다.",
+      "Do 원문 freshness와 참조 coverage를 분리하고, `0 references`를 `no impact`로 표현하지 않는다.",
+      "Do VCS와 Session baseline을 모두 제공하고 각 기준에 포함되지 않는 변경을 설명한다.",
+      "Do Windows + C# + Git 우선 맥락과 Perforce 필수 후속 범위를 제품 계약으로 유지한다.",
+      "Do native semantic control, `aria-pressed`, `aria-current`, `aria-live`, keyboard focus를 유지한다.",
+      "Do 모바일에서 select를 full width로 만들고 graph는 위치 관계를 보존한 채 내부 스크롤한다.",
+      "Do dark theme과 `prefers-reduced-motion`에서 동일한 상태 의미를 유지한다."
+    ],
+    "donts": [
+      "Don't 세 시안 중 하나를 최종 제품 UI 또는 확정 frontend stack으로 서술한다.",
+      "Don't hash 일치를 완전한 관계 분석의 증거로 사용한다.",
+      "Don't 텍스트 추정 edge를 정적 호출로, 합성 semantic fixture를 실제 분석 결과로 표현한다.",
+      "Don't stale/error/loading 중 이전 source, diff, graph를 현재 결과처럼 보여준다.",
+      "Don't decorative card, 사진, 일러스트, 표현적 motion으로 검사 근거보다 시각 효과를 앞세운다.",
+      "Don't 상위 `docs/prepare/design.md`를 이 시안 문서로 대체하거나 덮어쓴다."
+    ]
+  }
+}

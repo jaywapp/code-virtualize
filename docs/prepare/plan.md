@@ -1,0 +1,762 @@
+# Implementation Plan
+
+## 기준과 현재 상태
+
+작성일: 2026-09-20. [design.md](design.md), [architecture.md](architecture.md), [user-confirm.md](user-confirm.md)의 확정 결정과 [UI 시안 3종](samples/index.html)을 종합했다. 기준은 사용자 인터뷰 커밋 `b16df53`이다. 이 계획은 실제 엔진 구현·실험 결과가 아니라 후속 에이전트의 작업 지침이다.
+
+- UC-001~011은 모두 Confirmed다. 다시 선택을 요구하지 않는다.
+- UC-001 A: 측정·기존 도구 비교 후 Go/No-Go. 아직 엔진을 만들기로 결정한 것은 아니다.
+- 첫 범위는 Windows/C#/Git, 엔진을 만들면 C#/.NET, 영속 JSON/JSONL cache, L0/L1 전체 접근성, syntax-only 기본이다.
+- VCS와 Session baseline, CLI text/JSON과 로컬 Web UI는 모두 구현 범위다.
+- Perforce는 필수 후속이며 C++/UE5와 구분한다. IDE/데스크톱 전용 UI는 제외한다.
+- UI 시안은 준비 완료다. 최종안 선택과 제품 frontend stack은 FUP-006이다.
+- 원안이 잘린 부분의 요구 확정은 복구 전 보류한다(UC-010 B/FUP-005). 명시된 기존 요구의 작업은 계속할 수 있다.
+
+## 실행 상태와 gate
+
+`Ready`는 추가 결정과 독립적으로 준비할 수 있는 작업, `Blocked`는 명시된 입력·결과가 필요한 작업, `Conditional`은 독립 엔진 경로를 선택한 뒤 의존 순서대로 진행할 작업이다. 선행 작업이 차단되면 종속 작업도 차단된다. 모든 작업은 이 준비 산출물 이후 수행할 예정이며 완료 상태가 아니다.
+
+| Gate | 조건 | 영향 |
+|---|---|---|
+| Pilot 실행 | FUP-001의 데이터·실행량·비용/시간 상한 지정 | TASK-004 |
+| 제품 경로 | pilot 결과와 본 실험 기준을 검토하고 Go/No-Go 결정 | TASK-005, FUP-002/003 |
+| 정확성 | stale 원문·조용한 partial·원문/세션 데이터 훼손 결함 해결 | TASK-012 이후 기능 |
+| 본 실험 | pilot 설계/결과로 정한 기준·반복·예산을 실행 전 동결 | TASK-016 |
+| UI 제품화 | 시안·frontend stack 선택 | TASK-018 |
+| 필수 Perforce | CL별 계약·승인된 환경 입력 | TASK-019 |
+| 자동 GC | 실측 후 retention/용량 수치 확정 | TASK-021 |
+
+```mermaid
+flowchart TD
+    P[TASK-001 프로토콜] --> E[TASK-004 pilot]
+    C[TASK-002 정답 corpus] --> E
+    R[TASK-003 기존 도구] --> E
+    E --> G[TASK-005 경로 선택]
+    G -->|엔진| F[TASK-006~010 CSharp PoC]
+    F --> S[TASK-011~012 증분과 정확성]
+    S --> D[TASK-013~015 참조 / 두 diff / 연동]
+    D --> B[TASK-016 본 실험]
+    D --> U[TASK-018 로컬 Web UI]
+    D --> V[TASK-019 필수 Perforce]
+    S --> K[TASK-021 실측 GC]
+    G -->|얇은 연동 또는 중단| N[TASK-017 계획 전환]
+    B --> N
+    O[TASK-020 원문 복구] --> H[누락 요구만 별도 보완]
+```
+
+TASK-001/002/003은 독립적인 준비 작업이다. 실제 로그 수집·도구 설치·모델 실험을 이 Ready 범위에 섞지 않는다. 제품 구현에서 공통 schema·브랜치를 공유하는 변경은 의존 순서를 지킨다. 원문 복구가 전체 작업의 불필요한 선행 조건이 되지 않게 한다.
+
+## Agent / Model 배정
+
+현재 세션에서 실제 사용 가능하다고 명시된 Codex 모델 `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`를 작업 성격에 맞게 지정했다. 복합 설계·검토는 Astra High, 명확한 구현·분석은 Sol/Terra Medium 또는 High, 제한된 출처 수집은 Luna Low다. 불필요한 최고 추론을 쓰지 않는다.
+
+전역 역할 규칙의 Claude 설계·교차 리뷰 선호는 유지한다. 이 세션에서 특정 Claude 모델의 실행 가능성이 확인되지 않았으므로 계획에 호출 불가능한 모델명을 기입하지 않았다. 실제 Claude 환경을 확인하면 해당 작업을 동등 역할로 재배정하고 모델·추론 수준을 갱신한다. 모델 배정은 계획이며 유료 agent 실행 권한·실험 예산의 대체물이 아니다.
+
+## 실험 프로토콜
+
+### 조건과 통제
+
+| 조건 | 구성 | 목적 |
+|---|---|---|
+| A | 기존 grep/search/read | baseline |
+| B | A + 필요한 범위만 읽는 고정 지침 | 지시문 효과 분리 |
+| C | 같은 하네스 + 사용 가능한 C# LSP | 표준 semantic 탐색 |
+| D | 같은 하네스 + Serena | 기존 agent 도구 |
+| E | 같은 하네스 + CV, 구현·정확성 gate 이후 | CV 추가 가치 |
+
+repo/commit, task prompt, 모델 version/reasoning, 원본 접근 권한, timeout을 고정한다. 조건별 도구 정의·지침의 차이와 token 비용을 기록한다. 같은 작업의 조건 순서를 seed로 무작위화 또는 균형 교차하며 깨끗한 worktree·새 agent context를 사용한다. 실패·timeout·CV 미사용 실행도 전체 결과에서 제외하지 않는다. 설치 불가 비교군은 unavailable로 표시하고 0 비용/0 결과로 대체하지 않는다.
+
+### Corpus와 정답
+
+small/medium/large를 LOC뿐 아니라 file/symbol/project/reference 수로 정의한다. 초기 navigation·understanding·bug fix·feature change, 후속 impact/refactoring/review·stale/missing을 capability에 맞춰 평가한다. 공개 repo는 commit·license·대표성·학습 노출 가능성을 기록하고 UE5/개인 프로젝트를 대표한다고 단정하지 않는다.
+
+합성 source fixture에서 선언·호출·동적 후보의 정답을 직접 검토한다. static과 dynamic ground truth를 분리하고 CV 또는 동일 query의 출력을 자체 정답으로 사용하지 않는다. tuning task와 held-out task를 분리하며 판정 후 데이터를 변경하면 새 실험으로 기록한다.
+
+### Pilot와 본 실험의 구분
+
+UC-007은 실험 방향을 확정하고 수치는 pilot 설계/결과 후 확정하도록 했다. 따라서 준비 단계에서 144회 같은 예시를 승인된 실행량으로 쓰지 않는다. TASK-001이 후보를 만들고 FUP-001에 **실제 pilot의 로그/모델/횟수·비용 상한**을 기록한 후 TASK-004를 실행한다.
+
+pilot은 분산과 실행 가능성 파악용이다. 그 설계·결과를 통해 본 실험의 반복 수, 품질 허용 저하 `deltaQuality`, 최소 실용 효율 차이 `minEfficiency`, latency/memory 상한·예산을 FUP-002에 확정한다. 최종 판정 데이터를 보기 전에 기준과 분석 규칙을 동결하며, pilot의 작은 성공률 차이를 확정 이득으로 주장하지 않는다.
+
+### 측정과 판정
+
+- cold는 index/worker startup 포함, warm은 실제 구축 후 탐색(준비 비용 별도), long은 여러 task/edit·update를 누적 측정한다.
+- input/output·cache read/write token, 최대 context, source bytes/lines, 도구 호출/실제 CV 사용률, fallback/repair, build/update/wall time, peak memory를 기록한다.
+- provider token 분류의 중복 여부를 확인하고 측정일 가격표로 비용을 계산한다. cache token을 input에 이중 합산하지 않는다. usage가 없으면 추정/미측정이며 line 수를 실제 token으로 부르지 않는다.
+- build/test·정답 위치·독립 리뷰로 성공과 defect recall/false positive를 판정한다. 모델 자기평가는 주 기준이 아니다.
+- task별 paired 차이, 중앙값/p95/분산, 품질 차이의 불확실성 구간을 보고한다. 적은 반복 pilot이 충분한 통계 검증이라는 주장을 하지 않는다.
+- TokenSaving = (A_input - E_input) / A_input. baseline 0이면 정의하지 않는다.
+- ReferenceRecall = 정답과 일치하는 참조 수 / 정답 참조 수. 정답 0건을 100%로 채우지 않는다.
+- ResolveAccuracy = 정확히 resolve한 범위 / 시도 수. unsupported·명시 실패도 별도 집계한다.
+- 승인된 품질 비열등 기준과 최소 효율 차이를 함께 판단한다. E는 A뿐 아니라 사전 규칙으로 정한 강한 비교군 B/C/D와 비교한다.
+- break-even은 같은 sequence의 누적 비용 차이가 이득으로 바뀌어 유지되는 첫 task다. 관측되지 않으면 not reached다.
+- token·초·bytes를 임의로 더한 단일 점수로 손해를 숨기지 않는다. stale 원문 오반환·조용한 부분 결과는 평균 절감으로 상쇄하지 않는다.
+- 원문/시크릿/전체 세션 로그는 로컬 비공개로 관리한다. 보고·commit에는 승인된 비식별 집계만 포함한다. 이번 prepare에서 실제 로그 분석이나 유료 실험은 실행하지 않았다.
+
+## TASK-001 — pilot 프로토콜과 로그 집계 계약
+
+### Goal
+실제 로그를 읽기 전에 비교 조건·측정 분모·집계 형식을 정의한다.
+
+### Dependencies
+없음
+
+### Scope
+Read/Grep 비중·전체 읽기율·재읽기율·주석 비율, cache-aware 비용, pilot 범위·예산 후보와 비식별화 규칙을 작성한다. 원문 복원으로 표시하지 않는다.
+
+### Files
+`benchmarks/protocol.md` / `benchmarks/result.schema.json` / `benchmarks/log-analysis.md`
+
+### Validation
+합성 이벤트로 분모·중복 token·누락 필드·실패 실행 집계를 손으로 검산한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | Medium |
+| Reason | 측정 계약과 집계의 오류를 검토하면서 작은 산출물로 나눈다. |
+
+### Blocked By
+없음
+
+### Status
+Ready
+
+## TASK-002 — 독립 정답 fixture와 corpus 후보
+
+### Goal
+CV 결과에 의존하지 않는 C# 선언·참조·diff 정답을 준비한다.
+
+### Dependencies
+없음; TASK-001과 병렬 가능
+
+### Scope
+overload/generic/partial/private/linked file·동적 참조·CRLF/emoji, VCS/session dirty-start·삭제 snapshot fixture를 만든다. 공개 repo는 후보와 commit/license만 조사한다.
+
+### Files
+`tests/fixtures/csharp/` / `benchmarks/tasks/` / `benchmarks/corpus-candidates.md`
+
+### Validation
+source와 정답 위치를 독립 대조한다. CV 또는 같은 Roslyn query를 정답 생성기로 사용하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-terra |
+| Reasoning Level | Medium |
+| Reason | 기준이 명확한 테스트 자료 제작이다. |
+
+### Blocked By
+없음; 실제 corpus 실행은 FUP-001
+
+### Status
+Ready
+
+## TASK-003 — 기존 도구 capability 조사
+
+### Goal
+LSP·Serena·범위 읽기와 CV의 중복·차별 가설을 확인한다.
+
+### Dependencies
+없음
+
+### Scope
+공식 문서의 지원 기능·runtime·버전·호출 방법·제약을 정리한다. 문서에 기능이 있다는 사실을 실측 성능으로 바꾸지 않는다.
+
+### Files
+`benchmarks/tool-matrix.md`
+
+### Validation
+각 claim에 공식 출처·확인일·버전/미확인 표시가 있는지 검토한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-luna |
+| Reasoning Level | Low |
+| Reason | 한정된 기능 목록과 출처 수집이다. |
+
+### Blocked By
+없음; 실제 설치·모델 실행 제외
+
+### Status
+Ready
+
+## TASK-004 — 승인된 데이터로 pilot 실행
+
+### Goal
+현재 탐색 비용과 기존 도구 효과의 분포를 측정한다.
+
+### Dependencies
+TASK-001, TASK-002, TASK-003
+
+### Scope
+지정 로그 경로·기간만 집계하고 고정 corpus에서 A/B/C/D pilot을 수행한다. 모델·권한·시작 상태·조건 순서를 통제한다. 예산 초과 시 중단하며 원시 로그를 공개하지 않는다.
+
+### Files
+`benchmarks/runs/ (로컬 비공개)` / `benchmarks/results/pilot-report.md` / `비식별 run manifest`
+
+### Validation
+원시 usage와 집계 대조, 실패 포함 denominator, 실제 도구 사용률·비용 상한을 확인한다. pilot을 확정적 가치 증명이라고 보고하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | High |
+| Reason | 실험 조건·개인정보·비용 집계를 함께 통제한다. |
+
+### Blocked By
+FUP-001
+
+### Status
+Blocked
+
+## TASK-005 — Go/No-Go와 본 실험 기준 확정
+
+### Goal
+pilot 결과를 사용자와 검토해 엔진/얇은 연동/중단 경로를 선택한다.
+
+### Dependencies
+TASK-004
+
+### Scope
+불확실성·유지보수·기존 도구 우위를 검토하고 최종 품질/효율 기준과 본 실험 예산을 기록한다. 엔진 선택 시 승인된 .NET 설계를 적용한다. 누락 원문 요구는 끼워 넣지 않는다.
+
+### Files
+`docs/decisions/001-product-path.md` / `docs/prepare/design.md` / `docs/prepare/architecture.md` / `docs/prepare/user-confirm.md` / `docs/prepare/plan.md`
+
+### Validation
+사용자 선택·근거·날짜를 기록하고 기준을 본 실험 전에 동결한다. 기존 도구 경로에서도 Web UI·필수 Perforce 요구의 처리 방법이 남아 있어야 한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | 제품 가치와 실험 불확실성을 통합하는 판단이다. |
+
+### Blocked By
+FUP-002, FUP-003
+
+### Status
+Blocked
+
+## TASK-006 — .NET solution과 trust 경계
+
+### Goal
+Windows/C# Core·CLI·adapter의 빌드 가능한 기반을 만든다.
+
+### Dependencies
+TASK-005에서 독립 엔진 선택
+
+### Scope
+지원 SDK·package 버전을 고정하고 Core/CSharp/CLI/test 프로젝트와 CI를 만든다. .code-virtualize와 raw benchmark 데이터를 ignore한다. syntax-only 기본과 명시 trust 경계를 둔다.
+
+### Files
+`CodeVirtualize.sln` / `global.json` / `Directory.Build.props` / `.gitignore` / `src/` / `tests/` / `.github/workflows/ci.yml`
+
+### Validation
+restore/build/test와 CLI help를 실행한다. trust 없는 프로젝트의 generator·build sentinel이 실행되지 않아야 한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-terra |
+| Reasoning Level | Medium |
+| Reason | 확정한 단일 runtime 구조의 정형 구현이다. |
+
+### Blocked By
+FUP-003 (엔진 Go 전)
+
+### Status
+Conditional
+
+## TASK-007 — .cv schema와 CLI 응답 계약
+
+### Goal
+ID·span·coverage·오류·paging·baseline 의미를 고정한다.
+
+### Dependencies
+TASK-006, TASK-002
+
+### Scope
+Manifest/Symbol/Declaration/Reference/Diff/Response schema, UTF-16 span·1-based line, partial/generic ID, generation cursor와 source 반환 예산을 정의한다.
+
+### Files
+`schemas/` / `src/CodeVirtualize.Core/Contracts/` / `tests/Core.Tests/Contracts/` / `docs/contracts/cli.md`
+
+### Validation
+round-trip·unknown schema 거부, not_found/partial/truncated/error 필드, cursor 세대 불일치, 두 baseline 직렬화를 검증한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | 모든 후속 작업에 영향을 미치는 계약 정합성을 결정한다. |
+
+### Blocked By
+없음; 선행 제품 경로 gate 적용
+
+### Status
+Conditional
+
+## TASK-008 — Immutable generation store
+
+### Goal
+부분 쓰기를 노출하지 않는 영속 store를 구현한다.
+
+### Dependencies
+TASK-007
+
+### Scope
+JSON manifest/JSONL shards, digest·schema·크기 검증, 임시 generation publish, reader pin·writer lock, semantic config fingerprint를 구현한다. 자동 파괴적 GC는 비활성 상태다.
+
+### Files
+`src/CodeVirtualize.Core/Storage/` / `tests/Core.Tests/Storage/` / `tests/Integration.Tests/Storage/`
+
+### Validation
+손상 shard·partial write·publish crash·disk full에서 이전 generation 유지 또는 명시 오류를 확인한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | High |
+| Reason | 원자적 발행·복구의 오류는 데이터 정확성에 직접 영향을 준다. |
+
+### Blocked By
+없음; 자동 GC 수치는 FUP-004로 별도
+
+### Status
+Conditional
+
+## TASK-009 — C# 구축·검색
+
+### Goal
+cv-build/cv-find로 L0/L1 전체 접근성의 선언을 탐색한다.
+
+### Dependencies
+TASK-008
+
+### Scope
+Roslyn syntax/semantic 경로, partial 선언 병합, overload/generic ID, inventory·project coverage·제외 구성, 결정적 정렬·filter·paging을 구현한다.
+
+### Files
+`src/CodeVirtualize.CSharp/` / `src/CodeVirtualize.Core/Search/` / `src/CodeVirtualize.Cli/Commands/` / `tests/CSharp.Tests/`
+
+### Validation
+독립 fixture의 선언·위치·동명 후보·새 파일·빈 workspace·project load 실패를 검증한다. syntax-only 결과에 semantic 완전성을 표시하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | High |
+| Reason | 파서·binding과 coverage를 함께 다루는 구현이다. |
+
+### Blocked By
+없음; workspace semantic load는 명시 trust 적용
+
+### Status
+Conditional
+
+## TASK-010 — 원문 resolve·validate·터미널 inspect
+
+### Goal
+동일 bytes를 검증해 원문·상태를 정확히 반환한다.
+
+### Dependencies
+TASK-009
+
+### Scope
+cv-resolve/cv-validate/cv-inspect text/JSON, header/body/context 선택, stdout/stderr·exit code, stale·ambiguity·budget 오류를 구현한다.
+
+### Files
+`src/CodeVirtualize.Core/Resolution/` / `src/CodeVirtualize.Cli/Commands/` / `tests/Core.Tests/Resolution/` / `tests/Cli.Tests/`
+
+### Validation
+CRLF/LF/BOM·한글/emoji·same mtime/size 변경·오래된 span에서 정확한 원문 또는 명시 실패를 확인한다. pipe에서도 상태 의미를 유지한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | Medium |
+| Reason | 계약이 정해진 원문 추출·CLI 표시 작업이다. |
+
+### Blocked By
+없음; Web UI 선택과 독립
+
+### Status
+Conditional
+
+## TASK-011 — 증분·복구·동시 세션과 시작 snapshot
+
+### Goal
+외부 편집과 병렬 사용에서 freshness와 session base를 보존한다.
+
+### Dependencies
+TASK-008, TASK-010
+
+### Scope
+cv-update·신규/삭제/rename reconciliation, semantic 종속 invalidation, bounded fallback/repair, writer/reader lease를 구현한다. session 시작 source bytes·inventory·config를 immutable 저장하고 pin한다.
+
+### Files
+`src/CodeVirtualize.Core/Lifecycle/` / `src/CodeVirtualize.Core/Fallback/` / `src/CodeVirtualize.Core/Snapshots/` / `tests/Integration.Tests/Lifecycle/`
+
+### Validation
+두 session 동시 update/resolve·hook 누락·branch switch·crash와 full/incremental 결과를 비교한다. 시작 dirty 파일이 삭제돼도 base bytes를 복원하고 다른 session을 지우지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | 동시성·semantic invalidation·원문 보존의 복합 구현이다. |
+
+### Blocked By
+없음; 자동 GC는 TASK-021
+
+### Status
+Conditional
+
+## TASK-012 — 장애 주입·보안·정확성 검증
+
+### Goal
+최적화가 원문 정확성과 coverage를 훼손하지 않는지 검증한다.
+
+### Dependencies
+TASK-011
+
+### Scope
+entry/range 손상·update 누락·rename·크래시·timeout·취소·경계 이탈/junction·명령 인자·secret log·untrusted generator 사례를 검증한다.
+
+### Files
+`tests/Integration.Tests/FailureInjection/` / `tests/Integration.Tests/Security/` / `docs/verification/poc-gate.md`
+
+### Validation
+JSON 결과를 실제 source/독립 정답과 대조한다. stale source 오반환·조용한 coverage 누락은 해결 또는 사용자 수용 전 통과로 기록하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | 작성자의 성공 경로와 독립적으로 안전성·정확성 가정을 검토한다. |
+
+### Blocked By
+없음; Critical/High 미해결 결함은 다음 단계 차단
+
+### Status
+Conditional
+
+## TASK-013 — 주석과 영향 후보
+
+### Goal
+주석 lazy resolve와 불완전성을 명시하는 cv-impact를 제공한다.
+
+### Dependencies
+TASK-012 통과
+
+### Scope
+remark 위치·hash·원문, 정적 참조·caller expansion, lexical 후보 provenance, depth/result budget, reflection/DI/XAML/generated 한계를 구현한다.
+
+### Files
+`src/CodeVirtualize.Core/Remarks/` / `src/CodeVirtualize.Core/Impact/` / `src/CodeVirtualize.CSharp/References/` / `tests/CSharp.Tests/References/`
+
+### Validation
+독립 정답에서 recall을 계산하며 0건·partial·truncated를 구분한다. 주석 수정 후 이전 span이나 텍스트를 반환하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | High |
+| Reason | 참조 누락과 잘못된 완전성 주장을 막는 semantic 구현이다. |
+
+### Blocked By
+없음; 측정 예산은 UC-007 후속 조건 적용
+
+### Status
+Conditional
+
+## TASK-014 — VCS/Session 심볼 diff
+
+### Goal
+Git revision과 세션 시작 snapshot 두 모드의 diff를 구현한다.
+
+### Dependencies
+TASK-011, TASK-012; 영향 연결은 TASK-013
+
+### Scope
+baseline-kind를 명시하고 added/removed/signature/body/remark와 textual hunk를 연결한다. base source를 read-only로 조회하며 rename 불확실성은 delete/add 또는 후보로 표시한다.
+
+### Files
+`src/CodeVirtualize.Core/Diff/` / `src/CodeVirtualize.Core/Vcs/` / `tests/Integration.Tests/Diff/`
+
+### Validation
+dirty-start 변경은 VCS에 포함·Session에서 제외됨을 검증한다. 삭제 symbol base 복원·SESSION_BASE_MISSING·BASE_REQUIRED·모드 전환 stale 응답 방지를 검증한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | revision 의미와 identity 변화·원문 증거의 정확성이 핵심이다. |
+
+### Blocked By
+없음; Perforce는 TASK-019
+
+### Status
+Conditional
+
+## TASK-015 — Claude MCP·lifecycle 연동
+
+### Goal
+CLI 검증 후 최소 도구와 얇은 훅으로 엔진을 연결한다.
+
+### Dependencies
+TASK-010, TASK-011, TASK-012; impact는 TASK-013
+
+### Scope
+cv_find/cv_get 및 구현된 cv_impact를 stdio로 노출하고 세션 시작/종료·변경 힌트·timeout·기존 탐색 fallback을 연결한다. 설정 병합·dry-run·uninstall을 준비한다.
+
+### Files
+`src/CodeVirtualize.Mcp/` / `integrations/claude/` / `tests/Integration.Tests/AgentAdapter/` / `docs/integrations/claude.md`
+
+### Validation
+고정 client 버전에서 실제 tool 결과·timeout·worker crash·기존 설정 보존·복원을 검증한다. 훅을 꺼도 freshness 확인이 동작해야 한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | Medium |
+| Reason | 확정 Core 계약을 외부 client와 연결하는 작업이다. |
+
+### Blocked By
+실제 client 설치 범위·UC-007 실행 예산 지정
+
+### Status
+Conditional
+
+## TASK-016 — CV 포함 본 실험·가치 재평가
+
+### Goal
+품질·구축·갱신·복구 비용을 포함한 순효율을 평가한다.
+
+### Dependencies
+TASK-004, TASK-012, TASK-013, TASK-014, TASK-015
+
+### Scope
+A/B/C/D에 E(CV)를 추가하고 cold/warm/long·규모별 실험을 수행한다. actual CV 사용률·cache-aware cost·peak context·break-even·review recall/false positive를 보고한다.
+
+### Files
+`benchmarks/results/cv-report.md` / `비식별 집계 JSON/run manifest` / `docs/decisions/002-validation-outcome.md`
+
+### Validation
+사전 기준·고정 seed·실패 denominator·독립 품질 판정을 점검한다. 미지원 Perforce/UE5 성과를 추론하지 않으며 불확실하면 inconclusive로 보고한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | 정확도·비용·통계적 불확실성을 통합해 판단한다. |
+
+### Blocked By
+FUP-002와 승인된 본 실험 데이터·예산
+
+### Status
+Blocked
+
+## TASK-017 — 범위 전환·진행 또는 종료 기록
+
+### Goal
+선택한 결과에 맞춰 다음 작업을 완결된 계획으로 정리한다.
+
+### Dependencies
+TASK-005 또는 TASK-016의 사용자 판단
+
+### Scope
+얇은 연동이면 gap·도구 버전·Web UI·Perforce 충족 계약을 재설계한다. 중단이면 이유와 재검토 조건을 기록한다. 성공이면 필수 후속/제품화 작업을 유지한다.
+
+### Files
+`docs/decisions/003-next-step.md` / `docs/prepare/architecture.md` / `docs/prepare/plan.md`
+
+### Validation
+선택과 남은 작업이 일치하고 중단 기능이 무심코 실행되지 않는지 검토한다. 데이터 삭제·게시·설치를 자동 수행하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | Medium |
+| Reason | 근거가 확정된 선택을 실행 범위로 정리하는 문서 작업이다. |
+
+### Blocked By
+FUP-003의 경로 선택 또는 후속 평가 결과
+
+### Status
+Conditional
+
+## TASK-018 — 선택한 로컬 Web UI 제품 구현
+
+### Goal
+선택된 시안을 실제 `.cv` 조회 API에 연결한다.
+
+### Dependencies
+TASK-010, TASK-013, TASK-014; engine/adapter 경로 확정
+
+### Scope
+.NET loopback host·frontend 선택, 검색→source/remark/관계/diff, freshness/coverage·VCS/Session 표시, paging·취소·오래된 응답 폐기, 키보드·mobile·theme를 구현한다. 로컬 접근 인증·Host/Origin·CSP·no-store를 적용한다.
+
+### Files
+`src/CodeVirtualize.Web/` / `tests/Integration.Tests/Web/` / `docs/ui/` / `선택 frontend build 설정`
+
+### Validation
+CLI와 같은 query/generation의 결과가 일치해야 한다. 실제 source escape·remote Origin/Host·XSS·junction·session 종료·예산을 검증한다. static 시안 통과만으로 제품 API 통과를 주장하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | 선택된 UX와 민감한 로컬 source 접근 경계를 함께 구현한다. |
+
+### Blocked By
+FUP-006; FUP-003 이전 제품 구현 금지
+
+### Status
+Blocked
+
+## TASK-019 — 필수 Perforce adapter
+
+### Goal
+필수 후속 Perforce source/baseline/diff를 제공한다.
+
+### Dependencies
+TASK-014, TASK-012; 얇은 연동이면 TASK-017의 대응 계약
+
+### Scope
+submitted/shelved/pending별 base/target, server/client/depot mapping, have/head 차이, rename/delete/binary·권한/오프라인을 구현한다. 합성 fixture 후 지정한 실제 환경에서 read-only 검증한다.
+
+### Files
+`src/CodeVirtualize.Perforce/` / `tests/Integration.Tests/Perforce/` / `docs/integrations/perforce.md`
+
+### Validation
+file revision과 반환 bytes·diff를 독립 대조한다. sync/submit/revert/shelve를 호출하지 않고 ticket·원문을 로그에 누출하지 않는다. CL 유형별 미지원은 명시한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-6-astra |
+| Reasoning Level | High |
+| Reason | VCS 의미·workspace mapping·접근 경계를 다루는 필수 통합이다. |
+
+### Blocked By
+FUP-007; FUP-003 이전 제품 구현 금지
+
+### Status
+Blocked
+
+## TASK-020 — 잘린 원문 복구와 요구 보완
+
+### Goal
+작성자 원문이 확보되면 누락된 요구를 정확히 복구한다.
+
+### Dependencies
+현재 원안과 로컬 위키도 잘린 사실 확인 완료
+
+### Scope
+출처·revision·보완 내용을 대조하고 기존 확정 결정과 충돌을 식별한다. 새 요구를 design/architecture/plan에 반영한다. 정보가 없으면 임의 복원하지 않는다.
+
+### Files
+`docs/ideas/ (복구된 원문 제공 시)` / `docs/prepare/design.md` / `docs/prepare/architecture.md` / `docs/prepare/user-confirm.md` / `docs/prepare/plan.md`
+
+### Validation
+실제 보완 출처와 변경 내용이 대응하고, AI 추정을 원문으로 기록하지 않았는지 확인한다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | Medium |
+| Reason | 원문 증거와 확정 요구의 충돌을 제한된 문서 범위에서 검토한다. |
+
+### Blocked By
+FUP-005
+
+### Status
+Blocked
+
+## TASK-021 — 실측 기반 cache 한도·GC 확정
+
+### Goal
+사용자 결정대로 실측 후 retention/용량/GC 정책을 정한다.
+
+### Dependencies
+TASK-011의 측정 자료; TASK-016 결과가 있으면 함께 사용
+
+### Scope
+크기·session 수·warm 이득·disk 압박을 기록해 수치 후보를 제시한다. 승인 후만 자동 GC를 활성화하고 active reader/session/base snapshot을 보호한다.
+
+### Files
+`docs/decisions/004-cache-policy.md` / `src/CodeVirtualize.Core/Storage/` / `tests/Integration.Tests/Storage/`
+
+### Validation
+용량·나이 경계·동시 reader·crash lease·pinned base·config 보존을 검증한다. 승인 수치가 없으면 자동 삭제 기능을 활성화하지 않는다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | Codex |
+| Model | gpt-5.6-sol |
+| Reasoning Level | High |
+| Reason | 실측 정책과 삭제·동시성 안전성의 결합이다. |
+
+### Blocked By
+FUP-004
+
+### Status
+Blocked
+
+## 요구사항과 결정 추적
+
+| 요구 | 작업 |
+|---|---|
+| 가치 검증 / UC-001, UC-007 | TASK-001~005, TASK-016~017 |
+| FR-01 scope·trust / UC-002, UC-008 | TASK-006, TASK-009, TASK-012 |
+| FR-02 심볼 / UC-006 | TASK-007, TASK-009 |
+| FR-03 resolve | TASK-010, TASK-012 |
+| FR-04 freshness | TASK-010~012 |
+| FR-05 fallback·repair | TASK-011~012 |
+| FR-06 coverage | TASK-007, TASK-009, TASK-012~013 |
+| FR-07 update | TASK-011~012 |
+| FR-08 동시성 / UC-004 | TASK-008, TASK-011~012, TASK-021 |
+| FR-09 inspect·metrics | TASK-001, TASK-010~011, TASK-015~016 |
+| FR-10 impact | TASK-013, TASK-016 |
+| FR-11 두 baseline / UC-005 | TASK-011, TASK-014, TASK-019 |
+| FR-12 agent 연동 / UC-009 | TASK-015~016 |
+| FR-13 remark | TASK-013 |
+| FR-14 Web UI / UC-011 | 이번 시안 3종, TASK-018 |
+| FR-15 필수 Perforce / UC-002 조건 | TASK-019 |
+| UC-003 .NET | TASK-006 이후 |
+| UC-010 원문 보완 보류 | TASK-020 |
+
+FUP 상태와 입력 내용은 [user-confirm.md](user-confirm.md)의 후속 입력 표가 기준이다. FUP-004는 자동 GC만, FUP-005는 누락 관련 요구만 차단한다. 이미 확정된 선택을 다시 Pending으로 되돌리지 않는다.
+
+## Prepare 완료 검증
+
+- 아이디어 3개 전체를 분석했고 원안의 잘림과 검토 의견을 구분했다.
+- 사용자 인터뷰의 11개 User Decision 원문을 보존하고 design/architecture에 동기화했다.
+- CLI+Web UI 범위에 맞는 조작 가능한 시안 3종과 실행 방법을 제공했다.
+- [시안 검증 기록](samples/verification.md): 3종 기능 확인, desktop/mobile/dark 화면, JavaScript 오류 0, 페이지 가로 넘침 없음. 독립 reviewer의 경미 수정 2건 모두 resolved.
+- 시안의 원문·hash·revision·관계·diff는 합성이며 실제 제품 분석 결과가 아니다.
+- 이 plan은 기획·설계·결정·시안·검증 기록 이후 마지막에 작성했다.
+- 모든 TASK는 목표·의존·범위·예상 파일·검증·Agent·Model·Reasoning Level·배정 이유·Blocked By를 갖는다.
+- 실제 엔진·플러그인·실험을 완료하지 않았으며 본 작업에서 commit/push/배포는 수행하지 않았다.
+
+후속 에이전트는 TASK-001~003의 Ready 준비부터 진행하고, FUP 입력·제품 경로 결정을 반영해 의존 순서대로 구현한다.
