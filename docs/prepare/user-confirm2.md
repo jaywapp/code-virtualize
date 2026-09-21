@@ -9,7 +9,9 @@
 
 TASK-001~017은 지정 모델의 Codex 서브에이전트로 구현·검증을 완료했다. TASK-016에서 기술 prototype의 품질은 기준을 통과했지만, 동결한 효율 gate를 충족하지 못해 최종 판정은 `No-Go`다. TASK-017은 prototype과 실험 산출물을 보존하고 독립 엔진의 자동 제품화를 중단하는 후속 결정을 기록했다.
 
-TASK-018~021은 계획에 따라 `Blocked`다. 이 상태에서는 새 서브에이전트를 실행하지 않는다. 필요한 외부 입력과 새 결정이 확보되면 해당 FUP를 먼저 `Confirmed`로 갱신하고, 새 ADR과 계획 상태를 갱신한 뒤 작업을 재개한다.
+2026-09-21에 FUP-004·006·007이 `Confirmed`로, FUP-005가 요구 폐기로 갱신됐다. 이에 따라 TASK-020은 종결(Won't do)이고, TASK-021은 삭제를 수행하지 않는 측정부터 착수할 수 있다. TASK-018·019는 필요한 사용자 입력이 모두 확정됐지만 [ADR 003](../decisions/003-next-step.md)의 공통 제품화 재개 조건이 아직 미충족이므로 `Blocked`를 유지한다.
+
+재개 경로는 DIFF source-byte 반환 계약을 먼저 개선해 동결 gate를 재측정하고, 그 결과로 새 ADR을 승인한 뒤 TASK-018·019를 여는 것이다. FUP 확정만으로 새 서브에이전트를 실행하지 않으며 계획 상태 갱신과 새 ADR이 선행한다.
 
 ## TASK 상태와 모델 배정
 
@@ -27,12 +29,12 @@ TASK-018~021은 계획에 따라 `Blocked`다. 이 상태에서는 새 서브에
 | TASK-015 | `gpt-5.6-sol` / Medium | Complete | MCP stdio·Claude lifecycle adapter |
 | TASK-016 | `gpt-5.6-sol` / High | Complete — No-Go | 효율 gate 실패; token은 inconclusive |
 | TASK-017 | `gpt-5.6-sol` / Medium | Complete | 범위 전환·후속 결정 기록 |
-| TASK-018 | `gpt-5.6-sol` / High | Blocked | No-Go 이후 공통 재개 증거·FUP-006·새 ADR 필요 |
-| TASK-019 | `gpt-5.6-sol` / High | Blocked | 공통 재개 증거·FUP-007·실제 Perforce 환경 필요 |
-| TASK-020 | `gpt-5.6-sol` / Medium | Blocked | FUP-005의 정확한 원문·출처 필요 |
-| TASK-021 | `gpt-5.6-sol` / High | Blocked | FUP-004 실측 수치·GC 승인 필요 |
+| TASK-018 | `gpt-5.6-sol` / High | Blocked | FUP-006 확정(Sample 1 + Blazor Server). 공통 재개 증거·새 ADR 미충족 |
+| TASK-019 | `gpt-5.6-sol` / High | Blocked | FUP-007 계약 확정. 공통 재개 증거·새 ADR 미충족, 실제 p4 환경 제공 불가 |
+| TASK-020 | — | 종결 (Won't do) | FUP-005 요구 폐기; 원문을 복구하지 않기로 확정 |
+| TASK-021 | `gpt-5.6-sol` / High | 측정 착수 가능 | FUP-004 정책 확정. 삭제 없는 측정·정책 제안까지 진행하고 자동 삭제는 수치 확정 후 |
 
-`TASK-018~021`의 모델은 계획상 배정값이며, `Blocked` 규칙에 따라 실행하지 않았다. 서브에이전트는 커밋·push·PR·병합을 수행하지 않는다.
+`TASK-018~021`의 모델은 계획상 배정값이다. TASK-018·019는 `Blocked` 규칙에 따라 실행하지 않는다. TASK-021은 삭제를 수행하지 않는 측정 범위에서만 실행한다. 서브에이전트는 커밋·push·PR·병합을 수행하지 않는다.
 
 ## No-Go 근거
 
@@ -57,14 +59,14 @@ TASK-018~021은 계획에 따라 `Blocked`다. 이 상태에서는 새 서브에
 | FUP-001 | Partial | 실제 승인 로그의 경로·기간·필드, 실제 모델·token·비용 측정 설정. 지정 전 실제 로그를 읽거나 유료 실행하지 않음 | 실제 데이터 평가 |
 | FUP-002 | Complete / Frozen | 품질 저하 0, Critical 0, 최소 3회, seed `20260920`, 20% 효율 후보, 30분·1 GiB·latency 상한 | TASK-005·016 기준 유지 |
 | FUP-003 | Complete | 독립 C#/.NET prototype 완료; TASK-016 No-Go 후 자동 제품화 중단 | TASK-017 후속 결정 유지 |
-| FUP-004 | Confirmed | 기간/용량 기반 GC를 모두 제공하고 config에서 `age`/`capacity`/`hybrid`를 선택. 활성 generation 보호·dry-run 지원. 기본 retention/용량 수치는 실측 후 확정 | TASK-021 |
-| FUP-005 | Complete / Obsolete | 잘린 원문 복구 요구를 폐기. 누락 사실과 사용자 결정을 코멘트로 보존하고 현재 benchmark 설계·구현을 기준으로 진행 | TASK-020 |
-| FUP-006 | Confirmed | Sample 1 + Blazor/ASP.NET Core. CLI+Web을 유지하고 로컬 Web UI는 .NET stack으로 통일 | TASK-018 |
-| FUP-007 | Confirmed / Environment Pending | CL 중심 read-only adapter. submitted/pending/shelved CL 및 workspace 상태를 지원하고 변경 명령은 자동 실행하지 않음. 실제 server/client/CL은 통합 테스트 시 제공 | TASK-019 |
+| FUP-004 | Confirmed | 기간/용량 기반 GC를 모두 제공하고 config에서 `age`/`capacity`/`hybrid`를 선택. 활성 generation 보호·dry-run 지원. 기본은 `gc.enabled = false`이며 retention/용량 수치는 실측 후 확정 | TASK-021 |
+| FUP-005 | Obsolete | 잘린 원문 복구 요구를 폐기. 누락 사실과 사용자 결정을 이 문서와 [user-confirm.md](user-confirm.md) FUP 표에 보존하고 현재 benchmark 설계·구현을 기준으로 진행 | TASK-020 종결(Won't do) |
+| FUP-006 | Confirmed | Sample 1 + Blazor Server/ASP.NET Core. CLI+Web을 유지하고 로컬 Web UI는 .NET stack으로 통일하며 원문은 브라우저로 내리지 않음 | TASK-018 — 공통 재개 조건은 별도 |
+| FUP-007 | Confirmed / Environment Unavailable | CL 중심 read-only adapter. submitted/pending/shelved CL 및 workspace 상태를 지원하고 변경 명령은 자동 실행하지 않음. 실제 server/client/CL은 당분간 제공 불가 | TASK-019 — 합성 fixture 범위까지 |
 
 ### 입력 양식
 
-아래 형식으로 필요한 항목만 채워서 회신할 수 있다. 비어 있는 항목은 계속 `Pending`으로 둔다.
+아래는 2026-09-21에 회신된 확정 내용이다. 추가 입력도 같은 형식으로 덧붙이며, 비어 있는 항목은 계속 `Pending`으로 둔다.
 
 ```text
 FUP-004 — Confirmed (2026-09-21)
@@ -73,9 +75,10 @@ FUP-004 — Confirmed (2026-09-21)
 - cache capacity: config로 관리; 기본값은 실측 후 확정
 - GC trigger: 선택한 mode에 따라 기간/용량/혼합 기준
 - safety: 활성 generation 보호, dry-run 지원
+- default: `gc.enabled = false`. 측정과 dry-run을 먼저 수행해 retention·용량 수치를 확정한 뒤에만 자동 삭제를 켠다
 - destructive delete approved: 위 cache GC 범위 내에서만 허용
 
-FUP-005 — Complete / Obsolete (2026-09-21)
+FUP-005 — Obsolete (2026-09-21)
 - decision: 잘린 `benchmark task/g...` 원문은 복구하지 않는다.
 - comment: 원문 누락 사실과 복구하지 않기로 한 사용자 결정을 추적 정보로 남긴다.
 - baseline: 현재 benchmark 설계·구현을 이후 기준으로 사용한다.
@@ -83,22 +86,31 @@ FUP-005 — Complete / Obsolete (2026-09-21)
 FUP-006 — Confirmed (2026-09-21)
 - selected mock: Sample 1
 - frontend stack: Blazor / ASP.NET Core / .NET
+- render mode: Blazor Server (InteractiveServer). 조회 로직과 원문은 loopback 호스트 프로세스에 두고 브라우저로 내리지 않는다
 - intent: CLI 자동화 인터페이스와 로컬 Web 검사 UI를 함께 제공한다.
 
-FUP-007 — Confirmed / Environment Pending (2026-09-21)
-- server/client/workspace/CL: 실제 통합 테스트 시 제공
+FUP-007 — Confirmed / Environment Unavailable (2026-09-21)
+- server/client/workspace/CL: 당분간 제공 불가. 합성 CLI 응답 fixture까지만 구현·검증하고 실환경 대조는 보류한다
 - base-target contract: CL 중심. submitted CL은 depot revision 기준, pending CL은 해당 CL의 opened workspace 파일, shelved CL은 shelf revision, 현재 workspace는 have revision + local opened 상태를 사용
 - allowed read-only commands: `p4 info`, `p4 client`, `p4 opened`, `p4 changes`, `p4 describe`, `p4 files`, `p4 fstat`, `p4 print`, `p4 have`, `p4 where` 등 조회 계열
 - prohibited automatic mutations: `sync`, `edit`, `revert`, `submit`, `unshelve` 등 workspace/depot 변경 명령
+- 미확정 보완 항목: 인증(P4PORT/P4TICKETS/trust) 처리, charset·binary 파일 취급, 권한 거부·오프라인 실패 계약, `p4 print` 원문의 로그 마스킹 규칙
 ```
 
 ## 안전한 현재 기본값
 
-- GC는 config의 `age`/`capacity`/`hybrid` 정책으로 동작하며 활성 generation을 보호하고 dry-run을 제공한다. 기본 retention/용량 수치는 실측 후 확정한다.
-- 잘린 `benchmark task/g...` 원문은 복구하지 않으며, 누락 사실과 해당 결정을 코멘트로 보존한다.
+- GC는 config의 `age`/`capacity`/`hybrid` 정책으로 동작하며 활성 generation을 보호하고 dry-run을 제공한다. 확정된 기본값은 비활성(`gc.enabled = false`)이며, 실측으로 retention·용량 수치를 정하기 전에는 자동 삭제를 수행하지 않는다.
+- 잘린 `benchmark task/g...` 원문은 복구하지 않으며, 누락 사실과 해당 결정을 이 문서와 [user-confirm.md](user-confirm.md) FUP 표에 기록으로 보존한다.
 - `p4` 실행 환경과 실제 Perforce 계약이 없으면 adapter를 만들거나 성공으로 표시하지 않는다.
 - TASK-016 결과만으로 Web UI·Perforce 제품화를 자동 재개하지 않는다.
 - 실제 로그·원문·시크릿은 외부로 보내지 않으며, 보고서에는 승인된 비식별 집계만 남긴다.
+
+## 다음 단계
+
+1. DIFF source-byte 반환 계약을 개선하고 동결 protocol로 gate를 재측정한다. FUP-002 동결 수치는 변경하지 않는다.
+2. 재측정 결과로 새 ADR을 작성해 TASK-018·019 재개 여부를 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다.
+3. TASK-021은 삭제 없는 측정과 정책 제안까지 먼저 수행하고, 수치를 확정한 뒤 자동 삭제를 켠다.
+4. TASK-020 종결과 위 FUP 상태를 [plan.md](plan.md), [architecture.md](architecture.md), [design.md](design.md)에 동기화한다.
 
 ## 검증 및 작업 트리
 
@@ -110,4 +122,4 @@ FUP-007 — Confirmed / Environment Pending (2026-09-21)
 - fixture verifier 및 Windows PowerShell 5.1 검증
 - benchmark verify-only 재실행
 
-현재 feature branch에는 구현·문서 산출물이 작업 트리로 남아 있다. 이 확인 문서 작성만으로 커밋·push·PR·병합을 수행하지 않는다.
+TASK-006~017의 구현·문서 산출물은 PR #4로 `master`에 병합됐다. 이 확인 문서 갱신만으로 새 구현을 시작하거나 병합을 수행하지 않는다.
