@@ -13,7 +13,7 @@
 
 ## 실행 상태와 gate
 
-`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐다. TASK-018·019는 아래 재개 조건이 남은 `Blocked` 상태이고, TASK-020은 종결(Won't do), TASK-021은 삭제 없는 측정·정책 제안까지는 착수 가능하며 GC 구현과 자동 삭제 활성화는 수치 확정 후로 `Blocked`다. TASK-022는 완료됐고 TASK-023·025·032가 `Ready`다. 세부 순서는 아래 후속 실행 계획을 따른다.
+`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐다. TASK-018·019는 아래 재개 조건이 남은 `Blocked` 상태이고, TASK-020은 종결(Won't do), TASK-021은 삭제 없는 측정·정책 제안까지는 착수 가능하며 GC 구현과 자동 삭제 활성화는 수치 확정 후로 `Blocked`다. TASK-022·023·025·032는 완료됐고 TASK-024·026이 `Ready`다. 세부 순서는 아래 후속 실행 계획을 따른다.
 
 | Gate | 결과·조건 | 영향 |
 |---|---|---|
@@ -44,7 +44,7 @@ TASK-001/002/003은 독립적인 준비 작업이었다. 완료된 prototype과 
 
 ## 후속 실행 계획 (TASK-022~041)
 
-2026-09-23 사용자가 재개 경로(G1)를 "NAV·DIFF source-byte 계약 개선 + medium/large 공개 C# corpus protocol revision"으로 확정했다. 현재 small 합성 corpus의 DIFF task는 DIFF-03의 필수 반환 슬라이스(74 B)가 20% 통과선(59.2 B)보다 커서 구조적으로 gate를 통과할 수 없다. 따라서 계약 개선만으로는 재개 조건을 충족하지 못한다.
+2026-09-23 사용자가 재개 경로(G1)를 "NAV·DIFF source-byte 계약 개선 + medium/large 공개 C# corpus protocol revision"으로 확정했다. 현재 계상 방식에서 small 합성 corpus의 DIFF task는 gate를 통과할 수 없다. DIFF-03의 필수 반환 슬라이스(74 B)가 20% 통과선(59.2 B)보다 크기 때문이다. 다만 이 통과선은 baseline B가 품질 판정에 쓴 `git diff` 출력(원문 줄 402 B)을 source bytes에 넣지 않은 비대칭 계상에서 나온 값이다(`benchmarks/runs/CvEvaluationRunner.cs:246-265`, 2026-09-23 확인). 계상 규칙은 TASK-024(ADR 005)에서 결과를 보기 전에 확정한다. 어느 쪽이든 small corpus만으로는 제품 가치를 판단할 수 없으므로 protocol revision이 함께 필요하다.
 
 | Phase | TASK | 목적 | 착수 조건 |
 |---|---|---|---|
@@ -858,7 +858,7 @@ G1
 없음
 
 ### Status
-Ready
+Complete — 2026-09-23 (`benchmarks/corpus-candidates.md`)
 
 ## TASK-024 — protocol rev2와 ADR 005
 
@@ -869,7 +869,7 @@ Ready
 TASK-023
 
 ### Scope
-TASK-023 후보에서 medium/large corpus를 선정하고 NAV·DIFF task 확장, 독립 정답 작성 규칙, paired 구조, 조건 A/B/E와 unavailable C/D 처리, 반복·seed를 정한다. FUP-002 동결 수치(20% 등)는 바꾸지 않는다. small corpus DIFF가 구조적으로 통과할 수 없는 사실과 판정에서 그 corpus를 다루는 방식을 결과 전에 명시한다. ADR 005는 Proposed로 작성하고 G2 승인 후 Accepted로 바꾼다.
+TASK-023 후보에서 medium/large corpus를 선정하고 NAV·DIFF task 확장, 독립 정답 작성 규칙, paired 구조, 조건 A/B/E와 unavailable C/D 처리, 반복·seed를 정한다. FUP-002 동결 수치(20% 등)는 바꾸지 않는다. TASK-025가 찾은 측정 비대칭(B의 `git diff` 출력 미계상, E에만 있는 stale 복구 재조회, 줄바꿈 기준, NAV 품질 판정의 반환 내용 미검증)의 처리와 small corpus를 판정에서 다루는 방식을 결과 전에 명시한다. ADR 005는 Proposed로 작성하고 G2 승인 후 Accepted로 바꾼다.
 
 ### Files
 `benchmarks/protocol.md` / `docs/decisions/005-protocol-revision.md`
@@ -887,7 +887,7 @@ TASK-023 후보에서 medium/large corpus를 선정하고 NAV·DIFF task 확장,
 TASK-023
 
 ### Status
-Blocked — TASK-023 선행
+Ready — TASK-023 완료
 
 ## TASK-025 — source-byte 반환 계약 개선 설계
 
@@ -916,7 +916,7 @@ DIFF evidence를 symbol 전체 before/after 대신 hunk·변경 줄 단위로 �
 없음
 
 ### Status
-Ready
+Complete — 2026-09-23 설계 사용자 승인 (`docs/contracts/source-byte-contract-proposal.md`)
 
 ## TASK-026 — 반환 계약 개선 구현
 
@@ -945,7 +945,7 @@ locked restore, Release build, Core/CSharp/CLI/Integration 테스트, fixture ve
 TASK-025 설계 확인
 
 ### Status
-Blocked — TASK-025 선행
+Ready — TASK-025 설계 승인
 
 ## TASK-027 — 새 corpus fixture와 독립 정답
 
@@ -1119,7 +1119,7 @@ config 파일 위치·schema·CLI 플래그 우선순위(현재 CLI 설정은 `-
 없음
 
 ### Status
-Ready
+Complete — 2026-09-23 설계 사용자 승인 (ADR 004 Proposed, 수치는 G4)
 
 ## TASK-033 — GC 코드 리뷰
 
