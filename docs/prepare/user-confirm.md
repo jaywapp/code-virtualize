@@ -13,16 +13,16 @@
 | ID | 주제 | 사용자 선택 | 상태 | 남은 조건 |
 |---|---|---|---|---|
 | UC-001 | 제품 방향 | A: 측정·비교 후 Go/No-Go | Confirmed | FUP-003 결과 기반 경로 선택 |
-| UC-002 | 지원 범위 | A 조건부: Windows/C#/Git 먼저, Perforce 필수 후속 | Confirmed | FUP-007 Perforce 계약·환경 |
+| UC-002 | 지원 범위 | A 조건부: Windows/C#/Git 먼저, Perforce 필수 후속 | Confirmed | FUP-007 계약 Confirmed; 실제 p4 환경 미제공 |
 | UC-003 | Core | A: 엔진 선택 시 C#/.NET CLI | Confirmed | 엔진 Go 이후 적용 |
-| UC-004 | 저장·수명 | A: 영속 JSON/JSONL cache + 세션 metadata | Confirmed | FUP-004 retention·용량·GC 실측 |
+| UC-004 | 저장·수명 | A: 영속 JSON/JSONL cache + 세션 metadata | Confirmed | FUP-004 정책 Confirmed; 기본 수치는 실측 후 |
 | UC-005 | baseline | C: VCS와 Session 모두 제공 | Confirmed | 별도 추가 선택 불필요 |
 | UC-006 | 심볼 | A: L0/L1 전체 접근성, 원문 lazy resolve | Confirmed | 상세 반환 예산은 구현 계약 |
 | UC-007 | 실험 | A: 승인 비식별 로그 + 공개/합성 paired 실험 | Confirmed | FUP-001/002 실행 설정·최종 수치 |
 | UC-008 | trust | A: syntax-only 기본, 명시 trust 시 semantic | Confirmed | workspace별 trust 적용 |
 | UC-009 | 연동 | A: CLI 검증 후 MCP stdio + 얇은 훅 | Confirmed | 실제 설치는 별도 실행 범위 |
-| UC-010 | 잘린 원문 | B: 복구 전 관련 요구 확정 보류 | Confirmed | FUP-005 원문 보완 |
-| UC-011 | 검사 화면 | A+B: CLI text/JSON + 로컬 Web UI | Confirmed | FUP-006 시안·frontend 선택 |
+| UC-010 | 잘린 원문 | B: 복구 전 관련 요구 확정 보류 | Confirmed | FUP-005 폐기 — 복구하지 않음 |
+| UC-011 | 검사 화면 | A+B: CLI text/JSON + 로컬 Web UI | Confirmed | FUP-006 Confirmed — Sample 1 + Blazor Server |
 
 ## UC-001 — 제품 방향과 개발 순서
 
@@ -327,15 +327,17 @@ A. B/C를 선택하면 승인된 화면 범위를 바탕으로 정보 밀도 중
 
 2026-09-20 동기화: 위 11개 결정은 모두 Confirmed이며 다시 선택할 필요가 없다. 아래 표는 이미 선택한 방향을 실행하기 위한 구체 입력 또는 결과 기반 판단이다. 합성 smoke 완료와 실제 승인 로그·모델 비용 평가를 구분하며, 미입력 상태를 승인으로 바꾸지 않는다.
 
+2026-09-21 동기화: FUP-004·006·007을 사용자 확정으로, FUP-005를 요구 폐기로 갱신했다. 확정 원문과 입력 양식은 [user-confirm2.md](user-confirm2.md)에 있으며, FUP 상태의 기준은 계속 이 표다. FUP-006/007 확정은 [ADR 003](../decisions/003-next-step.md)의 공통 제품화 재개 조건을 대신하지 않는다.
+
 | ID | 상태 | 필요한 정보/근거 | 영향 TASK |
 |---|---|---|---|
 | FUP-001 | Partial | 합성 fixture smoke는 2026-09-20 완료. 실제 승인 로그 경로·기간·필드와 실제 모델 token/비용 평가는 미완이며 별도 지정 전 실행하지 않음 | TASK-004 합성 범위 완료; 실제 데이터 평가 |
 | FUP-002 | Complete / Frozen — 2026-09-20 | 품질 저하 0, Critical 0, task·조건별 최소 3회, seed `20260920`, 20% 효율 후보, 유료비용 0, 30분 및 자원 상한. 아래 동결 표와 ADR 001 적용 | TASK-005, TASK-016 |
 | FUP-003 | Complete — 2026-09-20 | 독립 C#/.NET engineering prototype 구현은 완료. TASK-016은 source-byte gate 실패로 최종 No-Go이며 기술 artifact 보존·제품화 자동 진행 중단 | TASK-005~017 완료; TASK-018/019/021 재개 조건부 Blocked |
-| FUP-004 | Pending | 실측에 근거한 retention·용량·GC 수치. 초기에는 자동 파괴적 GC 비활성 | TASK-021 |
-| FUP-005 | Pending | 작성자가 보완한 잘린 원문의 정확한 내용과 출처 | TASK-020, 누락 내용을 전제하는 요구 |
-| FUP-006 | Pending | 시안 3종 중 최종 방향과 frontend stack. CLI+Web 제공 자체는 재논의하지 않음 | TASK-018 |
-| FUP-007 | Pending | Perforce submitted/shelved/pending CL별 base/target 계약과 실제 server/client/CL·허용 read-only 명령 | TASK-019의 실서버 연동 |
+| FUP-004 | Confirmed — 2026-09-21 | `age`/`capacity`/`hybrid` 모드를 config로 선택하고 활성 generation 보호·dry-run을 제공한다. 기본은 `gc.enabled = false`이며 retention·용량 기본값은 실측 후 확정한다 | TASK-021 |
+| FUP-005 | Obsolete — 2026-09-21 | 잘린 원문 복구 요구를 폐기한다. 누락 사실과 이 결정을 기록으로 보존하고 현재 benchmark 설계·구현을 이후 기준으로 삼는다 | TASK-020 종결(Won't do) |
+| FUP-006 | Confirmed — 2026-09-21 | Sample 1(3열 심볼 탐색기) + Blazor Server / ASP.NET Core / .NET. 조회 로직과 원문은 loopback 호스트 프로세스에 두고 브라우저로 내리지 않는다 | TASK-018; 공통 재개 조건은 별도 |
+| FUP-007 | Confirmed / Environment Unavailable — 2026-09-21 | CL 중심 read-only adapter 계약과 허용 read-only 명령 목록은 확정. 실제 server/client/CL은 당분간 제공 불가이므로 합성 fixture까지만 검증한다 | TASK-019 fixture 범위; 실환경 대조 보류 |
 
 ### FUP-002 동결 수치
 
@@ -352,12 +354,13 @@ A. B/C를 선택하면 승인된 화면 범위를 바탕으로 정보 밀도 중
 
 선정·측정 규칙과 상한의 이유는 [ADR 001](../decisions/001-product-path.md)을 따른다. unavailable인 C/D를 0 비용·0 읽기로 대체하지 않으며 실제 승인 로그·실제 모델 비용 평가는 FUP-001의 미완 범위다.
 
-FUP-005 확인: 저장소 원안과 로컬 위키 원본을 2026-09-20 확인했으며 둘 다 `benchmark task/g`에서 끝난다. 복구됐다고 간주하지 않는다. 누락과 무관하게 명시된 요구·시안·프로토콜 설계는 진행한다.
+FUP-005 확인: 저장소 원안과 로컬 위키 원본을 2026-09-20 확인했으며 둘 다 `benchmark task/g`에서 끝난다. 복구됐다고 간주하지 않는다. 누락과 무관하게 명시된 요구·시안·프로토콜 설계는 진행한다. 2026-09-21 사용자 결정으로 복구 요구 자체를 폐기했다. 누락 내용을 추정해 채우지 않으며 UC-010의 보류는 이 폐기로 종결한다.
 
 ### 동기화 기록
 
 - 반영 기준: 사용자 인터뷰 기록 커밋 `b16df53`과 2026-09-20 전체 계획 구현 지시.
 - 이번 작업에서 위 11개 `User Decision` 블록의 선택·근거·날짜와 본문은 변경하지 않았다. FUP 표·동결 수치·동기화 기록만 갱신했다.
+- 2026-09-21 갱신도 같은 범위다. 결정 요약의 `남은 조건` 열과 FUP 표 상태만 바꿨고 `User Decision` 본문과 FUP-002 동결 수치는 유지했다.
 - 제품 경로 결정: [ADR 001](../decisions/001-product-path.md)의 prototype 승인, [ADR 002](../decisions/002-validation-outcome.md)의 본 실험 No-Go, [ADR 003](../decisions/003-next-step.md)의 prototype 보존·제품화 자동 진행 중단을 순서대로 적용한다.
 - 최신 적용 문서: [design.md](design.md), [architecture.md](architecture.md), [plan.md](plan.md).
 - UI 비교 자료: [시안 목록](samples/index.html). 시안의 데이터와 동작은 합성이며 제품 구현 결과가 아니다.

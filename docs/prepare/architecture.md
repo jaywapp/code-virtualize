@@ -2,7 +2,7 @@
 
 ## 상태와 적용 조건
 
-2026-09-20에 `b16df53`의 11개 사용자 결정, [ADR 001](../decisions/001-product-path.md), [ADR 002](../decisions/002-validation-outcome.md), [ADR 003](../decisions/003-next-step.md)을 반영했다. TASK-006~016의 **독립 C#/.NET engineering prototype**과 재현 가능한 증거는 보존한다. TASK-016은 품질·안전성을 통과했지만 동결된 source-byte 효율 gate에 실패해 최종 **No-Go**다. 신규 제품화는 중단하며 Web UI·Perforce·자동 GC는 요구를 보존한 `Blocked` 상태다. 재개 조건과 남은 FUP는 [user-confirm.md](user-confirm.md)를 따른다.
+2026-09-20에 `b16df53`의 11개 사용자 결정, [ADR 001](../decisions/001-product-path.md), [ADR 002](../decisions/002-validation-outcome.md), [ADR 003](../decisions/003-next-step.md)을 반영했다. TASK-006~016의 **독립 C#/.NET engineering prototype**과 재현 가능한 증거는 보존한다. TASK-016은 품질·안전성을 통과했지만 동결된 source-byte 효율 gate에 실패해 최종 **No-Go**다. 신규 제품화는 중단하며 Web UI·Perforce는 요구를 보존한 `Blocked` 상태이고, 자동 GC는 삭제 없는 측정·정책 제안까지 착수 가능하나 GC 구현과 자동 삭제 활성화는 실측 수치 승인 전까지 `Blocked`다. 재개 조건과 남은 FUP는 [user-confirm.md](user-confirm.md)를 따른다.
 ## Architecture Overview
 
 ```mermaid
@@ -39,7 +39,7 @@ flowchart LR
 | 검색 | snapshot별 정규화 이름·ID의 메모리 인덱스 | 결정적인 조회, 원문 body는 저장하지 않음 | UC-006 |
 | 변경 감지 | 훅/파일 watcher + 조회 시 hash 검증 + inventory reconciliation | 이벤트 유실에 대비; 이벤트는 최적화 힌트 | UC-004 |
 | 외부 노출 | CLI JSON, 이후 MCP stdio | 독립 Core 유지; 훅은 lifecycle만 담당 | UC-009 |
-| 로컬 Web UI | .NET loopback host + 정적 frontend 제안 | Core 재사용; frontend 최종 stack은 시안 선택 후 | UC-011, FUP-006 |
+| 로컬 Web UI | .NET loopback host + Blazor Server(InteractiveServer) frontend | Core 재사용; FUP-006 확정으로 frontend stack을 Blazor Server/ASP.NET Core로 고정 | UC-011, FUP-006 |
 | 테스트 | .NET 테스트 프로젝트 + golden fixtures + integration process tests | 파서/저장/CLI/동시성 책임을 나눠 검증 | UC-003 |
 
 Roslyn Workspaces는 solution/project/document 모델과 syntax tree·semantic model 접근을 제공한다. 이는 C# 선택의 기술적 근거일 뿐, 대형 솔루션의 속도나 정확도를 보증하지 않는다. [Microsoft 문서](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/work-with-workspace).
@@ -65,12 +65,12 @@ Roslyn Workspaces는 solution/project/document 모델과 syntax tree·semantic m
 | 대상 | 현재 처리 | 재개 조건 |
 |---|---|---|
 | Core·CLI·MCP prototype | TASK-006~016 산출물과 benchmark artifact 보존 | 유지보수 목적을 벗어난 제품 작업은 새 결정 필요 |
-| TASK-018 Web UI | `Blocked`; 얇은 연동은 사람 중심 UI·로컬 Web 보안/API gap을 충족하지 않음 | 대표 corpus·실제 token·source-byte 계약 개선 및 새 ADR, FUP-006 |
-| TASK-019 Perforce | `Blocked`; 얇은 연동은 CL별 bytes/baseline·mapping gap을 충족하지 않음 | 대표 corpus·실제 token·source-byte 계약 개선 및 새 ADR, FUP-007 |
-| TASK-020 원문 복구 | `Blocked`; 원문을 추정하지 않음 | FUP-005 |
-| TASK-021 retention/GC | `Blocked`; 자동 GC 비활성, no-delete | FUP-004의 실측 수치·명시적 승인; 제품화 재개는 별도 결정 |
+| TASK-018 Web UI | `Blocked`; 얇은 연동은 사람 중심 UI·로컬 Web 보안/API gap을 충족하지 않음. FUP-006 확정(Sample 1 + Blazor Server)으로 UI 방향은 정해짐 | 대표 corpus·실제 model token·NAV/DIFF source-byte 계약 개선과 protocol revision을 반영한 새 ADR(005 동결 → 006 결과) |
+| TASK-019 Perforce | `Blocked`; 얇은 연동은 CL별 bytes/baseline·mapping gap을 충족하지 않음. FUP-007 계약 확정(실제 p4 환경은 미제공)과 baseline provider 추상화 선행 필요 | 대표 corpus·실제 model token·NAV/DIFF source-byte 계약 개선과 protocol revision을 반영한 새 ADR(005 동결 → 006 결과); 실제 p4 환경 |
+| TASK-020 원문 복구 | 종결(Won't do); FUP-005로 복구 요구 자체를 폐기 | 해당 없음 |
+| TASK-021 retention/GC | 측정 착수 가능; FUP-004 정책 확정(`age`/`capacity`/`hybrid`, 기본 `gc.enabled=false`)으로 삭제 없는 측정·정책 제안은 진행 가능 | 실측 retention·용량 수치와 명시적 승인 후 GC 구현·자동 삭제 활성화 |
 
-실제 승인 로그와 실제 model input/output/cache token·비용은 FUP-001 입력과 측정 전까지 미완이다. 잘린 원문은 FUP-005 전까지 추정하지 않으며 session source, immutable base snapshot과 pin된 generation을 보존한다. 데이터 삭제·설치·게시를 경로 전환의 부수 동작으로 수행하지 않는다.
+실제 승인 로그와 실제 model input/output/cache token·비용은 FUP-001 입력과 측정 전까지 미완이다. 잘린 원문은 FUP-005 결정에 따라 복구하지 않으며(TASK-020 종결) session source, immutable base snapshot과 pin된 generation을 보존한다. 데이터 삭제·설치·게시를 경로 전환의 부수 동작으로 수행하지 않는다.
 ## System Components / Component Responsibilities
 
 | 컴포넌트 | 책임 | 경계 |
@@ -140,7 +140,7 @@ code-virtualize/
   CodeVirtualize.sln
 ```
 
-UC-003 A에 맞춰 단일 .NET solution으로 구체화한다. frontend 파일 구조는 FUP-006에서 선택 후 고정한다.
+UC-003 A에 맞춰 단일 .NET solution으로 구체화한다. frontend 파일 구조는 FUP-006 확정(Blazor Server/ASP.NET Core)에 따라 고정한다.
 
 ### Workspace runtime — UC-004 A 반영
 
@@ -253,7 +253,7 @@ Next action   inspect failed project diagnostics; use source search
 ## External Dependencies
 
 - .NET SDK/Roslyn·MSBuild 관련 package: 솔루션 로딩의 실제 지원 범위는 spike로 검증한다.
-- Git: base source와 textual diff를 read-only로 읽는다. Perforce는 UC-002에 따라 필수 후속 adapter다. CL별 source mapping·환경 입력은 FUP-007에서 확정한다.
+- Git: base source와 textual diff를 read-only로 읽는다. Perforce는 UC-002에 따라 필수 후속 adapter다. CL별 source mapping 계약은 FUP-007로 확정했으나 실제 server/client/CL 환경은 당분간 제공되지 않는다.
 - `rg`: fallback 후보 도구. 설치 여부를 검사하고 없으면 파일 scan 대안 또는 `CAPABILITY_UNAVAILABLE`을 명시한다.
 - Claude/MCP: 초기 연동 후보이며 Core 필수 의존성이 아니다. 공식 plugin 문서는 MCP/LSP와 lifecycle hook 연동을 설명한다. [Claude plugin reference](https://code.claude.com/docs/en/plugins-reference), [hook reference](https://code.claude.com/docs/en/hooks).
 - 원격 서비스·벡터 DB·LLM API는 Core 실행에 필수로 두지 않는다.
@@ -264,7 +264,7 @@ generation: `building → valid | partial | failed`. session: `starting → acti
 
 writer는 workspace/analysis key별 하나이며 competing writer는 bounded wait 또는 `BUSY`로 응답한다. reader는 generation을 pin하고 manifest가 가리킨 shard만 읽는다. GC는 active reader/session이 참조하는 generation을 제거하지 않는다. crash lock 회수는 PID만이 아니라 host/process start identity와 lease를 검사한다. 강제 종료·재부팅 후 복구를 테스트한다.
 
-한 세션 종료는 자신의 pin만 해제한다. retention/용량/GC 수치는 실측 후 FUP-004에서 정한다. 확정 전 자동 파괴적 GC를 켜지 않고 측정·수동 후보 보고만 제공한다. Session baseline source도 pin 대상으로 유지하며 다른 session 데이터와 사용자 설정은 삭제하지 않는다.
+한 세션 종료는 자신의 pin만 해제한다. GC 정책은 FUP-004로 확정했다(`age`/`capacity`/`hybrid` 중 config 선택, 활성 generation 보호, dry-run 지원). retention/용량 수치는 실측 후 정하며 확정 전 기본값 `gc.enabled=false`로 자동 파괴적 GC를 켜지 않고 측정·수동 후보 보고만 제공한다. Session baseline source도 pin 대상으로 유지하며 다른 session 데이터와 사용자 설정은 삭제하지 않는다.
 
 ## Error Handling
 
@@ -354,21 +354,21 @@ snapshot은 민감한 원문을 포함하므로 session 접근 범위·수명에
 
 ## Perforce 필수 후속 계약
 
-첫 지원 Windows/C#/Git prototype에서 Perforce 요구는 아직 충족되지 않았다. TASK-019는 No-Go에 따라 `Blocked`이며, 현재 MCP/Claude 연동은 CL별 source/baseline 계약을 대신하지 않는다. 아래 계약은 폐기하지 않고 FUP-007과 공통 제품화 재개 조건이 모두 충족될 때 구현한다.
+첫 지원 Windows/C#/Git prototype에서 Perforce 요구는 아직 충족되지 않았다. TASK-019는 No-Go에 따라 `Blocked`이며, 현재 MCP/Claude 연동은 CL별 source/baseline 계약을 대신하지 않는다. 현재 `src/CodeVirtualize.Core/Vcs/GitBaselineProvider.cs`는 인터페이스 없는 concrete sealed class이므로 Perforce adapter를 붙이려면 baseline provider 추상화 추출이 선행 작업이다. 아래 계약은 폐기하지 않고 공통 제품화 재개 조건이 모두 충족될 때 구현한다.
 
 - `IBaselineProvider` 구현에서 server/client/depot mapping, case handling, revision, digest를 관리한다.
 - submitted/shelved/pending CL의 base와 target bytes를 각각 정의한다. pending은 로컬 unshelved 변경과 서버 상태의 차이를 표시한다.
 - have revision과 head revision은 다를 수 있다. sync로 맞추지 않고 명시 base를 읽는다.
 - move/add·move/delete·delete·binary·잠금·권한 부족·오프라인·미매핑 파일의 지원 표와 오류를 정의한다.
 - read-only source/diff 조회만 제공한다. sync/submit/revert/shelve·ticket 출력/저장은 역할에 포함하지 않는다.
-- 합성 CLI 응답 fixture로 먼저 검증한다. 실제 server/client/CL·명령 allowlist·권한은 FUP-007에서 지정한다.
+- 합성 CLI 응답 fixture로 먼저 검증한다. 명령 allowlist는 FUP-007로 확정했다(`p4 info`/`client`/`opened`/`changes`/`describe`/`files`/`fstat`/`print`/`have`/`where` 등 조회 계열 허용, `sync`/`edit`/`revert`/`submit`/`unshelve` 등 변경 명령 금지). 실제 server/client/CL 환경은 당분간 제공되지 않아 실환경 대조는 보류한다. 인증(P4PORT/P4TICKETS/trust), charset·binary, 권한 거부·오프라인 실패 계약, `p4 print` 원문의 로그 마스킹은 미확정 보완 항목이다.
 - 구현 시 공식 문서로 CLI/API·서버 버전을 확인한다. 현재는 실서버 검증 전 설계다.
 
 ## Local Web UI / API
 
 UC-011 A+B의 Web UI는 읽기 중심 로컬 검사 도구다. 검색, snapshot metadata, source/remark, 관계 후보, VCS/Session diff를 제공해야 한다. [시안 3종](samples/index.html)은 합성 prototype이며 현재 MCP/Claude 연동은 이 화면·로컬 API·접근 경계를 충족하지 않는다.
 
-No-Go에 따라 `CodeVirtualize.Web` 구현은 TASK-018 `Blocked`다. Web UI 요구와 아래 API 계약은 유지하며, 공통 제품화 재개 조건과 FUP-006의 최종 방향·frontend stack이 모두 확정된 뒤 새 결정으로 재개한다. static prototype이 최종 framework 선택이나 실제 engine 연결을 대신하지 않는다.
+No-Go에 따라 `CodeVirtualize.Web` 구현은 TASK-018 `Blocked`다. Web UI 요구와 아래 API 계약은 유지하며, FUP-006으로 UI 방향(Sample 1 + Blazor Server)은 확정됐지만 공통 제품화 재개 조건이 충족된 뒤 새 결정으로 재개한다. static prototype이 최종 framework 선택이나 실제 engine 연결을 대신하지 않는다.
 
 | 요청 계약(제안) | Core 매핑 | 반환·제약 |
 |---|---|---|
