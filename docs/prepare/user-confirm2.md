@@ -13,7 +13,7 @@ TASK-001~017은 지정 모델의 Codex 서브에이전트로 구현·검증을 �
 
 재개 경로 판단에는 새 사실이 추가됐다. 현재 small 합성 corpus에서는 DIFF source-byte gate를 수학적으로 통과할 수 없다. DIFF-03은 삭제된 `Removed()`의 base source 10~13행 반환이 필수인데 그 슬라이스가 74 B이고, baseline B의 DIFF 중앙값도 74 B(이론상 최소치)라서 20% 감소 통과선 59.2 B가 필수 반환량보다 작다. NAV도 426 B를 377.6 B 이하로 줄여야 하며(추가 약 11%p 개선 필요) 현재 9.75% 감소로는 부족하다. 근거는 [cv-report.md](../../benchmarks/results/cv-report.md), `tests/fixtures/csharp/diff/expected.md`, `benchmarks/tasks/csharp-diff.md`다.
 
-제안된 재개 경로(G1, 사용자 확정 대기)는 NAV·DIFF의 source-byte 반환 계약을 개선하고, medium/large 공개 C# corpus를 추가하는 protocol revision을 함께 진행하는 것이다. protocol revision은 새 corpus 결과를 보기 전에 ADR 005로 동결하고, 재측정 결과와 TASK-018·019 재개 판정은 ADR 006에 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다. FUP-002의 동결 수치(20% 등)는 변경하지 않는다. FUP 확정만으로 새 서브에이전트를 실행하지 않으며 ADR 005 승인이 선행한다.
+재개 경로(G1, 2026-09-23 사용자 확정)는 NAV·DIFF의 source-byte 반환 계약을 개선하고, medium/large 공개 C# corpus를 추가하는 protocol revision을 함께 진행하는 것이다. protocol revision은 새 corpus 결과를 보기 전에 ADR 005로 동결하고, 재측정 결과와 TASK-018·019 재개 판정은 ADR 006에 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다. FUP-002의 동결 수치(20% 등)는 변경하지 않는다. FUP 확정만으로 새 서브에이전트를 실행하지 않으며 ADR 005 승인이 선행한다.
 
 ## TASK 상태와 모델 배정
 
@@ -31,12 +31,12 @@ TASK-001~017은 지정 모델의 Codex 서브에이전트로 구현·검증을 �
 | TASK-015 | `gpt-5.6-sol` / Medium | Complete | MCP stdio·Claude lifecycle adapter |
 | TASK-016 | `gpt-5.6-sol` / High | Complete — No-Go | 효율 gate 실패; token은 inconclusive |
 | TASK-017 | `gpt-5.6-sol` / Medium | Complete | 범위 전환·후속 결정 기록 |
-| TASK-018 | `gpt-5.6-sol` / High | Blocked | FUP-006 확정(Sample 1 + Blazor Server). 공통 재개 증거·새 ADR 미충족 |
-| TASK-019 | `gpt-5.6-sol` / High | Blocked | FUP-007 계약 확정. 공통 재개 증거·새 ADR 미충족, 실제 p4 환경 제공 불가 |
+| TASK-018 | `developer` / sonnet | Blocked | FUP-006 확정(Sample 1 + Blazor Server). 공통 재개 증거·새 ADR 미충족 |
+| TASK-019 | `developer` / sonnet | Blocked | FUP-007 계약 확정. 공통 재개 증거·새 ADR 미충족, 실제 p4 환경 제공 불가 |
 | TASK-020 | — | 종결 (Won't do) | FUP-005 요구 폐기; 원문을 복구하지 않기로 확정 |
-| TASK-021 | `gpt-5.6-sol` / High | 측정 착수 가능 | FUP-004 정책 확정. 삭제 없는 측정·정책 제안까지 진행하고 GC 구현·자동 삭제는 수치 확정 후 |
+| TASK-021 | `developer` / sonnet | 측정 착수 가능 | FUP-004 정책 확정. 삭제 없는 측정·정책 제안까지 진행하고 GC 구현·자동 삭제는 수치 확정 후 |
 
-`TASK-018~021`의 모델은 계획상 배정값이다. TASK-018·019는 `Blocked` 규칙에 따라 실행하지 않는다. TASK-021은 삭제를 수행하지 않는 측정 범위에서만 실행한다. 서브에이전트는 커밋·push·PR·병합을 수행하지 않는다.
+TASK-001~017은 실행 기록(Codex 모델·추론 수준)이고, TASK-018 이후는 2026-09-23 계획에 따른 Claude 역할·모델 배정이다(추론 수준 미지정). TASK-018·019는 `Blocked` 규칙에 따라 실행하지 않는다. TASK-021은 삭제를 수행하지 않는 측정 범위에서만 실행한다. 서브에이전트는 커밋·push·PR·병합을 수행하지 않는다.
 
 ## No-Go 근거
 
@@ -103,7 +103,7 @@ FUP-007 — Confirmed / Environment Unavailable (2026-09-21)
 
 - GC는 config의 `age`/`capacity`/`hybrid` 정책으로 동작하며 활성 generation을 보호하고 dry-run을 제공한다. 확정된 기본값은 비활성(`gc.enabled = false`)이며, 실측으로 retention·용량 수치를 정하기 전에는 자동 삭제를 수행하지 않는다.
 - 잘린 `benchmark task/g...` 원문은 복구하지 않으며, 누락 사실과 해당 결정을 이 문서와 [user-confirm.md](user-confirm.md) FUP 표에 기록으로 보존한다.
-- `p4` 실행 환경과 실제 Perforce 계약이 없으면 adapter를 만들거나 성공으로 표시하지 않는다.
+- 실제 `p4` 환경이 없는 동안 Perforce adapter는 합성 CLI 응답 fixture 범위까지만 구현·검증하며, 실환경 대조를 성공으로 표시하지 않는다.
 - TASK-016 결과만으로 Web UI·Perforce 제품화를 자동 재개하지 않는다.
 - 실제 로그·원문·시크릿은 외부로 보내지 않으며, 보고서에는 승인된 비식별 집계만 남긴다.
 
@@ -113,6 +113,7 @@ FUP-007 — Confirmed / Environment Unavailable (2026-09-21)
 2. ADR 005 protocol로 재측정한 결과와 TASK-018·019 재개 여부를 ADR 006에 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다.
 3. TASK-021은 삭제 없는 측정과 정책 제안까지 먼저 수행하고, 수치를 확정한 뒤 GC를 구현하고 자동 삭제를 켠다.
 4. (2026-09-22 완료) TASK-020 종결과 위 FUP 상태를 [plan.md](plan.md), [architecture.md](architecture.md), [design.md](design.md)에 동기화했다.
+5. 전체 후속 실행 순서와 역할·모델 배정은 [plan.md](plan.md)의 TASK-022~041을 따른다.
 
 ## 검증 및 작업 트리
 

@@ -66,7 +66,7 @@ Roslyn Workspaces는 solution/project/document 모델과 syntax tree·semantic m
 |---|---|---|
 | Core·CLI·MCP prototype | TASK-006~016 산출물과 benchmark artifact 보존 | 유지보수 목적을 벗어난 제품 작업은 새 결정 필요 |
 | TASK-018 Web UI | `Blocked`; 얇은 연동은 사람 중심 UI·로컬 Web 보안/API gap을 충족하지 않음. FUP-006 확정(Sample 1 + Blazor Server)으로 UI 방향은 정해짐 | 대표 corpus·실제 model token·NAV/DIFF source-byte 계약 개선과 protocol revision을 반영한 새 ADR(005 동결 → 006 결과) |
-| TASK-019 Perforce | `Blocked`; 얇은 연동은 CL별 bytes/baseline·mapping gap을 충족하지 않음. FUP-007 계약 확정(실제 p4 환경은 미제공)과 baseline provider 추상화 선행 필요 | 대표 corpus·실제 model token·NAV/DIFF source-byte 계약 개선과 protocol revision을 반영한 새 ADR(005 동결 → 006 결과); 실제 p4 환경 |
+| TASK-019 Perforce | `Blocked`; 얇은 연동은 CL별 bytes/baseline·mapping gap을 충족하지 않음. FUP-007 계약 확정(실제 p4 환경은 미제공)과 baseline provider 추상화 선행 필요 | 대표 corpus·실제 model token·NAV/DIFF source-byte 계약 개선과 protocol revision을 반영한 새 ADR(005 동결 → 006 결과); 실제 p4 환경은 실환경 대조에만 필요 |
 | TASK-020 원문 복구 | 종결(Won't do); FUP-005로 복구 요구 자체를 폐기 | 해당 없음 |
 | TASK-021 retention/GC | 측정 착수 가능; FUP-004 정책 확정(`age`/`capacity`/`hybrid`, 기본 `gc.enabled=false`)으로 삭제 없는 측정·정책 제안은 진행 가능 | 실측 retention·용량 수치와 명시적 승인 후 GC 구현·자동 삭제 활성화 |
 
