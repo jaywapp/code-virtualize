@@ -1,6 +1,6 @@
 # TASK-025 — source-byte 반환 계약 개선 설계 제안
 
-- 상태: Proposed. 사용자 확인 전이다. 확인 후 TASK-026이 구현한다.
+- 상태: Approved — 2026-09-23 사용자가 권장안(U1~U6, U8, U9)을 승인했다. U7(E 호출 패턴 고정)은 TASK-024로 넘겼다. TASK-026이 구현한다.
 - 작성일: 2026-09-23
 - 범위: NAV(`cv_get`/`cv-resolve`)와 DIFF(Core `SymbolDiffService`)의 source 반환 계약
 - 반영 대상(확인 후 TASK-026): `docs/contracts/cli.md`, `schemas/common.schema.json`, `schemas/diff.schema.json`, `docs/prepare/architecture.md`, `src/`, `tests/`

@@ -13,7 +13,7 @@
 
 ## 실행 상태와 gate
 
-`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐다. TASK-018·019는 아래 재개 조건이 남은 `Blocked` 상태이고, TASK-020은 종결(Won't do), TASK-021은 삭제 없는 측정·정책 제안까지는 착수 가능하며 GC 구현과 자동 삭제 활성화는 수치 확정 후로 `Blocked`다. TASK-022는 완료됐고 TASK-023·025·032가 `Ready`다. 세부 순서는 아래 후속 실행 계획을 따른다.
+`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐다. TASK-018·019는 아래 재개 조건이 남은 `Blocked` 상태이고, TASK-020은 종결(Won't do), TASK-021은 삭제 없는 측정·정책 제안까지는 착수 가능하며 GC 구현과 자동 삭제 활성화는 수치 확정 후로 `Blocked`다. TASK-022·023·025·032는 완료됐고 TASK-024·026이 `Ready`다. 세부 순서는 아래 후속 실행 계획을 따른다.
 
 | Gate | 결과·조건 | 영향 |
 |---|---|---|
@@ -858,7 +858,7 @@ G1
 없음
 
 ### Status
-Ready
+Complete — 2026-09-23 (`benchmarks/corpus-candidates.md`)
 
 ## TASK-024 — protocol rev2와 ADR 005
 
@@ -887,7 +887,7 @@ TASK-023 후보에서 medium/large corpus를 선정하고 NAV·DIFF task 확장,
 TASK-023
 
 ### Status
-Blocked — TASK-023 선행
+Ready — TASK-023 완료
 
 ## TASK-025 — source-byte 반환 계약 개선 설계
 
@@ -916,7 +916,7 @@ DIFF evidence를 symbol 전체 before/after 대신 hunk·변경 줄 단위로 �
 없음
 
 ### Status
-Ready
+Complete — 2026-09-23 설계 사용자 승인 (`docs/contracts/source-byte-contract-proposal.md`)
 
 ## TASK-026 — 반환 계약 개선 구현
 
@@ -945,7 +945,7 @@ locked restore, Release build, Core/CSharp/CLI/Integration 테스트, fixture ve
 TASK-025 설계 확인
 
 ### Status
-Blocked — TASK-025 선행
+Ready — TASK-025 설계 승인
 
 ## TASK-027 — 새 corpus fixture와 독립 정답
 
@@ -1119,7 +1119,7 @@ config 파일 위치·schema·CLI 플래그 우선순위(현재 CLI 설정은 `-
 없음
 
 ### Status
-Ready
+Complete — 2026-09-23 설계 사용자 승인 (ADR 004 Proposed, 수치는 G4)
 
 ## TASK-033 — GC 코드 리뷰
 

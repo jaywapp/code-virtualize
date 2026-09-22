@@ -1,6 +1,6 @@
 # ADR 004 — cache 정책: config 시스템과 generation GC
 
-- 상태: Proposed
+- 상태: Proposed — 2026-09-23 설계(사용자 확인 필요 11개 항목) 사용자 승인, 수치는 G4 확정 후 Accepted
 - 작성일: 2026-09-23
 - 적용 범위: FUP-004 cache 정책의 config·GC 설계(TASK-032). 구현은 설계 확인과 G4 수치 확정 뒤 TASK-021, 검증은 TASK-033·034
 - 결정 요약(제안): **user·workspace 2단 JSON config + 명시 명령 `cv-gc` + writer lease 아래 fence·tombstone 삭제. 기본 `gc.enabled = false`이며 비활성 상태에서는 삭제 코드가 호출될 수 없는 구조로 둔다.** 수치는 모두 "G4에서 확정"으로 둔다.
