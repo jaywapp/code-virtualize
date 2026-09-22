@@ -11,7 +11,7 @@ TASK-001~017은 지정 모델의 Codex 서브에이전트로 구현·검증을 �
 
 2026-09-21에 FUP-004·006·007이 `Confirmed`로, FUP-005가 요구 폐기로 갱신됐다. 이에 따라 TASK-020은 종결(Won't do)이고, TASK-021은 삭제를 수행하지 않는 측정부터 착수할 수 있다. TASK-018·019는 필요한 사용자 입력이 모두 확정됐지만 [ADR 003](../decisions/003-next-step.md)의 공통 제품화 재개 조건이 아직 미충족이므로 `Blocked`를 유지한다.
 
-재개 경로 판단에는 새 사실이 추가됐다. 현재 small 합성 corpus에서는 DIFF source-byte gate를 수학적으로 통과할 수 없다. DIFF-03은 삭제된 `Removed()`의 base source 10~13행 반환이 필수인데 그 슬라이스가 74 B이고, baseline B의 DIFF 중앙값도 74 B(이론상 최소치)라서 20% 감소 통과선 59.2 B가 필수 반환량보다 작다. NAV도 426 B를 377.6 B 이하로 줄여야 하며(추가 약 11%p 개선 필요) 현재 9.75% 감소로는 부족하다. 근거는 [cv-report.md](../../benchmarks/results/cv-report.md), `tests/fixtures/csharp/diff/expected.md`, `benchmarks/tasks/csharp-diff.md`다.
+재개 경로 판단에는 새 사실이 추가됐다. 현재 계상 방식에서는 small 합성 corpus의 DIFF source-byte gate를 통과할 수 없다. DIFF-03은 삭제된 `Removed()`의 base source 10~13행 반환이 필수인데 그 슬라이스가 74 B이고, baseline B의 DIFF 중앙값도 74 B라서 20% 감소 통과선 59.2 B가 필수 반환량보다 작다. 다만 B는 품질 판정에 `git diff` 출력을 쓰면서 그 출력의 원문 줄(402 B)을 source bytes에 넣지 않았다(2026-09-23 확인, `benchmarks/runs/CvEvaluationRunner.cs:246-265`). 대칭으로 세면 B는 약 476 B이므로 계상 규칙은 TASK-024(ADR 005)에서 결과 전에 확정한다. NAV도 426 B를 377.6 B 이하로 줄여야 하며(추가 약 11%p 개선 필요) 현재 9.75% 감소로는 부족하다. 근거는 [cv-report.md](../../benchmarks/results/cv-report.md), `tests/fixtures/csharp/diff/expected.md`, `benchmarks/tasks/csharp-diff.md`다.
 
 재개 경로(G1, 2026-09-23 사용자 확정)는 NAV·DIFF의 source-byte 반환 계약을 개선하고, medium/large 공개 C# corpus를 추가하는 protocol revision을 함께 진행하는 것이다. protocol revision은 새 corpus 결과를 보기 전에 ADR 005로 동결하고, 재측정 결과와 TASK-018·019 재개 판정은 ADR 006에 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다. FUP-002의 동결 수치(20% 등)는 변경하지 않는다. FUP 확정만으로 새 서브에이전트를 실행하지 않으며 ADR 005 승인이 선행한다.
 
