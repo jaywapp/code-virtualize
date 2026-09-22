@@ -118,10 +118,10 @@ flowchart TD
 |---|---|---|
 | 조사 | 세션 탐색 비중, 범위 읽기·LSP·Serena 비교, 정답 corpus | 실험 방향 확정; pilot 실행 설정 FUP-001 |
 | C# engineering prototype | `cv-build`, `cv-find`, `cv-resolve`, `cv-inspect`, `cv-validate` | FUP-003 완료; TASK-006부터 독립 .NET 경로 |
-| 안정화 | `cv-update`, 동시성·failure injection·구조화 metrics | PoC 검증; GC 수치 FUP-004 |
+| 안정화 | `cv-update`, 동시성·failure injection·구조화 metrics | PoC 검증 완료; GC 정책 FUP-004 확정, retention·용량 수치는 실측 후 |
 | 참조·리뷰 | remark lazy resolve, `cv-impact`, VCS/Session `cv-diff`, Claude 연동 | 단계별 정확도 검증 |
-| 로컬 Web UI | `.cv`·심볼 관계·diff 검사 | UC-011 확정; 시안 선택 FUP-006 |
-| 필수 후속 | Perforce baseline·target·원문·diff | Git 검증 후 CL 계약·환경 입력 FUP-007 |
+| 로컬 Web UI | `.cv`·심볼 관계·diff 검사 | UC-011 확정; FUP-006 확정(Sample 1 + Blazor Server); 공통 재개 조건 충족 필요 |
+| 필수 후속 | Perforce baseline·target·원문·diff | Git 검증 후 CL 계약 FUP-007 확정(실제 p4 환경 미제공); 공통 재개 조건 충족 필요 |
 | 별도 후보 | C++/UE5, Codex 연동, npm 배포 | 필요성과 호환성을 별도 결정 |
 
 ## Functional Requirements
@@ -183,7 +183,7 @@ UC-011 A+B에 따라 터미널 text/JSON과 로컬 Web UI를 모두 제공한다
 | [sample2](samples/sample2/index.html) | 심볼 선택 뒤 필요한 문맥을 단계적으로 펼침 | 낮은 인지 부담·원문 이해 |
 | [sample3](samples/sample3/index.html) | 관계·변경 중심으로 원문 증거 확인 | 영향 범위·리뷰 |
 
-시안은 합성 데이터로 조작 가능한 비교 prototype이며 engine 결과가 아니다. 최종 UI·frontend stack은 아직 선택되지 않았다(FUP-006). loading/empty/error/stale/partial, baseline 모드와 정적/추정 참조 구분을 공통 검토한다. 로컬 API·접근 제어는 architecture에서 정의한다.
+시안은 합성 데이터로 조작 가능한 비교 prototype이며 engine 결과가 아니다. 최종 UI·frontend stack은 FUP-006으로 확정했다(Sample 1 + Blazor Server/ASP.NET Core, InteractiveServer). loading/empty/error/stale/partial, baseline 모드와 정적/추정 참조 구분을 공통 검토한다. 로컬 API·접근 제어는 architecture에서 정의한다.
 
 ## Success Criteria
 
@@ -199,4 +199,4 @@ UC-011 A+B에 따라 터미널 text/JSON과 로컬 Web UI를 모두 제공한다
 4. 복구 안전성: stale source를 검증된 결과로 반환하는 사례와 조용한 부분 결과를 failure injection으로 찾는다.
 5. 반복성: task·repository별 편차와 비교군의 실제 도구 사용률을 공개한다.
 
-원안의 `-42%`, `94% → 95%`, `1.8s`는 예시이며 실제 결과·목표치로 재사용하지 않는다. FUP-002는 [ADR 001](../decisions/001-product-path.md)에 품질 저하 0, stale/조용한 partial Critical 0, task·조건별 최소 3회, seed `20260920`, stronger available baseline 대비 source bytes 또는 실제 input token 20% 이상 감소, 유료 외부 비용 0, 전체 30분으로 동결했다. token 미측정이면 token 이득은 `inconclusive`다. 실제 승인 로그·실제 모델 비용은 FUP-001의 미완 범위이고 누락 원문 관련 요구는 FUP-005로 보류한다.
+원안의 `-42%`, `94% → 95%`, `1.8s`는 예시이며 실제 결과·목표치로 재사용하지 않는다. FUP-002는 [ADR 001](../decisions/001-product-path.md)에 품질 저하 0, stale/조용한 partial Critical 0, task·조건별 최소 3회, seed `20260920`, stronger available baseline 대비 source bytes 또는 실제 input token 20% 이상 감소, 유료 외부 비용 0, 전체 30분으로 동결했다. token 미측정이면 token 이득은 `inconclusive`다. 실제 승인 로그·실제 모델 비용은 FUP-001의 미완 범위이고 잘린 원문 복구 요구는 FUP-005로 폐기했다(TASK-020 종결).

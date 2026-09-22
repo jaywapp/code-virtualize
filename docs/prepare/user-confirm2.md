@@ -11,7 +11,9 @@ TASK-001~017은 지정 모델의 Codex 서브에이전트로 구현·검증을 �
 
 2026-09-21에 FUP-004·006·007이 `Confirmed`로, FUP-005가 요구 폐기로 갱신됐다. 이에 따라 TASK-020은 종결(Won't do)이고, TASK-021은 삭제를 수행하지 않는 측정부터 착수할 수 있다. TASK-018·019는 필요한 사용자 입력이 모두 확정됐지만 [ADR 003](../decisions/003-next-step.md)의 공통 제품화 재개 조건이 아직 미충족이므로 `Blocked`를 유지한다.
 
-재개 경로는 DIFF source-byte 반환 계약을 먼저 개선해 동결 gate를 재측정하고, 그 결과로 새 ADR을 승인한 뒤 TASK-018·019를 여는 것이다. FUP 확정만으로 새 서브에이전트를 실행하지 않으며 계획 상태 갱신과 새 ADR이 선행한다.
+재개 경로 판단에는 새 사실이 추가됐다. 현재 small 합성 corpus에서는 DIFF source-byte gate를 수학적으로 통과할 수 없다. DIFF-03은 삭제된 `Removed()`의 base source 10~13행 반환이 필수인데 그 슬라이스가 74 B이고, baseline B의 DIFF 중앙값도 74 B(이론상 최소치)라서 20% 감소 통과선 59.2 B가 필수 반환량보다 작다. NAV도 426 B를 377.6 B 이하로 줄여야 하며(추가 약 11%p 개선 필요) 현재 9.75% 감소로는 부족하다. 근거는 [cv-report.md](../../benchmarks/results/cv-report.md), `tests/fixtures/csharp/diff/expected.md`, `benchmarks/tasks/csharp-diff.md`다.
+
+제안된 재개 경로(G1, 사용자 확정 대기)는 NAV·DIFF의 source-byte 반환 계약을 개선하고, medium/large 공개 C# corpus를 추가하는 protocol revision을 함께 진행하는 것이다. protocol revision은 새 corpus 결과를 보기 전에 ADR 005로 동결하고, 재측정 결과와 TASK-018·019 재개 판정은 ADR 006에 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다. FUP-002의 동결 수치(20% 등)는 변경하지 않는다. FUP 확정만으로 새 서브에이전트를 실행하지 않으며 ADR 005 승인이 선행한다.
 
 ## TASK 상태와 모델 배정
 
@@ -32,7 +34,7 @@ TASK-001~017은 지정 모델의 Codex 서브에이전트로 구현·검증을 �
 | TASK-018 | `gpt-5.6-sol` / High | Blocked | FUP-006 확정(Sample 1 + Blazor Server). 공통 재개 증거·새 ADR 미충족 |
 | TASK-019 | `gpt-5.6-sol` / High | Blocked | FUP-007 계약 확정. 공통 재개 증거·새 ADR 미충족, 실제 p4 환경 제공 불가 |
 | TASK-020 | — | 종결 (Won't do) | FUP-005 요구 폐기; 원문을 복구하지 않기로 확정 |
-| TASK-021 | `gpt-5.6-sol` / High | 측정 착수 가능 | FUP-004 정책 확정. 삭제 없는 측정·정책 제안까지 진행하고 자동 삭제는 수치 확정 후 |
+| TASK-021 | `gpt-5.6-sol` / High | 측정 착수 가능 | FUP-004 정책 확정. 삭제 없는 측정·정책 제안까지 진행하고 GC 구현·자동 삭제는 수치 확정 후 |
 
 `TASK-018~021`의 모델은 계획상 배정값이다. TASK-018·019는 `Blocked` 규칙에 따라 실행하지 않는다. TASK-021은 삭제를 수행하지 않는 측정 범위에서만 실행한다. 서브에이전트는 커밋·push·PR·병합을 수행하지 않는다.
 
@@ -107,10 +109,10 @@ FUP-007 — Confirmed / Environment Unavailable (2026-09-21)
 
 ## 다음 단계
 
-1. DIFF source-byte 반환 계약을 개선하고 동결 protocol로 gate를 재측정한다. FUP-002 동결 수치는 변경하지 않는다.
-2. 재측정 결과로 새 ADR을 작성해 TASK-018·019 재개 여부를 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다.
-3. TASK-021은 삭제 없는 측정과 정책 제안까지 먼저 수행하고, 수치를 확정한 뒤 자동 삭제를 켠다.
-4. TASK-020 종결과 위 FUP 상태를 [plan.md](plan.md), [architecture.md](architecture.md), [design.md](design.md)에 동기화한다.
+1. NAV·DIFF의 source-byte 반환 계약을 개선하고, medium/large 공개 C# corpus를 추가하는 protocol revision을 새 corpus 결과를 보기 전에 ADR 005로 동결한다. FUP-002 동결 수치는 변경하지 않는다.
+2. ADR 005 protocol로 재측정한 결과와 TASK-018·019 재개 여부를 ADR 006에 기록한다. `004` 번호는 TASK-021의 `004-cache-policy.md`가 선점하므로 `005`부터 쓴다.
+3. TASK-021은 삭제 없는 측정과 정책 제안까지 먼저 수행하고, 수치를 확정한 뒤 GC를 구현하고 자동 삭제를 켠다.
+4. (2026-09-22 완료) TASK-020 종결과 위 FUP 상태를 [plan.md](plan.md), [architecture.md](architecture.md), [design.md](design.md)에 동기화했다.
 
 ## 검증 및 작업 트리
 
