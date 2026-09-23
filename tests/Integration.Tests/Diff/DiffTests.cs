@@ -98,6 +98,15 @@ internal static class DiffTests
         EvidenceBudgetTruncatesExplicitly();
         CrlfSnapshotHunkUsesRealLineNumbers();
         RealAnalyzerContainerSuppressionEndToEnd();
+        OverBudgetSingleLineDowngradesToFingerprint();
+        NearTotalRewriteDowngradesInsteadOfExhaustingMemory();
+        EnumMembersSharingALineAreNotFalselyFlagged();
+        FieldDeclaratorsSharingALineAreComparedIndependently();
+        ContainerSelfTextGapProducesSeparateHunks();
+        RemarkAcrossMultipleFilesDegradesToFingerprint();
+        PartialDeclarationsPairByPathNotIndex();
+        EolOnlyChangeIsReportedAsFormattingOnly();
+        PureInsertionUsesPrecedingLineAnchor();
     }
 
     /// <summary>
@@ -321,6 +330,342 @@ internal static class DiffTests
             "The hunk must show full CRLF source lines without embedding raw \\r characters.");
         Assert(!evidence.TextualHunk.Contains("\r", StringComparison.Ordinal), "Rendered hunk lines must not retain the source's CRLF terminators.");
     }
+
+    // --- TASK-028 review fixes (H1, M1, M2, M3, M4, L1, L2) ---------------------------------------------
+
+    private static void OverBudgetSingleLineDowngradesToFingerprint()
+    {
+        // Both sides must individually exceed the per-entry budget: the trim loop shrinks a group from its
+        // *last* edit first, so if only the target line were huge, trimming down to just the (small) base
+        // delete line would "succeed" and mask the bug this test exists to catch.
+        var baseHugeValue = new string('x', 9000);
+        var targetHugeValue = new string('y', 9000);
+        var baseSource = $"namespace Fixture.Budget;\npublic static class BudgetTarget\n{{\n    public const string Value = \"{baseHugeValue}\";\n}}\n";
+        var targetSource = $"namespace Fixture.Budget;\npublic static class BudgetTarget\n{{\n    public const string Value = \"{targetHugeValue}\";\n}}\n";
+        var baseDeclarationText = $"public const string Value = \"{baseHugeValue}\";";
+        var targetDeclarationText = $"public const string Value = \"{targetHugeValue}\";";
+
+        var baseSymbol = AdHocSymbol(baseSource, "Budget.cs", "budget-project", "field", "Value", "Fixture.Budget.BudgetTarget.Value", "public const string Value", baseDeclarationText);
+        var targetSymbol = AdHocSymbol(targetSource, "Budget.cs", "budget-project", "field", "Value", "Fixture.Budget.BudgetTarget.Value", "public const string Value", targetDeclarationText);
+        Assert(baseSymbol.SymbolId == targetSymbol.SymbolId, "Changing only the literal value must not change the field's identity.");
+
+        var baseSnapshot = BuildSnapshot("h1-base", "Budget.cs", baseSource, [baseSymbol]);
+        var targetSnapshot = BuildSnapshot("h1-target", "Budget.cs", targetSource, [targetSymbol]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "h1-base", "h1-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        var change = result.Changes.Single(item => item.Kind == DiffKind.BodyChanged);
+        var evidence = change.Contract.Evidence.Single();
+        Assert(evidence.TextMode == DiffEvidenceTextMode.FingerprintOnly && evidence.Truncated && evidence.TextualHunk is null,
+            "A single line that alone exceeds the per-entry hunk byte budget must downgrade to fingerprint-only evidence instead of an empty hunk that fails contract validation (H1).");
+        Assert(result.Contract.EvidenceTruncated && result.Contract.Limitations.Contains(DiffContract.EvidenceBudgetExhaustedLimitation, StringComparer.Ordinal),
+            "The unfittable single-line hunk must surface as evidenceTruncated with the budget-exhausted limitation.");
+    }
+
+    private static void NearTotalRewriteDowngradesInsteadOfExhaustingMemory()
+    {
+        const int lineCount = 5000;
+        var baseBody = string.Join("\n", Enumerable.Range(0, lineCount).Select(i => $"        // base-only-line-{i}-aaaaaaaaaa"));
+        var targetBody = string.Join("\n", Enumerable.Range(0, lineCount).Select(i => $"        // target-only-line-{i}-bbbbbbbbbb"));
+        var baseSource = $"namespace Fixture.Rewrite;\npublic static class RewriteTarget\n{{\n    public static void Big()\n    {{\n{baseBody}\n    }}\n}}\n";
+        var targetSource = $"namespace Fixture.Rewrite;\npublic static class RewriteTarget\n{{\n    public static void Big()\n    {{\n{targetBody}\n    }}\n}}\n";
+        var baseDeclarationText = $"public static void Big()\n    {{\n{baseBody}\n    }}";
+        var targetDeclarationText = $"public static void Big()\n    {{\n{targetBody}\n    }}";
+
+        var baseSymbol = AdHocSymbol(baseSource, "Rewrite.cs", "rewrite-project", "method", "Big", "Fixture.Rewrite.RewriteTarget.Big", "public static void Big()", baseDeclarationText);
+        var targetSymbol = AdHocSymbol(targetSource, "Rewrite.cs", "rewrite-project", "method", "Big", "Fixture.Rewrite.RewriteTarget.Big", "public static void Big()", targetDeclarationText);
+
+        var baseSnapshot = BuildSnapshot("m1-base", "Rewrite.cs", baseSource, [baseSymbol]);
+        var targetSnapshot = BuildSnapshot("m1-target", "Rewrite.cs", targetSource, [targetSymbol]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "m1-base", "m1-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        stopwatch.Stop();
+
+        Assert(stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+            $"A near-total rewrite (edit distance ~{2 * lineCount}, within MaxLinesForLineDiff) must abort the Myers computation via the internal trace-memory cap well before completing it, not spend unbounded time/memory on it; took {stopwatch.Elapsed}.");
+        var change = result.Changes.Single(item => item.Kind == DiffKind.BodyChanged);
+        var evidence = change.Contract.Evidence.Single();
+        Assert(evidence.TextMode == DiffEvidenceTextMode.FingerprintOnly && evidence.Truncated,
+            "A near-total rewrite whose edit distance exceeds the internal Myers trace budget must downgrade to fingerprint-only evidence (M1) instead of risking unbounded memory.");
+    }
+
+    private static void EnumMembersSharingALineAreNotFalselyFlagged()
+    {
+        var baseSource = "namespace Fixture.Shared;\npublic enum Color\n{\n    Red, Green, Blue\n}\n";
+        var targetSource = "namespace Fixture.Shared;\npublic enum Color\n{\n    Red, Green, Blue, Yellow\n}\n";
+
+        SymbolContract Member(string source, string name) =>
+            AdHocSymbol(source, "Shared.cs", "shared-project", "enum_member", name, $"Fixture.Shared.Color.{name}", name, name);
+
+        var baseRed = Member(baseSource, "Red");
+        var baseGreen = Member(baseSource, "Green");
+        var baseBlue = Member(baseSource, "Blue");
+        var targetRed = Member(targetSource, "Red");
+        var targetGreen = Member(targetSource, "Green");
+        var targetBlue = Member(targetSource, "Blue");
+        var targetYellow = Member(targetSource, "Yellow");
+        Assert(baseRed.SymbolId == targetRed.SymbolId && baseGreen.SymbolId == targetGreen.SymbolId && baseBlue.SymbolId == targetBlue.SymbolId,
+            "Sanity: members present in both revisions must share identity.");
+
+        var baseSnapshot = BuildSnapshot("m2-enum-base", "Shared.cs", baseSource, [baseRed, baseGreen, baseBlue]);
+        var targetSnapshot = BuildSnapshot("m2-enum-target", "Shared.cs", targetSource, [targetRed, targetGreen, targetBlue, targetYellow]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "m2-enum-base", "m2-enum-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count(change => change.Kind == DiffKind.Added && change.TargetSymbol?.Name == "Yellow") == 1,
+            "Adding Yellow must be reported exactly once.");
+        Assert(!result.Changes.Any(change => change.BaseSymbol?.Name is "Red" or "Green" or "Blue" || change.TargetSymbol?.Name is "Red" or "Green" or "Blue"),
+            "Unrelated enum members sharing a physical line with the appended member must not be falsely reported as changed (M2).");
+        Assert(result.Changes.Count == 1, $"Only the Added Yellow entry is expected; got {result.Changes.Count}.");
+    }
+
+    private static void FieldDeclaratorsSharingALineAreComparedIndependently()
+    {
+        var baseSource = "namespace Fixture.Shared;\npublic static class Fields\n{\n    public static int a = 1, b = 2;\n}\n";
+        var targetSource = "namespace Fixture.Shared;\npublic static class Fields\n{\n    public static int a = 9, b = 2;\n}\n";
+
+        var baseA = AdHocSymbol(baseSource, "Fields.cs", "fields-project", "field", "a", "Fixture.Shared.Fields.a", "public static int a", "a = 1");
+        var baseB = AdHocSymbol(baseSource, "Fields.cs", "fields-project", "field", "b", "Fixture.Shared.Fields.b", "public static int b", "b = 2");
+        var targetA = AdHocSymbol(targetSource, "Fields.cs", "fields-project", "field", "a", "Fixture.Shared.Fields.a", "public static int a", "a = 9");
+        var targetB = AdHocSymbol(targetSource, "Fields.cs", "fields-project", "field", "b", "Fixture.Shared.Fields.b", "public static int b", "b = 2");
+        Assert(baseB.SymbolId == targetB.SymbolId && baseA.SymbolId == targetA.SymbolId, "Sanity: field identities must be stable.");
+
+        var baseSnapshot = BuildSnapshot("m2-fields-base", "Fields.cs", baseSource, [baseA, baseB]);
+        var targetSnapshot = BuildSnapshot("m2-fields-target", "Fields.cs", targetSource, [targetA, targetB]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "m2-fields-base", "m2-fields-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.Name == "a") == 1,
+            "The declarator whose own initializer changed must be reported.");
+        Assert(!result.Changes.Any(change => change.BaseSymbol?.Name == "b" || change.TargetSymbol?.Name == "b"),
+            "A field declarator sharing a physical line with an edited neighbor, but whose own text is unchanged, must not be falsely reported (M2).");
+    }
+
+    private static void ContainerSelfTextGapProducesSeparateHunks()
+    {
+        string ClassText(string leadingComment, string trailingComment) => string.Join("\n",
+            "public static class GapTarget",
+            "{",
+            $"    // {leadingComment}",
+            "    public static int A() => 1;",
+            "    public static int B() => 1;",
+            "    public static int C() => 1;",
+            $"    // {trailingComment}",
+            "}");
+
+        var baseClassText = ClassText("leading v1", "trailing v1");
+        var targetClassText = ClassText("leading v2", "trailing v2");
+        var baseSource = "namespace Fixture.Gap;\n" + baseClassText + "\n";
+        var targetSource = "namespace Fixture.Gap;\n" + targetClassText + "\n";
+
+        var containerBase = AdHocSymbol(baseSource, "Gap.cs", "gap-project", "class", "GapTarget", "Fixture.Gap.GapTarget", "public static class GapTarget", baseClassText);
+        var containerTarget = AdHocSymbol(targetSource, "Gap.cs", "gap-project", "class", "GapTarget", "Fixture.Gap.GapTarget", "public static class GapTarget", targetClassText);
+        Assert(containerBase.SymbolId == containerTarget.SymbolId, "Sanity: container identity must be stable.");
+        var containerId = containerBase.SymbolId;
+
+        SymbolContract Member(string source, string name) => AdHocSymbol(
+            source, "Gap.cs", "gap-project", "method", name, $"Fixture.Gap.GapTarget.{name}", $"public static int {name}()", $"public static int {name}() => 1;", containerId);
+
+        var baseSnapshot = BuildSnapshot("m3-gap-base", "Gap.cs", baseSource,
+            [containerBase, Member(baseSource, "A"), Member(baseSource, "B"), Member(baseSource, "C")]);
+        var targetSnapshot = BuildSnapshot("m3-gap-target", "Gap.cs", targetSource,
+            [containerTarget, Member(targetSource, "A"), Member(targetSource, "B"), Member(targetSource, "C")]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "m3-gap-base", "m3-gap-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        var change = result.Changes.Single(item => item.Kind == DiffKind.BodyChanged && item.BaseSymbol?.SymbolId == containerId);
+        var evidence = change.Contract.Evidence.Single(item => item.TextMode == DiffEvidenceTextMode.LineHunks);
+        var hunkCount = evidence.TextualHunk!.Split("@@ -", StringSplitOptions.None).Length - 1;
+        Assert(hunkCount >= 2,
+            $"A container self-text change spanning a line-number gap (excluded member lines A/B/C in between) must render as separate @@ hunks, not one hunk that falsely claims a contiguous range (M3); got {hunkCount} @@ block(s).\n{evidence.TextualHunk}");
+        Assert(evidence.TextualHunk.Contains("leading v2", StringComparison.Ordinal) && evidence.TextualHunk.Contains("trailing v2", StringComparison.Ordinal),
+            "Both sides of the gap must be represented in the evidence.");
+        Assert(!result.Changes.Any(item => item.BaseSymbol?.Name is "A" or "B" or "C" || item.TargetSymbol?.Name is "A" or "B" or "C"),
+            "Members whose own declarations did not change must not appear when only the container's self text changed.");
+    }
+
+    private static void RemarkAcrossMultipleFilesDegradesToFingerprint()
+    {
+        var fileASource = "namespace Fixture.Remark;\n/// <summary>A v1</summary>\npublic partial class RemarkTarget\n{\n}\n";
+        var fileBSource = "namespace Fixture.Remark;\n/// <summary>B v1</summary>\npublic partial class RemarkTarget\n{\n    public static int X() => 1;\n}\n";
+        var targetFileASource = "namespace Fixture.Remark;\n/// <summary>A v2</summary>\npublic partial class RemarkTarget\n{\n}\n";
+        var targetFileBSource = fileBSource;
+
+        var identity = new SymbolIdentityContract("remark-project", AnalysisKey, "class", "Fixture.Remark.RemarkTarget", 0, [], null);
+        var symbolId = DeterministicSymbolId.Create(identity);
+
+        var baseDeclA = FragmentLocation(fileASource, "A.cs", "public partial class RemarkTarget\n{\n}");
+        var baseDeclB = FragmentLocation(fileBSource, "B.cs", "public partial class RemarkTarget\n{\n    public static int X() => 1;\n}");
+        var baseRemarkA = FragmentLocation(fileASource, "A.cs", "/// <summary>A v1</summary>");
+        var baseRemarkB = FragmentLocation(fileBSource, "B.cs", "/// <summary>B v1</summary>");
+
+        var targetDeclA = FragmentLocation(targetFileASource, "A.cs", "public partial class RemarkTarget\n{\n}");
+        var targetDeclB = FragmentLocation(targetFileBSource, "B.cs", "public partial class RemarkTarget\n{\n    public static int X() => 1;\n}");
+        var targetRemarkA = FragmentLocation(targetFileASource, "A.cs", "/// <summary>A v2</summary>");
+        var targetRemarkB = FragmentLocation(targetFileBSource, "B.cs", "/// <summary>B v1</summary>");
+
+        var baseSymbol = new SymbolContract(symbolId, "remark-project", AnalysisKey, "class", "RemarkTarget", "Fixture.Remark.RemarkTarget", "public partial class RemarkTarget",
+            "public", null, 0, IdentityQuality.Semantic, [], null,
+            [new DeclarationContract(symbolId, baseDeclA, DocumentKind.Source), new DeclarationContract(symbolId, baseDeclB, DocumentKind.Source)], []);
+        var targetSymbol = baseSymbol with
+        {
+            Declarations = [new DeclarationContract(symbolId, targetDeclA, DocumentKind.Source), new DeclarationContract(symbolId, targetDeclB, DocumentKind.Source)]
+        };
+
+        var baseBytesA = new UTF8Encoding(false).GetBytes(fileASource);
+        var baseBytesB = new UTF8Encoding(false).GetBytes(fileBSource);
+        var targetBytesA = new UTF8Encoding(false).GetBytes(targetFileASource);
+        var targetBytesB = new UTF8Encoding(false).GetBytes(targetFileBSource);
+
+        var baseSnapshot = new SymbolDiffSnapshot("m3-remark-base", HashUtf8Bytes(baseBytesA), DateTimeOffset.UtcNow, Coverage(), [baseSymbol],
+            [new DiffSourceDocument("A.cs", baseBytesA, "utf-8", HashUtf8Bytes(baseBytesA)), new DiffSourceDocument("B.cs", baseBytesB, "utf-8", HashUtf8Bytes(baseBytesB))],
+            [new DiffRemarkSnapshot(symbolId, baseRemarkA), new DiffRemarkSnapshot(symbolId, baseRemarkB)]);
+        var targetSnapshot = new SymbolDiffSnapshot("m3-remark-target", HashUtf8Bytes(targetBytesA), DateTimeOffset.UtcNow, Coverage(), [targetSymbol],
+            [new DiffSourceDocument("A.cs", targetBytesA, "utf-8", HashUtf8Bytes(targetBytesA)), new DiffSourceDocument("B.cs", targetBytesB, "utf-8", HashUtf8Bytes(targetBytesB))],
+            [new DiffRemarkSnapshot(symbolId, targetRemarkA), new DiffRemarkSnapshot(symbolId, targetRemarkB)]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "m3-remark-base", "m3-remark-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        var remarkChange = result.Changes.Single(item => item.Kind == DiffKind.RemarkChanged);
+        var evidence = remarkChange.Contract.Evidence.Single();
+        Assert(evidence.TextMode == DiffEvidenceTextMode.FingerprintOnly && evidence.TextualHunk is null,
+            "A remark spanning multiple files cannot be faithfully rendered as one unified-diff hunk (one '--- a/<path>' header), so it must degrade to fingerprint-only evidence (M3) instead of misattributing every line to whichever file's path sorts first.");
+        Assert(evidence.BaseContentHash is not null && evidence.TargetContentHash is not null, "Fingerprint evidence must still carry both content hashes.");
+    }
+
+    private static void PartialDeclarationsPairByPathNotIndex()
+    {
+        var identity = new SymbolIdentityContract("partial-project", AnalysisKey, "class", "Fixture.PartialSwap.SwapTarget", 0, [], null);
+        var symbolId = DeterministicSymbolId.Create(identity);
+
+        var baseFileA = "namespace Fixture.PartialSwap;\npublic partial class SwapTarget\n{\n    // in A\n}\n";
+        var baseFileB = "namespace Fixture.PartialSwap;\npublic partial class SwapTarget\n{\n    // in B\n}\n";
+        var targetFileA = baseFileA;
+        var targetFileC = "namespace Fixture.PartialSwap;\npublic partial class SwapTarget\n{\n    // in C\n}\n";
+
+        var baseDeclA = FragmentLocation(baseFileA, "A.cs", "public partial class SwapTarget\n{\n    // in A\n}");
+        var baseDeclB = FragmentLocation(baseFileB, "B.cs", "public partial class SwapTarget\n{\n    // in B\n}");
+        var targetDeclA = FragmentLocation(targetFileA, "A.cs", "public partial class SwapTarget\n{\n    // in A\n}");
+        var targetDeclC = FragmentLocation(targetFileC, "C.cs", "public partial class SwapTarget\n{\n    // in C\n}");
+
+        var baseSymbol = new SymbolContract(symbolId, "partial-project", AnalysisKey, "class", "SwapTarget", "Fixture.PartialSwap.SwapTarget", "public partial class SwapTarget",
+            "public", null, 0, IdentityQuality.Semantic, [], null,
+            [new DeclarationContract(symbolId, baseDeclA, DocumentKind.Source), new DeclarationContract(symbolId, baseDeclB, DocumentKind.Source)], []);
+        var targetSymbol = baseSymbol with
+        {
+            Declarations = [new DeclarationContract(symbolId, targetDeclA, DocumentKind.Source), new DeclarationContract(symbolId, targetDeclC, DocumentKind.Source)]
+        };
+
+        var baseBytesA = new UTF8Encoding(false).GetBytes(baseFileA);
+        var baseBytesB = new UTF8Encoding(false).GetBytes(baseFileB);
+        var targetBytesA = new UTF8Encoding(false).GetBytes(targetFileA);
+        var targetBytesC = new UTF8Encoding(false).GetBytes(targetFileC);
+
+        var baseSnapshot = new SymbolDiffSnapshot("m4-base", HashUtf8Bytes(baseBytesA), DateTimeOffset.UtcNow, Coverage(), [baseSymbol],
+            [new DiffSourceDocument("A.cs", baseBytesA, "utf-8", HashUtf8Bytes(baseBytesA)), new DiffSourceDocument("B.cs", baseBytesB, "utf-8", HashUtf8Bytes(baseBytesB))], []);
+        var targetSnapshot = new SymbolDiffSnapshot("m4-target", HashUtf8Bytes(targetBytesA), DateTimeOffset.UtcNow, Coverage(), [targetSymbol],
+            [new DiffSourceDocument("A.cs", targetBytesA, "utf-8", HashUtf8Bytes(targetBytesA)), new DiffSourceDocument("C.cs", targetBytesC, "utf-8", HashUtf8Bytes(targetBytesC))], []);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "m4-base", "m4-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        var change = result.Changes.Single(item => item.BaseSymbol?.SymbolId == symbolId || item.TargetSymbol?.SymbolId == symbolId);
+
+        Assert(change.Contract.Evidence.Count == 2, $"Expected exactly two evidence items (B.cs removed, C.cs added); got {change.Contract.Evidence.Count}.");
+        Assert(change.Contract.Evidence.All(item => item.TextMode == DiffEvidenceTextMode.HeaderOnly),
+            "B.cs's removal and C.cs's addition must each be reported as header_only, never as a line-hunk comparing one unrelated file's text to the other's (M4).");
+        Assert(change.Contract.Evidence.Any(item => item.Kind == "declaration-removed" && item.BaseContentHash is not null && item.TargetContentHash is null),
+            "B.cs's declaration must be reported as removed.");
+        Assert(change.Contract.Evidence.Any(item => item.Kind == "declaration-added" && item.TargetContentHash is not null && item.BaseContentHash is null),
+            "C.cs's declaration must be reported as added.");
+    }
+
+    private static void EolOnlyChangeIsReportedAsFormattingOnly()
+    {
+        var baseSource = "namespace Fixture.Eol;\r\npublic static class EolTarget\r\n{\r\n    public static int Value()\r\n    {\r\n        return 1;\r\n    }\r\n}\r\n";
+        var targetSource = baseSource.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var declarationTextBase = "public static int Value()\r\n    {\r\n        return 1;\r\n    }";
+        var declarationTextTarget = declarationTextBase.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var baseSymbol = AdHocSymbol(baseSource, "Eol.cs", "eol-project", "method", "Value", "Fixture.Eol.EolTarget.Value", "public static int Value()", declarationTextBase);
+        var targetSymbol = AdHocSymbol(targetSource, "Eol.cs", "eol-project", "method", "Value", "Fixture.Eol.EolTarget.Value", "public static int Value()", declarationTextTarget);
+        Assert(baseSymbol.SymbolId == targetSymbol.SymbolId, "Sanity: identity must be stable across an EOL-only change.");
+
+        var baseSnapshot = BuildSnapshot("l1-base", "Eol.cs", baseSource, [baseSymbol]);
+        var targetSnapshot = BuildSnapshot("l1-target", "Eol.cs", targetSource, [targetSymbol]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "l1-base", "l1-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        var change = result.Changes.Single();
+        Assert(change.Kind == DiffKind.FormattingOnly,
+            "A CRLF-to-LF-only change must still be reported as formatting_only (L1), matching pre-TASK-026 behavior, not silently dropped.");
+        var evidence = change.Contract.Evidence.Single();
+        Assert(evidence.TextMode == DiffEvidenceTextMode.FingerprintOnly && evidence.BaseContentHash != evidence.TargetContentHash,
+            "An EOL-only change has no meaningful line-level hunk (every line's EOL-stripped text is identical), so fingerprint evidence with differing hashes is sufficient (L1).");
+    }
+
+    private static void PureInsertionUsesPrecedingLineAnchor()
+    {
+        var baseSource = string.Join("\n",
+            "namespace Fixture.Insert;", "public static class InsertTarget", "{", "    public static void M()",
+            "    {", "        Step1();", "    }", "}", string.Empty);
+        var targetSource = string.Join("\n",
+            "namespace Fixture.Insert;", "public static class InsertTarget", "{", "    public static void M()",
+            "    {", "        Step1();", "        Step2();", "    }", "}", string.Empty);
+
+        var baseDeclarationText = "public static void M()\n    {\n        Step1();\n    }";
+        var targetDeclarationText = "public static void M()\n    {\n        Step1();\n        Step2();\n    }";
+
+        var baseSymbol = AdHocSymbol(baseSource, "Insert.cs", "insert-project", "method", "M", "Fixture.Insert.InsertTarget.M", "public static void M()", baseDeclarationText);
+        var targetSymbol = AdHocSymbol(targetSource, "Insert.cs", "insert-project", "method", "M", "Fixture.Insert.InsertTarget.M", "public static void M()", targetDeclarationText);
+
+        var baseSnapshot = BuildSnapshot("l2-base", "Insert.cs", baseSource, [baseSymbol]);
+        var targetSnapshot = BuildSnapshot("l2-target", "Insert.cs", targetSource, [targetSymbol]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "l2-base", "l2-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var tinyContext = new DiffEvidenceOptions(ContextLines: 0, MaxHunkBytesPerEntry: 8192, MaxEvidenceBytesTotal: 65536, MaxLinesForLineDiff: 20000);
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot, Evidence: tinyContext));
+        var change = result.Changes.Single(item => item.Kind == DiffKind.BodyChanged);
+        var evidence = change.Contract.Evidence.Single();
+
+        // M() spans base lines 4-7 (header, {, Step1(), }). Step2() is inserted after base's Step1() line
+        // (line 6). With contextLines=0, the pure-insertion hunk's base anchor must be "-6,0" (the line
+        // preceding the insertion point), not "-0,0" (L2).
+        Assert(evidence.TextualHunk!.Contains("@@ -6,0 +", StringComparison.Ordinal),
+            $"A pure insertion's base anchor must be the preceding base line (6), not 0.\n{evidence.TextualHunk}");
+    }
+
+    private static SymbolContract AdHocSymbol(
+        string source, string path, string projectIdentity, string kind, string name, string qualifiedName, string signature,
+        string declarationText, string? containerId = null)
+    {
+        var location = FragmentLocation(source, path, declarationText);
+        var identity = new SymbolIdentityContract(projectIdentity, AnalysisKey, kind, qualifiedName, 0, [], null);
+        var symbolId = DeterministicSymbolId.Create(identity);
+        return new SymbolContract(symbolId, "project-adhoc", AnalysisKey, kind, name, qualifiedName, signature, "public", containerId, 0,
+            IdentityQuality.Semantic, [], null, [new DeclarationContract(symbolId, location, DocumentKind.Source)], []);
+    }
+
+    private static LocationContract FragmentLocation(string source, string path, string fragment)
+    {
+        var start = source.IndexOf(fragment, StringComparison.Ordinal);
+        Assert(start >= 0, $"Fragment not found in '{path}': {fragment}");
+        var bytes = new UTF8Encoding(false).GetBytes(source);
+        var hash = HashUtf8Bytes(bytes);
+        return new LocationContract($"file_{path}", hash, new TextSpanContract(start, fragment.Length, LineAt(source, start), LineAt(source, start + fragment.Length)), path, null);
+    }
+
+    private static SymbolDiffSnapshot BuildSnapshot(string snapshotId, string path, string source, IReadOnlyList<SymbolContract> symbols)
+    {
+        var bytes = new UTF8Encoding(false).GetBytes(source);
+        var hash = HashUtf8Bytes(bytes);
+        return new SymbolDiffSnapshot(snapshotId, hash, DateTimeOffset.UtcNow, Coverage(), symbols, [new DiffSourceDocument(path, bytes, "utf-8", hash)], []);
+    }
+
+    // ------------------------------------------------------------------------------------------------------
 
     private static void ContractRoundTripAndUnknownKind(DiffContract contract)
     {

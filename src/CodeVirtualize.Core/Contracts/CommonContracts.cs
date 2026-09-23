@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace CodeVirtualize.Core.Contracts;
@@ -229,6 +230,12 @@ public sealed record SourceSliceContract(
             if (Span.Length != Content.Length)
             {
                 throw ContractGuard.Invalid(nameof(Span), "length must equal the returned content UTF-16 length");
+            }
+
+            var expectedHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Content)))}";
+            if (!string.Equals(ContentHash, expectedHash, StringComparison.Ordinal))
+            {
+                throw ContractGuard.Invalid(nameof(ContentHash), "must equal the sha256 of the returned content's UTF-8 bytes");
             }
         }
 

@@ -19,6 +19,12 @@
     "schema": { "const": "code-virtualize/diff" },
     "schemaVersion": { "const": 1 }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "evidenceTruncated": { "const": true } } },
+      "then": { "properties": { "limitations": { "contains": { "const": "diff-evidence-budget-exhausted" } } } }
+    }
+  ],
   "$defs": {
     "evidence": {
       "type": "object",
@@ -53,11 +59,11 @@
         },
         {
           "if": { "properties": { "textMode": { "const": "header_only" } } },
-          "then": { "properties": { "textualHunk": { "type": "string" }, "contextLines": { "const": 0 } } }
+          "then": { "properties": { "textualHunk": { "type": "string", "minLength": 1 }, "contextLines": { "const": 0 } } }
         },
         {
           "if": { "properties": { "textMode": { "const": "line_hunks" } } },
-          "then": { "properties": { "textualHunk": { "type": "string" } } }
+          "then": { "properties": { "textualHunk": { "type": "string", "minLength": 1 } } }
         }
       ]
     },

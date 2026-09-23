@@ -121,9 +121,13 @@ public sealed class SymbolDiffService
                 changes.Add(BuildChange(DiffKind.BodyChanged, before, after, 1m, evidences));
             }
         }
-        else if (!string.Equals(before.CompareText, after.CompareText, StringComparison.Ordinal))
+        else if (!string.Equals(before.FullText, after.FullText, StringComparison.Ordinal))
         {
-            var formatting = NormalizeWhitespace(before.CompareText) == NormalizeWhitespace(after.CompareText);
+            // Change detection for a leaf (non-container) symbol must compare its own declaration span
+            // text (FullText), not whole source lines (CompareText): a leaf's line can be shared with an
+            // unrelated neighboring symbol (an enum member list, or "int a, b;" field declarators), and
+            // that neighbor's edit must not make this symbol appear changed too (M2).
+            var formatting = NormalizeWhitespace(before.FullText) == NormalizeWhitespace(after.FullText);
             var kind = formatting ? DiffKind.FormattingOnly : DiffKind.BodyChanged;
             changes.Add(BuildChange(kind, before, after, 1m,
                 BuildSymbolLineHunkEvidence(formatting ? "formatting-only" : "body-changed", before, after, budget)));
@@ -216,35 +220,52 @@ public sealed class SymbolDiffService
     private static List<DiffEvidenceContract> BuildSymbolLineHunkEvidence(
         string kind, SymbolView before, SymbolView after, EvidenceBudget budget)
     {
+        // Pair declarations by their normalized file path first (M4), not by list index: a symbol's
+        // Declarations are sorted by (path, span start), so if a partial declaration's file was replaced
+        // (base has A.cs+B.cs, target has A.cs+C.cs), index-based pairing would compare B.cs against C.cs
+        // as if one were edited into the other, instead of reporting B.cs removed and C.cs added.
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var baseByPath = before.Declarations.GroupBy(declaration => DiffSnapshotReader.NormalizePath(declaration.Location.Path!), pathComparer)
+            .ToDictionary(group => group.Key, group => group.ToArray(), pathComparer);
+        var afterByPath = after.Declarations.GroupBy(declaration => DiffSnapshotReader.NormalizePath(declaration.Location.Path!), pathComparer)
+            .ToDictionary(group => group.Key, group => group.ToArray(), pathComparer);
+        var allPaths = baseByPath.Keys.Concat(afterByPath.Keys).Distinct(pathComparer).Order(StringComparer.Ordinal);
+
         var evidences = new List<DiffEvidenceContract>();
-        var pairCount = Math.Min(before.Declarations.Count, after.Declarations.Count);
-        for (var i = 0; i < pairCount; i++)
+        foreach (var path in allPaths)
         {
-            var baseDeclaration = before.Declarations[i];
-            var targetDeclaration = after.Declarations[i];
-            if (string.Equals(baseDeclaration.RawText, targetDeclaration.RawText, StringComparison.Ordinal) &&
-                LinesEqual(baseDeclaration.Lines, targetDeclaration.Lines))
+            var baseDeclarations = baseByPath.GetValueOrDefault(path, []);
+            var targetDeclarations = afterByPath.GetValueOrDefault(path, []);
+            var pairCount = Math.Min(baseDeclarations.Length, targetDeclarations.Length);
+            for (var i = 0; i < pairCount; i++)
             {
-                continue;
+                var baseDeclaration = baseDeclarations[i];
+                var targetDeclaration = targetDeclarations[i];
+                if (string.Equals(baseDeclaration.RawText, targetDeclaration.RawText, StringComparison.Ordinal))
+                {
+                    // Nothing changed in this declaration's own span text; a different declaration in the
+                    // same symbol (or, for a container, self text elsewhere) is what triggered this entry.
+                    continue;
+                }
+
+                evidences.Add(BuildLineHunkFromLines(
+                    kind, baseDeclaration.Lines, targetDeclaration.Lines, baseDeclaration.Location.Path, targetDeclaration.Location.Path,
+                    DiffDigests.Utf8(baseDeclaration.RawText), DiffDigests.Utf8(targetDeclaration.RawText), budget));
             }
 
-            evidences.Add(BuildLineHunkFromLines(
-                kind, baseDeclaration.Lines, targetDeclaration.Lines, baseDeclaration.Location.Path, targetDeclaration.Location.Path,
-                DiffDigests.Utf8(baseDeclaration.RawText), DiffDigests.Utf8(targetDeclaration.RawText), budget));
-        }
+            for (var i = pairCount; i < baseDeclarations.Length; i++)
+            {
+                var declaration = baseDeclarations[i];
+                evidences.Add(BuildHeaderOnlyEvidence("declaration-removed", declaration, added: false,
+                    DiffDigests.Utf8(declaration.RawText), declaration.Lines.Count, budget));
+            }
 
-        for (var i = pairCount; i < before.Declarations.Count; i++)
-        {
-            var declaration = before.Declarations[i];
-            evidences.Add(BuildHeaderOnlyEvidence("declaration-removed", declaration, added: false,
-                DiffDigests.Utf8(declaration.RawText), declaration.Lines.Count, budget));
-        }
-
-        for (var i = pairCount; i < after.Declarations.Count; i++)
-        {
-            var declaration = after.Declarations[i];
-            evidences.Add(BuildHeaderOnlyEvidence("declaration-added", declaration, added: true,
-                DiffDigests.Utf8(declaration.RawText), declaration.Lines.Count, budget));
+            for (var i = pairCount; i < targetDeclarations.Length; i++)
+            {
+                var declaration = targetDeclarations[i];
+                evidences.Add(BuildHeaderOnlyEvidence("declaration-added", declaration, added: true,
+                    DiffDigests.Utf8(declaration.RawText), declaration.Lines.Count, budget));
+            }
         }
 
         if (evidences.Count == 0)
@@ -258,24 +279,6 @@ public sealed class SymbolDiffService
         }
 
         return evidences;
-    }
-
-    private static bool LinesEqual(IReadOnlyList<LineHunkBuilder.SourceLine> a, IReadOnlyList<LineHunkBuilder.SourceLine> b)
-    {
-        if (a.Count != b.Count)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < a.Count; i++)
-        {
-            if (!string.Equals(a[i].Text, b[i].Text, StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static DiffEvidenceContract BuildLineHunkFromLines(
@@ -295,13 +298,25 @@ public sealed class SymbolDiffService
             return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, true, baseHash, targetHash);
         }
 
-        var built = LineHunkBuilder.Build(baseLines, targetLines, basePath, targetPath, budget.Options.ContextLines, budget.Options.MaxHunkBytesPerEntry);
+        var built = LineHunkBuilder.Build(
+            baseLines, targetLines, basePath, targetPath, budget.Options.ContextLines, budget.Options.MaxHunkBytesPerEntry,
+            budget.Options.MaxLinesForLineDiff);
         if (!built.HasChanges)
         {
             return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false, baseHash, targetHash);
         }
 
-        var bytes = built.Text is null ? 0 : Encoding.UTF8.GetByteCount(built.Text);
+        if (built.Text is null)
+        {
+            // Either the per-entry byte budget could not fit even a single line (H1: e.g. a one-line
+            // declaration whose entire text is one very long string literal), or the Myers edit-distance
+            // cap was hit before a hunk could be computed (M1: a near-total rewrite). Either way, no hunk
+            // text exists to report — downgrade to fingerprint-only evidence rather than an empty string,
+            // which would fail contract validation.
+            return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, true, baseHash, targetHash);
+        }
+
+        var bytes = Encoding.UTF8.GetByteCount(built.Text);
         if (!budget.TryConsume(bytes))
         {
             return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, true, baseHash, targetHash);
@@ -344,6 +359,11 @@ public sealed class SymbolDiffService
     {
         var baseHash = before.Remark is null ? null : DiffDigests.Utf8(before.Remark);
         var targetHash = after.Remark is null ? null : DiffDigests.Utf8(after.Remark);
+        if (before.RemarkMultiFile || after.RemarkMultiFile)
+        {
+            return new DiffEvidenceContract("remark-changed", DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false, baseHash, targetHash);
+        }
+
         return BuildLineHunkFromLines(
             "remark-changed", before.RemarkLines, after.RemarkLines, before.RemarkPath, after.RemarkPath, baseHash, targetHash, budget);
     }
@@ -432,9 +452,17 @@ public sealed class SymbolDiffService
                 : null;
             IReadOnlyList<LineHunkBuilder.SourceLine> remarkLines = [];
             string? remarkPath = null;
+            var remarkMultiFile = false;
             if (remarkLocations is { Length: > 0 })
             {
-                remarkPath = remarkLocations[0].Location.Path;
+                var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+                var distinctPaths = remarkLocations.Select(item => item.Location.Path!).Distinct(pathComparer).ToArray();
+                // Multiple remark locations normally come from partial declarations. If they land in
+                // different files, a single "--- a/<path>" hunk header can only ever name one of them, so
+                // (M3) render this comparison as fingerprint-only rather than misattributing every line to
+                // whichever file happened to sort first.
+                remarkMultiFile = distinctPaths.Length > 1;
+                remarkPath = distinctPaths[0];
                 remarkLines = remarkLocations
                     .SelectMany(item => DiffSnapshotReader.FullLines(sources[DiffSnapshotReader.NormalizePath(item.Location.Path!)].Text, item.Location.Span))
                     .ToArray();
@@ -446,7 +474,7 @@ public sealed class SymbolDiffService
             var primaryPath = orderedDeclarations[0].Location.Path ?? orderedDeclarations[0].Location.Uri ?? "unknown";
 
             views[symbol.SymbolId] = new SymbolView(
-                symbol, declarationViews, compareText, fullText, remark, remarkLines, remarkPath, isContainer, primaryPath);
+                symbol, declarationViews, compareText, fullText, remark, remarkLines, remarkPath, remarkMultiFile, isContainer, primaryPath);
         }
 
         return views;
@@ -495,7 +523,10 @@ public sealed class SymbolDiffService
     private static string RenameShape(SymbolView view)
     {
         var signature = view.Symbol.Signature.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
-        var source = view.CompareText.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
+        // Use the declaration's own span text (FullText), not whole source lines, for the same reason as
+        // the leaf change-detection gate above (M2): a rename candidate's "shape" must not be perturbed by
+        // an unrelated neighbor sharing a physical line with this declaration.
+        var source = view.FullText.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
         return NormalizeWhitespace(signature + "\n" + source);
     }
 
@@ -518,6 +549,7 @@ public sealed class SymbolDiffService
         string? Remark,
         IReadOnlyList<LineHunkBuilder.SourceLine> RemarkLines,
         string? RemarkPath,
+        bool RemarkMultiFile,
         bool IsContainer,
         string PrimaryPath);
 

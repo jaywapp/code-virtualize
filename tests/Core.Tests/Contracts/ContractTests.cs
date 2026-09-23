@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using CodeVirtualize.Core.Contracts;
 
@@ -135,7 +137,8 @@ internal static class ContractTests
     private static void SpanAndBudgetInvariantsAreValidated()
     {
         const string content = "A😀\r\nB";
-        var source = new SourceSliceContract(content, new TextSpanContract(12, content.Length, 3, 4), new SourceBudgetContract(8, 2), new SourceUsageContract(8, 2), false, BudgetExhaustion.None, HashA, false);
+        var contentHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)))}";
+        var source = new SourceSliceContract(content, new TextSpanContract(12, content.Length, 3, 4), new SourceBudgetContract(8, 2), new SourceUsageContract(8, 2), false, BudgetExhaustion.None, contentHash, false);
         source.Validate();
         Assert(source.Span.Length == 6, "Emoji must occupy two UTF-16 code units.");
         Throws(() => new TextSpanContract(0, 1, 0, 1).Validate(), "CONTRACT_INVALID");
@@ -147,6 +150,10 @@ internal static class ContractTests
         Throws(() => (notModified with { Content = "x" }).Validate(), "CONTRACT_INVALID");
         Throws(() => (notModified with { Usage = new SourceUsageContract(1, 0) }).Validate(), "CONTRACT_INVALID");
         Throws(() => (source with { ContentHash = "not-a-hash" }).Validate(), "CONTRACT_INVALID");
+
+        // L6: a syntactically valid sha256 that simply does not match the returned content's bytes must be
+        // rejected too, not just malformed hashes — content and contentHash must never silently diverge.
+        Throws(() => (source with { ContentHash = HashA }).Validate(), "CONTRACT_INVALID");
     }
 
     private static void DiffEvidenceRulesAreValidated()

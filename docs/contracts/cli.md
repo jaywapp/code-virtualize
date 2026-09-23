@@ -121,7 +121,7 @@ Diff entry의 `evidence[]` 항목마다 `textMode`(`line_hunks | header_only | f
 | `added`, `deleted` | `header_only` | 선언 시작부터 첫 `{`/`=>` 직전까지(=`part=header`와 같은 규칙)만 싣는다. `contextLines=0`이며 나머지 줄 수는 `omittedBaseLines`/`omittedTargetLines`에 남는다 |
 | container 멤버 순서만 바뀜(`kind=member-order-changed`) | `fingerprint_only` | 텍스트 없이 `baseContentHash`/`targetContentHash`만 남긴다 |
 
-`baseContentHash`/`targetContentHash`는 evidence가 가리키는 symbol(또는 declaration) 전체 텍스트의 SHA-256이며, 아래 lazy resolve 결과의 `contentHash`와 대조할 수 있다. entry가 예산 때문에 hunk를 잘랐거나 `textMode`를 낮췄으면 evidence의 `truncated=true`이고, 이때 Diff 최상위 `evidenceTruncated=true`와 `limitations`의 `diff-evidence-budget-exhausted`가 함께 있다. 기본 예산은 `contextLines=1`, entry당 8 KiB, 전체 64 KiB, line diff 상한 20,000줄이다. evidence 생략은 entry 목록의 완전성과 별개 축이라 coverage level을 낮추지 않는다.
+`baseContentHash`/`targetContentHash`는 evidence가 가리키는 declaration **원문 span 텍스트**(잘리지 않은 전체 원문)의 SHA-256이다. 이 값은 아래 lazy resolve를 **`part=declaration`으로, 예산 안에서 잘림 없이** 요청했을 때의 source slice `contentHash`와 정확히 같다 — 다른 part(`header`/`body`/`context`)나 budget에 걸려 잘린 응답의 `contentHash`는 이 값과 다르다. entry가 예산 때문에 hunk를 잘랐거나 `textMode`를 낮췄으면 evidence의 `truncated=true`이고, 이때 Diff 최상위 `evidenceTruncated=true`와 `limitations`의 `diff-evidence-budget-exhausted`가 함께 있다. 기본 예산은 `contextLines=1`, entry당 8 KiB, 전체 64 KiB, line diff 상한 20,000줄이다. evidence 생략은 entry 목록의 완전성과 별개 축이라 coverage level을 낮추지 않는다.
 
 type symbol(다른 symbol의 `containerId`가 가리키는 symbol)의 비교 텍스트는 선언 span에서 직계 member의 선언 span을 제외한 자기 텍스트다. member 하나만 바뀌어도 containing type entry는 만들지 않는다(자기 텍스트가 whitespace 정규화 후에도 같으면). member 사이 주석처럼 index되지 않은 변경은 자기 텍스트에 남아 누락되지 않는다. 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다.
 
