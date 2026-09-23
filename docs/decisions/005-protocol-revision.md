@@ -1,9 +1,9 @@
 # ADR 005 — source-byte gate 재측정 protocol revision 2
 
-- 상태: Proposed — G2(사용자 승인) 뒤 Accepted
+- 상태: Accepted — 2026-09-23 G2 사용자 승인
 - 작성일: 2026-09-23
 - 적용 범위: TASK-027(새 corpus 정답), TASK-029(runner 확장·재측정), TASK-030(ADR 006 판정). 운영 규칙은 [protocol.md의 Revision 2 절](../../benchmarks/protocol.md#revision-2--mediumlarge-재측정-프로토콜-task-024)에 있다
-- 결정 요약(제안): **medium 2개(LiteDB, Quartz.NET)·large 1개(aspnetcore)와 small 회귀 기준으로, B와 E를 모두 이상적인 범위 읽기로 고정해 측정한다. 받은 원문 텍스트는 도구와 무관하게 모두 세고, 품질은 센 텍스트로만 판정한다. corpus × {NAV, DIFF} 8개 셀이 모두 20% 이상 감소해야 Go다.** FUP-002 동결 수치는 바꾸지 않는다. medium·large의 latency·memory·wall time은 새 기준으로 제안한다.
+- 결정 요약: **medium 2개(LiteDB, Quartz.NET)·large 1개(aspnetcore)와 small 회귀 기준으로, B와 E를 모두 이상적인 범위 읽기로 고정해 측정한다. 받은 원문 텍스트는 도구와 무관하게 모두 세고, 품질은 센 텍스트로만 판정한다. corpus × {NAV, DIFF} 8개 셀이 모두 20% 이상 감소해야 Go다.** FUP-002 동결 수치는 바꾸지 않는다. medium·large의 latency·memory·wall time은 새 기준으로 제안한다.
 
 ## 맥락
 
@@ -167,6 +167,8 @@ latency·memory 예산은 ADR 001의 "모든 품질·효율·latency·memory 기
 - rev2 결과가 Go여도 그 범위는 "공개 C# corpus 세 개와 small 합성, stronger available baseline B 대비 source bytes"다. 실제 모델 token, C#LSP·Serena 대비 우위, Perforce·UE5·비공개 코드로 일반화하지 않는다.
 
 ## G2 — 사용자 확인이 필요한 결정
+
+2026-09-23 사용자 인터뷰로 1~12를 모두 아래 제안대로 승인했다. 판단이 필요했던 항목의 답은 9 = 8개 셀 모두 통과, 10 = 제안 수치를 gate로 적용, 11 = 11시간 한도로 한 번에 실행이다.
 
 1. **corpus**: medium `medium-litedb`·`medium-quartznet`, large `large-aspnetcore`(위 commit 고정), 대체 순서(medium Polly → Hangfire → Serilog, large runtime → roslyn).
 2. **라이선스 기준**: 주 corpus는 permissive만, LGPL(Hangfire)은 예비, RPL-1.5·Six Labors Split은 제외, 원문 비복사(정답은 좌표·hash).
