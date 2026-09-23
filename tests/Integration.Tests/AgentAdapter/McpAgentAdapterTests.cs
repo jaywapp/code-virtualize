@@ -26,12 +26,30 @@ internal static class McpAgentAdapterTests
         var list = client.Request(new { jsonrpc = "2.0", id = 2, method = "tools/list", @params = new { } });
         var names = list.GetProperty("result").GetProperty("tools").EnumerateArray().Select(x => x.GetProperty("name").GetString()).ToArray();
         Assert(names.SequenceEqual(["cv_find", "cv_get", "cv_impact"]), "tools/list must expose only the three minimal tools.");
+        var cvGetTool = list.GetProperty("result").GetProperty("tools").EnumerateArray().Single(x => x.GetProperty("name").GetString() == "cv_get");
+        var partEnum = cvGetTool.GetProperty("inputSchema").GetProperty("properties").GetProperty("part").GetProperty("enum")
+            .EnumerateArray().Select(x => x.GetString()).ToArray();
+        Assert(partEnum.SequenceEqual(["header", "declaration", "body", "context"]), "cv_get's part enum must include declaration alongside header/body/context.");
+        Assert(cvGetTool.GetProperty("inputSchema").GetProperty("properties").TryGetProperty("ifNoneMatch", out var ifNoneMatchSchema) &&
+               ifNoneMatchSchema.GetProperty("pattern").GetString() == "^sha256:[0-9a-f]{64}$",
+            "cv_get must declare an ifNoneMatch input matching the sha256 slice content hash format.");
+
         var find = client.Request(Call(3, "cv_find", new { exact = "Hello" }));
         var findResult = find.GetProperty("result");
         Assert(!findResult.GetProperty("isError").GetBoolean(), "cv_find must return an engine result.");
         var symbolId = findResult.GetProperty("structuredContent").GetProperty("results")[0].GetProperty("symbolId").GetString()!;
         var get = client.Request(Call(4, "cv_get", new { symbolId, part = "body" }));
         Assert(get.GetProperty("result").GetProperty("structuredContent").GetProperty("source").GetProperty("content").GetString()!.Contains("hello", StringComparison.Ordinal), "cv_get must return verified source.");
+
+        var declaration = client.Request(Call(41, "cv_get", new { symbolId, part = "declaration" }));
+        var declarationSource = declaration.GetProperty("result").GetProperty("structuredContent").GetProperty("source");
+        Assert(declarationSource.GetProperty("notModified").GetBoolean() == false, "The first declaration request must not be notModified.");
+        var declarationHash = declarationSource.GetProperty("contentHash").GetString()!;
+        var notModified = client.Request(Call(42, "cv_get", new { symbolId, part = "declaration", ifNoneMatch = declarationHash }));
+        var notModifiedSource = notModified.GetProperty("result").GetProperty("structuredContent").GetProperty("source");
+        Assert(notModifiedSource.GetProperty("notModified").GetBoolean() && notModifiedSource.GetProperty("content").GetString() == string.Empty,
+            "A matching ifNoneMatch must return notModified=true with empty content over MCP.");
+
         var impact = client.Request(Call(5, "cv_impact", new { symbolIds = new[] { symbolId }, maxDepth = 1, maxResults = 20, maxSourceFiles = 20, pageSize = 20 }));
         Assert(impact.GetProperty("result").TryGetProperty("structuredContent", out _), "cv_impact must return structured content.");
 

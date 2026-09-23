@@ -176,7 +176,7 @@ UC-004 A에 따라 영속 캐시와 세션 metadata를 분리한다. 종료 시 
 | Declaration | `fileId`, `contentHash`, `spanStart`, `spanLength`, `startLine`, `endLine`; 부분 선언은 배열로 유지 |
 | Remark | `symbolId`, `fileId`, `span`, `kind`, `contentHash`; 원문은 resolve 시 읽음 |
 | Reference | `targetSymbolId`, `sourceSymbolId` nullable, `location`, `kind`, `provenance`, `analysisKey` |
-| DiffEntry | `kind`, `baseSymbolId`, `targetSymbolId`, `baseLocations[]`, `targetLocations[]`, `evidence`, `matchConfidence` |
+| DiffEntry | `kind`, `baseSymbolId`, `targetSymbolId`, `baseLocations[]`, `targetLocations[]`, `evidence`(각 항목은 `textMode`·파일 줄 번호 기준 hunk·`omittedBaseLines`/`omittedTargetLines`·`truncated`를 가짐), `matchConfidence` |
 
 `spanStart/spanLength`는 decode된 source의 0-based UTF-16 code unit, `startLine/endLine`은 1-based inclusive로 정의한다. byte offset과 혼용하지 않는다. source generator 문서는 `documentKind=generated`와 가상 URI로 구분하며, 디스크 경로처럼 외부 파일 읽기를 허용하지 않는다.
 
@@ -220,7 +220,7 @@ ID는 `project identity + 분석 구성 + symbol kind + qualified metadata signa
 |---|---|---|
 | `cv-build` | workspace, project/solution, config, session | manifest/coverage; 부분 project load를 숨기지 않음 |
 | `cv-find` | query, project/kind/path filter, limit, cursor | signature·ID·location·분석 범위, body 없음 |
-| `cv-resolve` | symbol ID, generation, part, max bytes/lines | source/remark, fingerprint, 실제 range; ambiguity/changed ID 거부 |
+| `cv-resolve` | symbol ID, generation, part(`header`\|`declaration`\|`body`\|`context`), max bytes/lines, 조건부 `ifNoneMatch` | source/remark, fingerprint, 실제 range, `contentHash`; `ifNoneMatch`가 현재 조건의 content hash와 같으면 `notModified=true`로 본문 없이 응답; ambiguity/changed ID 거부 |
 | `cv-inspect` | session 또는 generation, format text/json | cache 상태·coverage·제약·last error, 기본 source 없음 |
 | `cv-validate` | scope files/workspace, generation | mismatch·missing·schema 오류, 원문 수정 없음 |
 | `cv-update` | changed paths 또는 reconcile, session | 새로운 generation, invalidated project 범위 |

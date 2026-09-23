@@ -2,7 +2,7 @@ using CodeVirtualize.Core.Contracts;
 
 namespace CodeVirtualize.Core.Resolution;
 
-public enum SourcePart { Header, Body, Context }
+public enum SourcePart { Header, Declaration, Body, Context }
 
 public static class ResolutionErrorCodes
 {
@@ -19,7 +19,7 @@ public static class ResolutionErrorCodes
 
 public sealed record ResolveRequest(string WorkspacePath, string StorePath, string SymbolId, SourcePart Part,
     SourceBudgetContract Budget, string? GenerationId = null, string? DeclarationPath = null,
-    int? DeclarationIndex = null, int ContextLines = 2, string? RequestId = null);
+    int? DeclarationIndex = null, int ContextLines = 2, string? RequestId = null, string? IfNoneMatch = null);
 
 public sealed record ResolveResult(string SymbolId, string ProjectId, string QualifiedName, string Part,
     int DeclarationIndex, string Path, string ContentHash);

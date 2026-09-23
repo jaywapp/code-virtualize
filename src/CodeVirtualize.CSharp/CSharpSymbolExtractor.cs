@@ -18,6 +18,7 @@ internal static class CSharpSymbolExtractor
         string QualifiedName,
         string Signature,
         string Accessibility,
+        string? ContainerId,
         int GenericArity,
         IdentityQuality IdentityQuality,
         IReadOnlyList<ParameterIdentityContract> Parameters,
@@ -70,7 +71,7 @@ internal static class CSharpSymbolExtractor
                     first.QualifiedName,
                     first.Signature,
                     first.Accessibility,
-                    null,
+                    first.ContainerId,
                     first.GenericArity,
                     quality,
                     first.Parameters,
@@ -143,6 +144,7 @@ internal static class CSharpSymbolExtractor
             descriptor.Parameters,
             descriptor.ExplicitInterface);
         var symbolId = DeterministicSymbolId.Create(identity);
+        var containerId = ContainerSymbolId(project, analysisKey, node, semanticModel);
         var lineSpan = source.Tree.GetLineSpan(node.Span).Span;
         var location = new LocationContract(
             FileId(source.File.RelativePath),
@@ -159,12 +161,48 @@ internal static class CSharpSymbolExtractor
             descriptor.QualifiedName,
             descriptor.Signature,
             descriptor.Accessibility,
+            containerId,
             descriptor.GenericArity,
             identityQuality,
             descriptor.Parameters,
             descriptor.ExplicitInterface,
             declaration,
             limitations);
+    }
+
+    /// <summary>
+    /// The deterministic symbol ID of the immediately containing type declaration, or null for a
+    /// top-level type (whose container is a namespace, which is not itself modeled as a symbol here).
+    /// Computed the same way <see cref="CreatePart"/> would compute the container's own ID if that type's
+    /// declaration node were processed directly, so a member's <c>containerId</c> always resolves to the
+    /// exact <c>symbolId</c> of its containing type's merged <see cref="SymbolContract"/> — regardless of
+    /// which partial declaration or file the member or the container was found in.
+    /// </summary>
+    private static string? ContainerSymbolId(InventoryProject project, string analysisKey, SyntaxNode node, SemanticModel? semanticModel)
+    {
+        var containerNode = node.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault();
+        if (containerNode is null)
+        {
+            return null;
+        }
+
+        var declaredSymbol = semanticModel?.GetDeclaredSymbol(containerNode);
+        var canUseSemanticIdentity = declaredSymbol is not null && !HasErrorIdentity(declaredSymbol);
+        var descriptor = canUseSemanticIdentity ? DescribeSemantic(declaredSymbol!) : DescribeSyntactic(containerNode);
+        if (descriptor is null)
+        {
+            return null;
+        }
+
+        var identity = new SymbolIdentityContract(
+            project.Identity,
+            analysisKey,
+            descriptor.Kind,
+            descriptor.QualifiedMetadataName,
+            descriptor.GenericArity,
+            descriptor.Parameters,
+            descriptor.ExplicitInterface);
+        return DeterministicSymbolId.Create(identity);
     }
 
     private sealed record Descriptor(

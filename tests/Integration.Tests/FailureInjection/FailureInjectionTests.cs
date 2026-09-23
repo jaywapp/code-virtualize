@@ -16,7 +16,39 @@ internal static class FailureInjectionTests
         MissedUpdateAndRenameMatchIndependentSource();
         UnchangedSyntaxFailureRemainsInCoverage();
         TimeoutAndCancellationNeverReturnStaleSource();
+        SameSizeEditIsNeverHiddenByIfNoneMatch();
         RunFixtureVerifier();
+    }
+
+    private static void SameSizeEditIsNeverHiddenByIfNoneMatch()
+    {
+        using var fixture = new VerificationFixture("if-none-match-stale");
+        fixture.Write("Target.cs", "namespace Verification; public sealed class Target { public string Read() => \"aaa\"; }");
+        var build = fixture.Build();
+        var symbol = build.Symbols.Single(item => item.Name == "Read");
+        var request = new ResolveRequest(
+            fixture.WorkspacePath, fixture.StorePath, symbol.SymbolId, SourcePart.Declaration, new SourceBudgetContract(4096, 40));
+
+        var initial = new SourceResolver().Resolve(request);
+        Assert(initial.Source is not null, "Initial resolve must succeed.");
+        var originalHash = initial.Source!.ContentHash;
+
+        var path = Path.Combine(fixture.WorkspacePath, "Target.cs");
+        var stamp = File.GetLastWriteTimeUtc(path);
+        File.WriteAllText(path, "namespace Verification; public sealed class Target { public string Read() => \"bbb\"; }", new UTF8Encoding(false));
+        File.SetLastWriteTimeUtc(path, stamp); // Same length and same mtime: defeats a naive size/timestamp freshness check.
+
+        var staleWithMatchingIfNoneMatch = new SourceResolver().Resolve(request with { IfNoneMatch = originalHash });
+        Assert(staleWithMatchingIfNoneMatch.Source is null &&
+               staleWithMatchingIfNoneMatch.Errors.Any(error => error.Code == ResolutionErrorCodes.SourceStale),
+            "A same-size/same-mtime edit must still surface SOURCE_STALE even when ifNoneMatch happens to equal the old (now stale) content hash; ifNoneMatch comparison must never run before digest validation.");
+
+        var rebuilt = fixture.Build();
+        var rebuiltSymbol = rebuilt.Symbols.Single(item => item.Name == "Read");
+        Assert(rebuiltSymbol.SymbolId == symbol.SymbolId, "Editing only the body must not change the deterministic symbol identity.");
+        var afterReindex = new SourceResolver().Resolve(request with { IfNoneMatch = originalHash });
+        Assert(afterReindex.Source is { NotModified: false } && afterReindex.Source.Content.Contains("bbb", StringComparison.Ordinal),
+            "Once the generation is re-indexed to match the edited file, an ifNoneMatch from before the edit must return the new full content in the slice, not a false notModified.");
     }
 
     private static void CorruptRangeNeverReturnsSource()

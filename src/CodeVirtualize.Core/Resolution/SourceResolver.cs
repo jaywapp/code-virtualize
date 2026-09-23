@@ -7,11 +7,16 @@ namespace CodeVirtualize.Core.Resolution;
 
 public sealed class SourceResolver
 {
+    private static readonly System.Text.RegularExpressions.Regex Sha256Pattern =
+        new("^sha256:[0-9a-f]{64}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public ResponseContract Resolve(ResolveRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Budget.Validate();
         if (request.ContextLines < 0 || request.DeclarationIndex is < 0) throw new ArgumentException("Invalid declaration or context selector.");
+        if (request.IfNoneMatch is not null && !Sha256Pattern.IsMatch(request.IfNoneMatch))
+            throw new ArgumentException("ifNoneMatch must use the sha256:<64 lowercase hex characters> format.");
         var store = new GenerationStore(request.StorePath);
         using var reader = request.GenerationId is null ? store.OpenCurrent() : store.Open(request.GenerationId);
         var manifest = reader.Manifest;
@@ -53,7 +58,10 @@ public sealed class SourceResolver
             "Indexed UTF-16 span is invalid for verified source.", FreshnessState.Stale);
 
         var range = Range(text, indexed, request.Part, request.ContextLines);
-        var source = Budget(text, range.start, range.length, request.Budget);
+        var computed = Budget(text, range.start, range.length, request.Budget);
+        var source = request.IfNoneMatch is not null && string.Equals(request.IfNoneMatch, computed.ContentHash, StringComparison.Ordinal)
+            ? computed with { Content = string.Empty, Usage = new SourceUsageContract(0, 0), NotModified = true }
+            : computed;
         var coverage = source.Truncated ? Partial(manifest.Coverage, "source-budget-truncated", true) : manifest.Coverage;
         var status = source.Truncated || coverage.Level != CoverageLevel.CompleteWithinScope ? ResponseStatus.Partial : ResponseStatus.Ok;
         var metadata = new ResolveResult(symbol.SymbolId, symbol.ProjectId, symbol.QualifiedName,
@@ -113,15 +121,19 @@ public sealed class SourceResolver
         return encoding.GetString(bytes, offset, bytes.Length - offset);
     }
 
-    private static bool SpanValid(string text, TextSpanContract span) => span.Start >= 0 && span.Length >= 0 &&
+    internal static bool SpanValid(string text, TextSpanContract span) => span.Start >= 0 && span.Length >= 0 &&
         span.Start <= text.Length - span.Length && Line(text, span.Start) == span.StartLine && Line(text, span.Start + span.Length) == span.EndLine;
 
-    private static (int start, int length) Range(string text, TextSpanContract span, SourcePart part, int context)
+    internal static (int start, int length) Range(string text, TextSpanContract span, SourcePart part, int context)
     {
         if (part == SourcePart.Context)
         {
             var starts = LineStarts(text); var first = Math.Max(1, span.StartLine - context); var last = Math.Min(starts.Count, span.EndLine + context);
             var start = starts[first - 1]; var end = last < starts.Count ? starts[last] : text.Length; return (start, end - start);
+        }
+        if (part == SourcePart.Declaration)
+        {
+            return (span.Start, span.Length);
         }
         var declaration = text.AsSpan(span.Start, span.Length); var brace = declaration.IndexOf('{');
         var arrow = declaration.IndexOf("=>".AsSpan(), StringComparison.Ordinal);
@@ -144,7 +156,7 @@ public sealed class SourceResolver
         return (span.Start, span.Length);
     }
 
-    private static SourceSliceContract Budget(string text, int start, int length, SourceBudgetContract budget)
+    internal static SourceSliceContract Budget(string text, int start, int length, SourceBudgetContract budget)
     {
         var full = text.Substring(start, length); var bytes = Encoding.UTF8.GetByteCount(full); var lines = Lines(full);
         if (bytes <= budget.MaxBytes && lines <= budget.MaxLines) return Slice(text, start, full, budget, false, BudgetExhaustion.None);
@@ -161,15 +173,15 @@ public sealed class SourceResolver
         return Slice(text, start, full[..accepted], budget, true, exhausted);
     }
 
-    private static SourceSliceContract Slice(string text, int start, string content, SourceBudgetContract budget, bool truncated, BudgetExhaustion exhausted) =>
+    internal static SourceSliceContract Slice(string text, int start, string content, SourceBudgetContract budget, bool truncated, BudgetExhaustion exhausted) =>
         new(content, new(start, content.Length, Line(text, start), Line(text, start + content.Length)), budget,
-            new(Encoding.UTF8.GetByteCount(content), Lines(content)), truncated, exhausted);
+            new(Encoding.UTF8.GetByteCount(content), Lines(content)), truncated, exhausted, Digest(Encoding.UTF8.GetBytes(content)), false);
 
-    private static int Lines(string text) { if (text.Length == 0) return 0; var n = 1; for (var i = 0; i < text.Length; i++)
+    internal static int Lines(string text) { if (text.Length == 0) return 0; var n = 1; for (var i = 0; i < text.Length; i++)
         { if (text[i] == '\r') { n++; if (i + 1 < text.Length && text[i + 1] == '\n') i++; } else if (text[i] == '\n') n++; } return n; }
-    private static int Line(string text, int position) { var n = 1; for (var i = 0; i < Math.Min(position, text.Length); i++)
+    internal static int Line(string text, int position) { var n = 1; for (var i = 0; i < Math.Min(position, text.Length); i++)
         { if (text[i] == '\r') { n++; if (i + 1 < position && text[i + 1] == '\n') i++; } else if (text[i] == '\n') n++; } return n; }
-    private static List<int> LineStarts(string text) { var result = new List<int> { 0 }; for (var i = 0; i < text.Length; i++)
+    internal static List<int> LineStarts(string text) { var result = new List<int> { 0 }; for (var i = 0; i < text.Length; i++)
         { if (text[i] == '\r') { if (i + 1 < text.Length && text[i + 1] == '\n') i++; result.Add(i + 1); } else if (text[i] == '\n') result.Add(i + 1); } return result; }
     private static bool PathEqual(string? a, string? b) => string.Equals(a?.Replace('\\', '/'), b?.Replace('\\', '/'), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     private static CoverageContract Partial(CoverageContract c, string reason, bool truncated = false) => c with

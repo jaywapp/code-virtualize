@@ -4,6 +4,7 @@ using CodeVirtualize.Core.Contracts;
 using CodeVirtualize.Core.Search;
 using CodeVirtualize.Core.Storage;
 using CodeVirtualize.CSharp;
+using CodeVirtualize.CSharp.Tests;
 using CodeVirtualize.CSharp.Tests.References;
 
 var repositoryRoot = Directory.GetCurrentDirectory();
@@ -17,6 +18,7 @@ try
     ReferenceFeatureTests.Run(navigationRoot, temporaryRoot);
     InventoryFailureAndPagingTests(temporaryRoot);
     SentinelAndCliTests(repositoryRoot, navigationRoot, temporaryRoot);
+    ContainerIdentityTests.Run(temporaryRoot);
     Console.WriteLine("C# build/search/trust/coverage/paging tests passed.");
 }
 finally

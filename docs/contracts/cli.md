@@ -92,9 +92,13 @@ cursor는 인증 토큰이 아니며 보안 경계를 제공하지 않는다.
 
 ## source 반환 예산
 
-source 요청은 양의 `maxBytes`와 `maxLines`를 가진다. Response의 선택적 `source`는 실제 `content`, UTF-16 `span`, 요청 `budget`, 실제 `usage`, `truncated`, `exhaustedBy`를 함께 반환한다.
+source 요청은 양의 `maxBytes`와 `maxLines`를 가진다. Response의 선택적 `source`는 실제 `content`, UTF-16 `span`, 요청 `budget`, 실제 `usage`, `truncated`, `exhaustedBy`, `contentHash`, `notModified`를 함께 반환한다.
 
 `usage.bytes`는 JSON escaping 전 `content`의 UTF-8 byte 수다. 원본 파일 byte offset이나 전체 HTTP/CLI response 크기가 아니다. `usage.lines`는 CRLF, LF, CR을 각각 하나의 line break로 센 논리 line 수이며 빈 문자열은 0줄이다. 반환 content는 두 한도를 넘을 수 없다. 잘리지 않았으면 `exhaustedBy=none`, 잘렸으면 `bytes`, `lines`, `bytes_and_lines` 중 정확한 이유를 기록한다. 잘린 source를 완전한 declaration body로 표시하지 않는다.
+
+`part`는 `header | declaration | body | context` 중 하나다. 기본값은 `header`(선언 시작부터 첫 `{` 또는 `=>` 직전까지)다. `declaration`은 선언 span 전체(leading trivia 제외)를 반환한다 — type symbol이면 member 전체가 포함되므로 예산 잘림이 발생할 수 있다. `body`, `context`(기본 `contextLines=2`, 줄 경계 정렬)는 기존과 같다.
+
+`contentHash`는 이번 요청 조건(part, declaration index, contextLines, budget)으로 **반환되는 content**의 UTF-8 bytes SHA-256이다. 요청에 `ifNoneMatch`(`sha256:<64자>`)를 실으면, 기존 검증(파일 존재 → digest → encoding → span)을 모두 통과한 뒤 현재 조건으로 계산한 `contentHash`와 비교한다. 일치하면 `notModified=true`로 `content=""`, `usage={bytes:0, lines:0}`을 반환하고 `span`·`truncated`·`exhaustedBy`·`contentHash`는 반환했을 content 기준 그대로 채운다. 불일치하거나 stale이면 기존과 같이 전체 반환 또는 `SOURCE_STALE` 오류 경로를 탄다. `ifNoneMatch`는 digest 검증을 우회하지 않는다 — 파일이 stale이면 `notModified`를 쓰지 않고 오류를 낸다.
 
 ## VCS와 Session baseline
 
@@ -107,12 +111,28 @@ source 요청은 양의 `maxBytes`와 `maxLines`를 가진다. Response의 선�
 
 VCS base가 없으면 `BASE_REQUIRED`, 보존한 Session base가 없으면 `SESSION_BASE_MISSING`을 반환한다. 현재 파일로 누락된 base를 재구성하지 않는다. Session snapshot은 source bytes를 포함하므로 해당 session의 접근 범위와 수명에 묶고 metrics나 export에 복사하지 않는다.
 
+## Diff evidence와 lazy resolve
+
+Diff entry의 `evidence[]` 항목마다 `textMode`(`line_hunks | header_only | fingerprint_only`)가 evidence 텍스트의 형태를 정한다.
+
+| entry kind | 기본 `textMode` | 내용 |
+|---|---|---|
+| `body_changed`, `signature_changed`, `remark_changed`, `formatting_only`, `rename_candidate` | `line_hunks` | before/after의 Myers line diff. 변경 줄 ± `contextLines`(기본 1)만 담고, `@@ -a,b +c,d @@`의 `a`·`c`는 **파일 줄 번호**다(symbol 상대 번호가 아니다) |
+| `added`, `deleted` | `header_only` | 선언 시작부터 첫 `{`/`=>` 직전까지(=`part=header`와 같은 규칙)만 싣는다. `contextLines=0`이며 나머지 줄 수는 `omittedBaseLines`/`omittedTargetLines`에 남는다 |
+| container 멤버 순서만 바뀜(`kind=member-order-changed`) | `fingerprint_only` | 텍스트 없이 `baseContentHash`/`targetContentHash`만 남긴다 |
+
+`baseContentHash`/`targetContentHash`는 evidence가 가리키는 symbol(또는 declaration) 전체 텍스트의 SHA-256이며, 아래 lazy resolve 결과의 `contentHash`와 대조할 수 있다. entry가 예산 때문에 hunk를 잘랐거나 `textMode`를 낮췄으면 evidence의 `truncated=true`이고, 이때 Diff 최상위 `evidenceTruncated=true`와 `limitations`의 `diff-evidence-budget-exhausted`가 함께 있다. 기본 예산은 `contextLines=1`, entry당 8 KiB, 전체 64 KiB, line diff 상한 20,000줄이다. evidence 생략은 entry 목록의 완전성과 별개 축이라 coverage level을 낮추지 않는다.
+
+type symbol(다른 symbol의 `containerId`가 가리키는 symbol)의 비교 텍스트는 선언 span에서 직계 member의 선언 span을 제외한 자기 텍스트다. member 하나만 바뀌어도 containing type entry는 만들지 않는다(자기 텍스트가 whitespace 정규화 후에도 같으면). member 사이 주석처럼 index되지 않은 변경은 자기 텍스트에 남아 누락되지 않는다. 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다.
+
+added/deleted symbol이나 truncated evidence의 전체 원문은 Core `DiffSourceResolver`로 요청 시점에만 읽는다. `SelectionKey`·`Baseline`과 요청한 `side`(base/target)의 snapshot ID가 일치해야 하며, 다르면 `DIFF_SNAPSHOT_INVALID`, 더 최근 diff나 baseline 전환으로 선택이 무효화됐으면 `STALE_DIFF_RESPONSE`다. 원문은 diff 계산에 쓰인 **snapshot이 보존한 bytes**에서만 읽으며 현재 workspace 파일은 절대 열지 않는다 — 그래서 삭제된 symbol의 base source(DIFF-03류 요청)는 현재 파일이 달라져도 항상 선택한 baseline의 snapshot 값을 반환한다. 응답은 `cv-resolve`와 같은 source slice 계약(`contentHash`/`notModified`/`ifNoneMatch` 포함)을 쓰고 `freshness.returnedFiles=verified`(snapshot digest 검증), `freshness.workspace=not_applicable`이다. 이 lazy resolve API는 Core 전용이며 이번 버전에서 `cv-diff` CLI나 `cv_diff` MCP tool로는 노출하지 않는다.
+
 ## 저장 레코드 의미
 
 - Manifest는 generation, workspace/analysis key, input fingerprint, 파일·프로젝트·shard, generation state와 coverage를 고정한다.
 - Symbol은 L0/L1 모든 접근성 선언의 identity와 declaration 배열을 가진다. body와 remark 원문은 넣지 않는다.
 - Declaration은 symbol ID, content fingerprint, source/generated 위치와 UTF-16 span을 가진다.
 - Reference는 static과 lexical candidate를 구분하고 provenance, analysis key, coverage와 limitation을 보존한다.
-- Diff는 baseline을 반드시 포함하고 added/deleted/renamed/rename-candidate/signature/body/remark/formatting 변화와 textual/fingerprint evidence를 가진다. rename candidate는 확정 rename으로 승격하지 않으며 이는 동작 의미 변화의 보장이 아니다.
+- Diff는 baseline을 반드시 포함하고 added/deleted/renamed/rename-candidate/signature/body/remark/formatting 변화와 `textMode`별 textual/fingerprint evidence를 가진다. 원문은 변경 symbol 전체나 containing type 전체가 아니라 변경 줄(± context)이나 선언 header에 비례하며, 전체 원문은 `DiffSourceResolver`로 lazy 조회한다. rename candidate는 확정 rename으로 승격하지 않으며 이는 동작 의미 변화의 보장이 아니다.
 
 JSON Schema는 draft 2020-12를 사용한다. `common.schema.json`의 공통 정의와 여섯 최상위 schema의 `$ref`는 같은 `schemas/` 디렉터리를 기준으로 해석한다.

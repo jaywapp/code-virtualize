@@ -194,24 +194,42 @@ public sealed record SourceSliceContract(
     SourceBudgetContract Budget,
     SourceUsageContract Usage,
     bool Truncated,
-    BudgetExhaustion ExhaustedBy) : IContractValidatable
+    BudgetExhaustion ExhaustedBy,
+    string ContentHash,
+    bool NotModified) : IContractValidatable
 {
     public void Validate()
     {
         Span.Validate();
         Budget.Validate();
         Usage.Validate();
+        ContractGuard.Sha256(ContentHash, nameof(ContentHash));
 
-        var actualBytes = Encoding.UTF8.GetByteCount(Content);
-        var actualLines = CountLogicalLines(Content);
-        if (Usage.Bytes != actualBytes || Usage.Lines != actualLines)
+        if (NotModified)
         {
-            throw ContractGuard.Invalid(nameof(Usage), "must equal the UTF-8 byte count and logical line count of content");
+            if (Content.Length != 0)
+            {
+                throw ContractGuard.Invalid(nameof(Content), "must be empty when the slice is not modified");
+            }
+
+            if (Usage.Bytes != 0 || Usage.Lines != 0)
+            {
+                throw ContractGuard.Invalid(nameof(Usage), "must be zero when the slice is not modified");
+            }
         }
-
-        if (Span.Length != Content.Length)
+        else
         {
-            throw ContractGuard.Invalid(nameof(Span), "length must equal the returned content UTF-16 length");
+            var actualBytes = Encoding.UTF8.GetByteCount(Content);
+            var actualLines = CountLogicalLines(Content);
+            if (Usage.Bytes != actualBytes || Usage.Lines != actualLines)
+            {
+                throw ContractGuard.Invalid(nameof(Usage), "must equal the UTF-8 byte count and logical line count of content");
+            }
+
+            if (Span.Length != Content.Length)
+            {
+                throw ContractGuard.Invalid(nameof(Span), "length must equal the returned content UTF-16 length");
+            }
         }
 
         if (Usage.Bytes > Budget.MaxBytes || Usage.Lines > Budget.MaxLines)

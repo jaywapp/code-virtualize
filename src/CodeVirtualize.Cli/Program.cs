@@ -94,8 +94,8 @@ public static class CliApplication
         output.WriteLine("  code-virtualize cv-update --workspace <path> --session <id> --end-session [--format text|json]");
         output.WriteLine("  code-virtualize cv-find [query] (--workspace <path> | --store <path>) [--exact <name>] [--qualified <name>] [--name <name>]");
         output.WriteLine("      [--kind <kind>] [--accessibility <value>] [--project <id>] [--path <relative-path>] [--limit <n>] [--cursor <value>] [--format text|json]");
-        output.WriteLine("  code-virtualize cv-resolve <symbol-id> --workspace <path> [--part header|body|context] [--path <relative-path>] [--declaration <index>]");
-        output.WriteLine("      [--generation <id>] [--max-bytes <n>] [--max-lines <n>] [--context-lines <n>] [--format text|json]");
+        output.WriteLine("  code-virtualize cv-resolve <symbol-id> --workspace <path> [--part header|declaration|body|context] [--path <relative-path>] [--declaration <index>]");
+        output.WriteLine("      [--generation <id>] [--max-bytes <n>] [--max-lines <n>] [--context-lines <n>] [--if-none-match <sha256>] [--format text|json]");
         output.WriteLine("  code-virtualize cv-validate --workspace <path> [--store <path>] [--generation <id>] [--format text|json]");
         output.WriteLine("  code-virtualize cv-inspect (--workspace <path> | --store <path>) [--generation <id>] [--format text|json]");
         output.WriteLine("Default build mode is syntax-only and never evaluates MSBuild, restores/builds, or runs analyzers/source generators.");

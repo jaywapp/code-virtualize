@@ -9,6 +9,8 @@ public sealed class SymbolDiffService
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Baseline.Validate();
+        var options = request.Evidence ?? DiffEvidenceOptions.Default;
+        options.Validate();
         ValidateSnapshot(request.Base, nameof(request.Base));
         ValidateSnapshot(request.Target, nameof(request.Target));
         if (!string.Equals(request.Baseline.BaseId, request.Base.SnapshotId, StringComparison.Ordinal) ||
@@ -17,8 +19,11 @@ public sealed class SymbolDiffService
             throw new DiffException(DiffErrorCodes.InvalidSnapshot, "Baseline IDs do not match the supplied immutable snapshots.");
         }
 
-        var baseView = CreateView(request.Base);
-        var targetView = CreateView(request.Target);
+        var baseContainers = IndexContainers(request.Base);
+        var targetContainers = IndexContainers(request.Target);
+        var baseView = CreateView(request.Base, baseContainers.MembersByContainer);
+        var targetView = CreateView(request.Target, targetContainers.MembersByContainer);
+        var budget = new EvidenceBudget(options);
         var changes = new List<SymbolDiffChange>();
         var unmatchedBase = new Dictionary<string, SymbolView>(baseView, StringComparer.Ordinal);
         var unmatchedTarget = new Dictionary<string, SymbolView>(targetView, StringComparer.Ordinal);
@@ -27,35 +32,41 @@ public sealed class SymbolDiffService
         {
             var before = baseView[symbolId];
             var after = targetView[symbolId];
-            AddMatchedChanges(changes, before, after);
+            AddMatchedChanges(changes, before, after, baseContainers.Order, targetContainers.Order, budget);
             unmatchedBase.Remove(symbolId);
             unmatchedTarget.Remove(symbolId);
         }
 
-        PairSignatureChanges(changes, unmatchedBase, unmatchedTarget);
+        PairSignatureChanges(changes, unmatchedBase, unmatchedTarget, budget);
         if (request.DetectRenameCandidates)
         {
-            PairRenameCandidates(changes, unmatchedBase, unmatchedTarget);
+            PairRenameCandidates(changes, unmatchedBase, unmatchedTarget, budget);
         }
 
         foreach (var before in unmatchedBase.Values.OrderBy(item => SortKey(item.Symbol), StringComparer.Ordinal))
         {
-            changes.Add(Change(DiffKind.Deleted, before, null, 1m, "symbol-removed"));
+            changes.Add(BuildChange(DiffKind.Deleted, before, null, 1m, BuildAddedOrDeletedEvidence("symbol-removed", before, budget)));
         }
 
         foreach (var after in unmatchedTarget.Values.OrderBy(item => SortKey(item.Symbol), StringComparer.Ordinal))
         {
-            changes.Add(Change(DiffKind.Added, null, after, 1m, "symbol-added"));
+            changes.Add(BuildChange(DiffKind.Added, null, after, 1m, BuildAddedOrDeletedEvidence("symbol-added", after, budget)));
         }
 
         var ordered = changes.OrderBy(change => change.Kind)
             .ThenBy(change => SortKey(change.BaseSymbol ?? change.TargetSymbol!), StringComparer.Ordinal)
             .ToArray();
         var limitations = request.Base.Coverage.Limitations.Concat(request.Target.Coverage.Limitations)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            .Distinct(StringComparer.Ordinal).ToList();
         if (ordered.Any(change => change.Kind == DiffKind.RenameCandidate))
         {
             limitations.Add("rename-candidates-are-heuristic-and-not-confirmed-renames");
+        }
+
+        var evidenceTruncated = ordered.Any(change => change.Contract.Evidence.Any(evidence => evidence.Truncated));
+        if (evidenceTruncated)
+        {
+            limitations.Add(DiffContract.EvidenceBudgetExhaustedLimitation);
         }
 
         var coverage = CombineCoverage(request.Base.Coverage, request.Target.Coverage, limitations);
@@ -65,43 +76,71 @@ public sealed class SymbolDiffService
             coverage,
             limitations.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             false,
-            null);
+            null,
+            evidenceTruncated);
         contract.Validate();
-        var selectionKey = DiffDigests.Utf8(string.Join("\n",
-            request.Baseline.Kind,
-            request.Baseline.Provider,
-            request.Baseline.BaseId,
-            request.Baseline.TargetId,
-            request.Baseline.SessionId ?? string.Empty,
-            request.Base.InputFingerprint,
-            request.Target.InputFingerprint));
+        var selectionKey = DiffDigests.SelectionKey(request.Baseline, request.Base.InputFingerprint, request.Target.InputFingerprint);
         return new SymbolDiffResult(selectionKey, contract, ordered);
     }
 
-    private static void AddMatchedChanges(ICollection<SymbolDiffChange> changes, SymbolView before, SymbolView after)
+    private static void AddMatchedChanges(
+        List<SymbolDiffChange> changes,
+        SymbolView before,
+        SymbolView after,
+        IReadOnlyDictionary<string, string[]> baseContainerOrder,
+        IReadOnlyDictionary<string, string[]> targetContainerOrder,
+        EvidenceBudget budget)
     {
         if (!string.Equals(before.Symbol.Signature, after.Symbol.Signature, StringComparison.Ordinal))
         {
-            changes.Add(Change(DiffKind.SignatureChanged, before, after, 1m, "signature-changed"));
+            changes.Add(BuildChange(DiffKind.SignatureChanged, before, after, 1m,
+                BuildSymbolLineHunkEvidence("signature-changed", before, after, budget)));
+            return;
         }
-        else if (!string.Equals(before.Source, after.Source, StringComparison.Ordinal))
+
+        if (before.IsContainer || after.IsContainer)
         {
-            var kind = NormalizeWhitespace(before.Source) == NormalizeWhitespace(after.Source)
-                ? DiffKind.FormattingOnly
-                : DiffKind.BodyChanged;
-            changes.Add(Change(kind, before, after, 1m, kind == DiffKind.FormattingOnly ? "formatting-only" : "body-changed"));
+            var evidences = new List<DiffEvidenceContract>();
+            var selfChanged = NormalizeWhitespace(before.CompareText) != NormalizeWhitespace(after.CompareText);
+            if (selfChanged)
+            {
+                evidences.AddRange(BuildSymbolLineHunkEvidence("body-changed", before, after, budget));
+            }
+
+            var baseOrder = baseContainerOrder.GetValueOrDefault(before.Symbol.SymbolId, []);
+            var targetOrder = targetContainerOrder.GetValueOrDefault(after.Symbol.SymbolId, []);
+            if (OrderChanged(baseOrder, targetOrder))
+            {
+                evidences.Add(new DiffEvidenceContract(
+                    "member-order-changed", DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false,
+                    DiffDigests.Utf8(before.FullText), DiffDigests.Utf8(after.FullText)));
+            }
+
+            if (evidences.Count > 0)
+            {
+                changes.Add(BuildChange(DiffKind.BodyChanged, before, after, 1m, evidences));
+            }
+        }
+        else if (!string.Equals(before.CompareText, after.CompareText, StringComparison.Ordinal))
+        {
+            var formatting = NormalizeWhitespace(before.CompareText) == NormalizeWhitespace(after.CompareText);
+            var kind = formatting ? DiffKind.FormattingOnly : DiffKind.BodyChanged;
+            changes.Add(BuildChange(kind, before, after, 1m,
+                BuildSymbolLineHunkEvidence(formatting ? "formatting-only" : "body-changed", before, after, budget)));
         }
 
         if (!string.Equals(before.Remark, after.Remark, StringComparison.Ordinal))
         {
-            changes.Add(Change(DiffKind.RemarkChanged, before, after, 1m, "remark-changed", useRemark: true));
+            changes.Add(BuildChange(DiffKind.RemarkChanged, before, after, 1m,
+                [BuildRemarkLineHunkEvidence(before, after, budget)]));
         }
     }
 
     private static void PairSignatureChanges(
         ICollection<SymbolDiffChange> changes,
         IDictionary<string, SymbolView> unmatchedBase,
-        IDictionary<string, SymbolView> unmatchedTarget)
+        IDictionary<string, SymbolView> unmatchedTarget,
+        EvidenceBudget budget)
     {
         var baseGroups = unmatchedBase.Values.GroupBy(SignatureMatchKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
@@ -117,7 +156,8 @@ public sealed class SymbolDiffService
                 continue;
             }
 
-            changes.Add(Change(DiffKind.SignatureChanged, before[0], after[0], 0.9m, "signature-changed"));
+            changes.Add(BuildChange(DiffKind.SignatureChanged, before[0], after[0], 0.9m,
+                BuildSymbolLineHunkEvidence("signature-changed", before[0], after[0], budget)));
             unmatchedBase.Remove(before[0].Symbol.SymbolId);
             unmatchedTarget.Remove(after[0].Symbol.SymbolId);
         }
@@ -126,7 +166,8 @@ public sealed class SymbolDiffService
     private static void PairRenameCandidates(
         ICollection<SymbolDiffChange> changes,
         IDictionary<string, SymbolView> unmatchedBase,
-        IDictionary<string, SymbolView> unmatchedTarget)
+        IDictionary<string, SymbolView> unmatchedTarget,
+        EvidenceBudget budget)
     {
         foreach (var before in unmatchedBase.Values.OrderBy(item => SortKey(item.Symbol), StringComparer.Ordinal).ToArray())
         {
@@ -150,132 +191,265 @@ public sealed class SymbolDiffService
                 continue;
             }
 
-            changes.Add(Change(DiffKind.RenameCandidate, before, after, 0.5m, "rename-candidate"));
+            changes.Add(BuildChange(DiffKind.RenameCandidate, before, after, 0.5m,
+                BuildSymbolLineHunkEvidence("rename-candidate", before, after, budget)));
             unmatchedBase.Remove(before.Symbol.SymbolId);
             unmatchedTarget.Remove(after.Symbol.SymbolId);
         }
     }
 
-    private static SymbolDiffChange Change(
-        DiffKind kind,
-        SymbolView? before,
-        SymbolView? after,
-        decimal confidence,
-        string evidenceKind,
-        bool useRemark = false)
+    private static SymbolDiffChange BuildChange(
+        DiffKind kind, SymbolView? before, SymbolView? after, decimal confidence, IReadOnlyList<DiffEvidenceContract> evidence)
     {
-        var baseText = useRemark ? before?.Remark : before?.Source;
-        var targetText = useRemark ? after?.Remark : after?.Source;
-        var evidence = new DiffEvidenceContract(
-            evidenceKind,
-            UnifiedHunk(before?.PrimaryPath, after?.PrimaryPath, baseText, targetText),
-            baseText is null ? null : DiffDigests.Utf8(baseText),
-            targetText is null ? null : DiffDigests.Utf8(targetText));
         var entry = new DiffEntryContract(
             kind,
             before?.Symbol.SymbolId,
             after?.Symbol.SymbolId,
             before?.Symbol.Declarations.Select(declaration => declaration.Location).ToArray() ?? [],
             after?.Symbol.Declarations.Select(declaration => declaration.Location).ToArray() ?? [],
-            [evidence],
+            evidence,
             confidence);
         entry.Validate();
-        return new SymbolDiffChange(
-            kind,
-            before?.Symbol,
-            after?.Symbol,
-            before?.Source,
-            after?.Source,
-            before?.Remark,
-            after?.Remark,
-            entry);
+        return new SymbolDiffChange(kind, before?.Symbol, after?.Symbol, entry);
     }
 
-    private static IReadOnlyDictionary<string, SymbolView> CreateView(SymbolDiffSnapshot snapshot)
+    private static List<DiffEvidenceContract> BuildSymbolLineHunkEvidence(
+        string kind, SymbolView before, SymbolView after, EvidenceBudget budget)
     {
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var sources = snapshot.Sources.ToDictionary(source => NormalizePath(source.Path), Decode, pathComparer);
-        var remarks = snapshot.Remarks.GroupBy(remark => remark.SymbolId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => string.Join("\n", group.OrderBy(item => item.Location.Path, StringComparer.Ordinal)
-                .ThenBy(item => item.Location.Span.Start).Select(item => Extract(item.Location, sources))), StringComparer.Ordinal);
-        return snapshot.Symbols.ToDictionary(
-            symbol => symbol.SymbolId,
-            symbol =>
+        var evidences = new List<DiffEvidenceContract>();
+        var pairCount = Math.Min(before.Declarations.Count, after.Declarations.Count);
+        for (var i = 0; i < pairCount; i++)
+        {
+            var baseDeclaration = before.Declarations[i];
+            var targetDeclaration = after.Declarations[i];
+            if (string.Equals(baseDeclaration.RawText, targetDeclaration.RawText, StringComparison.Ordinal) &&
+                LinesEqual(baseDeclaration.Lines, targetDeclaration.Lines))
             {
-                var source = string.Join("\n// --- partial declaration ---\n", symbol.Declarations
-                    .OrderBy(declaration => declaration.Location.Path, StringComparer.Ordinal)
-                    .ThenBy(declaration => declaration.Location.Span.Start)
-                    .Select(declaration => Extract(declaration.Location, sources)));
-                return new SymbolView(
-                    symbol,
-                    source,
-                    remarks.GetValueOrDefault(symbol.SymbolId),
-                    symbol.Declarations[0].Location.Path ?? symbol.Declarations[0].Location.Uri ?? "unknown");
-            },
+                continue;
+            }
+
+            evidences.Add(BuildLineHunkFromLines(
+                kind, baseDeclaration.Lines, targetDeclaration.Lines, baseDeclaration.Location.Path, targetDeclaration.Location.Path,
+                DiffDigests.Utf8(baseDeclaration.RawText), DiffDigests.Utf8(targetDeclaration.RawText), budget));
+        }
+
+        for (var i = pairCount; i < before.Declarations.Count; i++)
+        {
+            var declaration = before.Declarations[i];
+            evidences.Add(BuildHeaderOnlyEvidence("declaration-removed", declaration, added: false,
+                DiffDigests.Utf8(declaration.RawText), declaration.Lines.Count, budget));
+        }
+
+        for (var i = pairCount; i < after.Declarations.Count; i++)
+        {
+            var declaration = after.Declarations[i];
+            evidences.Add(BuildHeaderOnlyEvidence("declaration-added", declaration, added: true,
+                DiffDigests.Utf8(declaration.RawText), declaration.Lines.Count, budget));
+        }
+
+        if (evidences.Count == 0)
+        {
+            // Defensive fallback: the callers only invoke this when a change was already detected, but if
+            // per-declaration text happens to match exactly, still surface fingerprint evidence rather than
+            // silently reporting an entry with no evidence at all.
+            var baseHash = before.Declarations.Count > 0 ? DiffDigests.Utf8(before.FullText) : null;
+            var targetHash = after.Declarations.Count > 0 ? DiffDigests.Utf8(after.FullText) : null;
+            evidences.Add(new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false, baseHash, targetHash));
+        }
+
+        return evidences;
+    }
+
+    private static bool LinesEqual(IReadOnlyList<LineHunkBuilder.SourceLine> a, IReadOnlyList<LineHunkBuilder.SourceLine> b)
+    {
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!string.Equals(a[i].Text, b[i].Text, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static DiffEvidenceContract BuildLineHunkFromLines(
+        string kind,
+        IReadOnlyList<LineHunkBuilder.SourceLine> baseLines,
+        IReadOnlyList<LineHunkBuilder.SourceLine> targetLines,
+        string? basePath,
+        string? targetPath,
+        string? baseHash,
+        string? targetHash,
+        EvidenceBudget budget)
+    {
+        if (budget.Exhausted ||
+            baseLines.Count > budget.Options.MaxLinesForLineDiff ||
+            targetLines.Count > budget.Options.MaxLinesForLineDiff)
+        {
+            return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, true, baseHash, targetHash);
+        }
+
+        var built = LineHunkBuilder.Build(baseLines, targetLines, basePath, targetPath, budget.Options.ContextLines, budget.Options.MaxHunkBytesPerEntry);
+        if (!built.HasChanges)
+        {
+            return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false, baseHash, targetHash);
+        }
+
+        var bytes = built.Text is null ? 0 : Encoding.UTF8.GetByteCount(built.Text);
+        if (!budget.TryConsume(bytes))
+        {
+            return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, true, baseHash, targetHash);
+        }
+
+        return new DiffEvidenceContract(
+            kind, DiffEvidenceTextMode.LineHunks, built.Text, budget.Options.ContextLines,
+            built.OmittedBaseLines, built.OmittedTargetLines, built.Truncated, baseHash, targetHash);
+    }
+
+    private static DiffEvidenceContract BuildHeaderOnlyEvidence(
+        string kind, DeclarationView declaration, bool added, string hash, int totalLines, EvidenceBudget budget)
+    {
+        var baseHash = added ? null : hash;
+        var targetHash = added ? hash : null;
+        var text = LineHunkBuilder.BuildHeaderOnlyHunk(
+            declaration.HeaderLines, added ? null : declaration.Location.Path, added ? declaration.Location.Path : null, added);
+        var bytes = Encoding.UTF8.GetByteCount(text);
+        if (!budget.TryConsume(bytes))
+        {
+            return new DiffEvidenceContract(kind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, true, baseHash, targetHash);
+        }
+
+        var omitted = Math.Max(0, totalLines - declaration.HeaderLines.Count);
+        return new DiffEvidenceContract(
+            kind, DiffEvidenceTextMode.HeaderOnly, text, 0,
+            added ? 0 : omitted, added ? omitted : 0, false, baseHash, targetHash);
+    }
+
+    private static List<DiffEvidenceContract> BuildAddedOrDeletedEvidence(string kind, SymbolView view, EvidenceBudget budget)
+    {
+        var added = kind == "symbol-added";
+        var totalLines = view.Declarations.Sum(declaration => declaration.Lines.Count);
+        return view.Declarations
+            .Select(declaration => BuildHeaderOnlyEvidence(kind, declaration, added, DiffDigests.Utf8(declaration.RawText), totalLines, budget))
+            .ToList();
+    }
+
+    private static DiffEvidenceContract BuildRemarkLineHunkEvidence(SymbolView before, SymbolView after, EvidenceBudget budget)
+    {
+        var baseHash = before.Remark is null ? null : DiffDigests.Utf8(before.Remark);
+        var targetHash = after.Remark is null ? null : DiffDigests.Utf8(after.Remark);
+        return BuildLineHunkFromLines(
+            "remark-changed", before.RemarkLines, after.RemarkLines, before.RemarkPath, after.RemarkPath, baseHash, targetHash, budget);
+    }
+
+    private static bool OrderChanged(IReadOnlyList<string> baseOrder, IReadOnlyList<string> targetOrder)
+    {
+        if (baseOrder.Count == 0 && targetOrder.Count == 0)
+        {
+            return false;
+        }
+
+        var targetSet = new HashSet<string>(targetOrder, StringComparer.Ordinal);
+        var baseCommon = baseOrder.Where(id => targetSet.Contains(id)).ToArray();
+        var baseSet = new HashSet<string>(baseOrder, StringComparer.Ordinal);
+        var targetCommon = targetOrder.Where(id => baseSet.Contains(id)).ToArray();
+        return !baseCommon.SequenceEqual(targetCommon, StringComparer.Ordinal);
+    }
+
+    private static (IReadOnlyDictionary<string, SymbolContract[]> MembersByContainer, IReadOnlyDictionary<string, string[]> Order)
+        IndexContainers(SymbolDiffSnapshot snapshot)
+    {
+        var membersByContainer = snapshot.Symbols
+            .Where(symbol => symbol.ContainerId is not null)
+            .GroupBy(symbol => symbol.ContainerId!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(symbol => PrimaryLocation(symbol).Path, StringComparer.Ordinal)
+                    .ThenBy(symbol => PrimaryLocation(symbol).Span.Start).ToArray(),
+                StringComparer.Ordinal);
+        var order = membersByContainer.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Select(symbol => symbol.SymbolId).ToArray(),
             StringComparer.Ordinal);
+        return (membersByContainer, order);
     }
 
-    private static string Extract(LocationContract location, IReadOnlyDictionary<string, DecodedSource> sources)
+    private static LocationContract PrimaryLocation(SymbolContract symbol) =>
+        symbol.Declarations.OrderBy(declaration => declaration.Location.Path, StringComparer.Ordinal)
+            .ThenBy(declaration => declaration.Location.Span.Start).First().Location;
+
+    private static IReadOnlyDictionary<string, SymbolView> CreateView(
+        SymbolDiffSnapshot snapshot, IReadOnlyDictionary<string, SymbolContract[]> membersByContainer)
     {
-        if (location.Path is null || !sources.TryGetValue(NormalizePath(location.Path), out var source))
-        {
-            throw new DiffException(DiffErrorCodes.SourceMissing, $"Snapshot source '{location.Path}' is missing.");
-        }
+        var sources = DiffSnapshotReader.DecodeSources(snapshot);
+        var remarksBySymbol = snapshot.Remarks.GroupBy(remark => remark.SymbolId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(item => item.Location.Path, StringComparer.Ordinal)
+                    .ThenBy(item => item.Location.Span.Start).ToArray(),
+                StringComparer.Ordinal);
 
-        if (!string.Equals(location.ContentHash, source.Document.ContentHash, StringComparison.Ordinal))
+        var views = new Dictionary<string, SymbolView>(StringComparer.Ordinal);
+        foreach (var symbol in snapshot.Symbols)
         {
-            throw new DiffException(DiffErrorCodes.SourceStale, $"Snapshot source '{location.Path}' does not match the indexed digest.");
-        }
+            var isContainer = membersByContainer.ContainsKey(symbol.SymbolId);
+            var orderedDeclarations = symbol.Declarations
+                .OrderBy(declaration => declaration.Location.Path, StringComparer.Ordinal)
+                .ThenBy(declaration => declaration.Location.Span.Start)
+                .ToArray();
 
-        var span = location.Span;
-        if (span.Start > source.Text.Length || span.Length > source.Text.Length - span.Start)
-        {
-            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"UTF-16 span for '{location.Path}' is outside the validated source.");
-        }
-
-        var actualStartLine = LineAt(source.Text, span.Start);
-        var actualEndLine = LineAt(source.Text, span.Start + span.Length);
-        if (actualStartLine != span.StartLine || actualEndLine != span.EndLine)
-        {
-            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"Line range for '{location.Path}' does not match its UTF-16 span.");
-        }
-
-        return source.Text.Substring(span.Start, span.Length);
-    }
-
-    private static DecodedSource Decode(DiffSourceDocument document)
-    {
-        if (!string.Equals(DiffDigests.Bytes(document.Bytes), document.ContentHash, StringComparison.Ordinal))
-        {
-            throw new DiffException(DiffErrorCodes.SourceStale, $"Snapshot source '{document.Path}' failed digest validation.");
-        }
-
-        try
-        {
-            var bytes = document.Bytes.AsSpan();
-            string text;
-            if (string.Equals(document.Encoding, "utf-8-bom", StringComparison.OrdinalIgnoreCase))
+            var declarationViews = new List<DeclarationView>();
+            foreach (var declaration in orderedDeclarations)
             {
-                if (bytes.Length < 3 || !bytes[..3].SequenceEqual(new byte[] { 0xEF, 0xBB, 0xBF }))
+                var location = declaration.Location;
+                var rawText = DiffSnapshotReader.Extract(location, sources);
+                var sourceText = sources[DiffSnapshotReader.NormalizePath(location.Path!)].Text;
+                List<(int StartLine, int EndLine)>? excluded = null;
+                if (isContainer && membersByContainer.TryGetValue(symbol.SymbolId, out var members))
                 {
-                    throw new DecoderFallbackException("UTF-8 BOM is missing.");
+                    excluded = members
+                        .SelectMany(member => member.Declarations)
+                        .Where(memberDeclaration => memberDeclaration.Location.Path is not null &&
+                            string.Equals(DiffSnapshotReader.NormalizePath(memberDeclaration.Location.Path), DiffSnapshotReader.NormalizePath(location.Path!),
+                                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                        .Select(memberDeclaration => (memberDeclaration.Location.Span.StartLine, memberDeclaration.Location.Span.EndLine))
+                        .ToList();
                 }
-                text = new UTF8Encoding(false, true).GetString(bytes[3..]);
+
+                var lines = DiffSnapshotReader.FullLines(sourceText, location.Span, excluded);
+                var headerLines = DiffSnapshotReader.HeaderLines(sourceText, location.Span);
+                declarationViews.Add(new DeclarationView(location, rawText, lines, headerLines));
             }
-            else
+
+            var remark = remarksBySymbol.TryGetValue(symbol.SymbolId, out var remarkLocations)
+                ? string.Join("\n", remarkLocations.Select(item => DiffSnapshotReader.Extract(item.Location, sources)))
+                : null;
+            IReadOnlyList<LineHunkBuilder.SourceLine> remarkLines = [];
+            string? remarkPath = null;
+            if (remarkLocations is { Length: > 0 })
             {
-                var encoding = Encoding.GetEncoding(
-                    document.Encoding,
-                    EncoderFallback.ExceptionFallback,
-                    DecoderFallback.ExceptionFallback);
-                text = encoding.GetString(document.Bytes);
+                remarkPath = remarkLocations[0].Location.Path;
+                remarkLines = remarkLocations
+                    .SelectMany(item => DiffSnapshotReader.FullLines(sources[DiffSnapshotReader.NormalizePath(item.Location.Path!)].Text, item.Location.Span))
+                    .ToArray();
             }
-            return new DecodedSource(document, text);
+
+            var compareText = string.Join("\n// --- partial declaration ---\n",
+                declarationViews.Select(view => string.Join("\n", view.Lines.Select(line => line.Text))));
+            var fullText = string.Join("\n// --- partial declaration ---\n", declarationViews.Select(view => view.RawText));
+            var primaryPath = orderedDeclarations[0].Location.Path ?? orderedDeclarations[0].Location.Uri ?? "unknown";
+
+            views[symbol.SymbolId] = new SymbolView(
+                symbol, declarationViews, compareText, fullText, remark, remarkLines, remarkPath, isContainer, primaryPath);
         }
-        catch (Exception exception) when (exception is ArgumentException or DecoderFallbackException)
-        {
-            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"Snapshot source '{document.Path}' has invalid encoding.", exception);
-        }
+
+        return views;
     }
 
     private static void ValidateSnapshot(SymbolDiffSnapshot snapshot, string name)
@@ -296,7 +470,7 @@ public sealed class SymbolDiffService
                 throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} contains a remark for an unknown symbol.");
             remark.Location.Validate();
         }
-        _ = CreateView(snapshot);
+        _ = CreateView(snapshot, IndexContainers(snapshot).MembersByContainer);
     }
 
     private static CoverageContract CombineCoverage(CoverageContract before, CoverageContract after, IReadOnlyList<string> limitations)
@@ -321,7 +495,7 @@ public sealed class SymbolDiffService
     private static string RenameShape(SymbolView view)
     {
         var signature = view.Symbol.Signature.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
-        var source = view.Source.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
+        var source = view.CompareText.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
         return NormalizeWhitespace(signature + "\n" + source);
     }
 
@@ -330,43 +504,46 @@ public sealed class SymbolDiffService
     private static string SortKey(SymbolContract symbol) =>
         $"{symbol.ProjectId}\n{symbol.QualifiedName}\n{symbol.Kind}\n{symbol.Signature}\n{symbol.SymbolId}";
 
-    private static string UnifiedHunk(string? basePath, string? targetPath, string? before, string? after)
-    {
-        var beforeLines = Lines(before);
-        var afterLines = Lines(after);
-        var builder = new StringBuilder();
-        builder.Append("--- ").AppendLine(basePath is null ? "/dev/null" : $"a/{basePath}");
-        builder.Append("+++ ").AppendLine(targetPath is null ? "/dev/null" : $"b/{targetPath}");
-        builder.Append("@@ -1,").Append(beforeLines.Length).Append(" +1,").Append(afterLines.Length).AppendLine(" @@");
-        foreach (var line in beforeLines) builder.Append('-').AppendLine(line);
-        foreach (var line in afterLines) builder.Append('+').AppendLine(line);
-        return builder.ToString();
-    }
+    private sealed record DeclarationView(
+        LocationContract Location,
+        string RawText,
+        IReadOnlyList<LineHunkBuilder.SourceLine> Lines,
+        IReadOnlyList<LineHunkBuilder.SourceLine> HeaderLines);
 
-    private static string[] Lines(string? value) => value is null
-        ? []
-        : value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n');
+    private sealed record SymbolView(
+        SymbolContract Symbol,
+        IReadOnlyList<DeclarationView> Declarations,
+        string CompareText,
+        string FullText,
+        string? Remark,
+        IReadOnlyList<LineHunkBuilder.SourceLine> RemarkLines,
+        string? RemarkPath,
+        bool IsContainer,
+        string PrimaryPath);
 
-    private static int LineAt(string text, int offset)
+    private sealed class EvidenceBudget(DiffEvidenceOptions options)
     {
-        var line = 1;
-        for (var index = 0; index < offset; index++)
+        private int used;
+
+        public DiffEvidenceOptions Options { get; } = options;
+
+        public bool Exhausted { get; private set; }
+
+        public bool TryConsume(int bytes)
         {
-            if (text[index] == '\r')
+            if (Exhausted)
             {
-                line++;
-                if (index + 1 < offset && text[index + 1] == '\n') index++;
+                return false;
             }
-            else if (text[index] == '\n')
+
+            if (used + bytes > Options.MaxEvidenceBytesTotal)
             {
-                line++;
+                Exhausted = true;
+                return false;
             }
+
+            used += bytes;
+            return true;
         }
-        return line;
     }
-
-    private static string NormalizePath(string path) => path.Replace('\\', '/');
-
-    private sealed record DecodedSource(DiffSourceDocument Document, string Text);
-    private sealed record SymbolView(SymbolContract Symbol, string Source, string? Remark, string PrimaryPath);
 }
