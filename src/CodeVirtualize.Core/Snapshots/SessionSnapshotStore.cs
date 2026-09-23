@@ -418,7 +418,7 @@ public sealed class SessionSnapshotStore
         try
         {
             WriteNew(temporary, JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions));
-            File.Move(temporary, path, overwrite: true);
+            TransientFileConflict.Retry(() => File.Move(temporary, path, overwrite: true));
         }
         finally
         {

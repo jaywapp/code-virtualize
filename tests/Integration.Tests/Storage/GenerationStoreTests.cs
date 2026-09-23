@@ -21,6 +21,10 @@ internal static class GenerationStoreTests
         GenerationCommitCrashDoesNotReplaceCurrent();
         PointerWriteCrashDoesNotReplaceCurrent();
         PointerReplaceCrashDoesNotReplaceCurrent();
+        TransientPointerHolderDoesNotFailPublish();
+        PersistentPointerHolderKeepsCurrent();
+        ConcurrentReadersNeverSeeMissingPointer();
+        RepeatedPublishReplacesPointerEveryTime();
         DiskFullDoesNotReplaceCurrent();
         WriterContentionIsExplicit();
         BoundedWriterWaitAcquiresAfterRelease();
@@ -127,6 +131,116 @@ internal static class GenerationStoreTests
         using var root = new TemporaryRoot();
         PublishBase(root.StorePath);
         AssertFaultKeepsCurrent(root.StorePath, StorageFaultPoint.BeforePointerReplace, new IOException("injected pointer publish crash"));
+    }
+
+    private static void TransientPointerHolderDoesNotFailPublish()
+    {
+        using var root = new TemporaryRoot();
+        PublishBase(root.StorePath);
+        var pointerPath = Path.Combine(root.StorePath, "current.json");
+        Task? release = null;
+        var injector = new ActionFaultInjector(StorageFaultPoint.BeforePointerReplace, _ =>
+        {
+            // Mimics an on-access scanner: opens without delete sharing, then lets go shortly after.
+            var holder = new FileStream(pointerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            release = Task.Run(() =>
+            {
+                Thread.Sleep(30);
+                holder.Dispose();
+            });
+        });
+        new GenerationStore(root.StorePath, injector).Publish(Request("gen-next", "analysis-next"));
+        release?.GetAwaiter().GetResult();
+        AssertCurrent(root.StorePath, "gen-next");
+        AssertNoTemporaryPointers(root.StorePath);
+    }
+
+    private static void PersistentPointerHolderKeepsCurrent()
+    {
+        using var root = new TemporaryRoot();
+        PublishBase(root.StorePath);
+        var pointerPath = Path.Combine(root.StorePath, "current.json");
+        var store = new GenerationStore(root.StorePath);
+        using (new FileStream(pointerPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                ThrowsStorage(() => store.Publish(Request("gen-next", "analysis-next")), StorageErrorCodes.IoError);
+            }
+            else
+            {
+                store.Publish(Request("gen-next", "analysis-next"));
+            }
+        }
+
+        AssertCurrent(root.StorePath, OperatingSystem.IsWindows() ? "gen-base" : "gen-next");
+        AssertNoTemporaryPointers(root.StorePath);
+    }
+
+    private static void ConcurrentReadersNeverSeeMissingPointer()
+    {
+        using var root = new TemporaryRoot();
+        PublishBase(root.StorePath);
+        var published = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
+        published["gen-base"] = 0;
+        using var stop = new CancellationTokenSource();
+        var readers = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        {
+            var reads = 0;
+            while (!stop.IsCancellationRequested)
+            {
+                // Any exception, including NO_CURRENT_GENERATION or a missing pointer file, fails the test:
+                // the pointer name must never be absent while it is replaced.
+                using (var reader = new GenerationStore(root.StorePath).OpenCurrent())
+                {
+                    Assert(published.ContainsKey(reader.Manifest.GenerationId), "A reader must only observe a completely published generation.");
+                }
+
+                reads++;
+                Thread.Sleep(1);
+            }
+
+            return reads;
+        })).ToArray();
+
+        var store = new GenerationStore(root.StorePath);
+        try
+        {
+            for (var index = 0; index < 150; index++)
+            {
+                var generationId = $"gen-{index:D3}";
+                published[generationId] = 0;
+                store.Publish(Request(generationId, $"analysis-{index:D3}"));
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+        }
+
+        var totalReads = readers.Sum(task => task.GetAwaiter().GetResult());
+        Assert(totalReads > 0, "Concurrent readers must have observed the store while publishing.");
+        AssertCurrent(root.StorePath, "gen-149");
+        AssertNoTemporaryPointers(root.StorePath);
+    }
+
+    private static void RepeatedPublishReplacesPointerEveryTime()
+    {
+        using var root = new TemporaryRoot();
+        var store = new GenerationStore(root.StorePath);
+        for (var index = 0; index < 200; index++)
+        {
+            var generationId = $"gen-{index:D3}";
+            store.Publish(Request(generationId, $"analysis-{index:D3}"));
+            AssertCurrent(root.StorePath, generationId);
+        }
+
+        AssertNoTemporaryPointers(root.StorePath);
+    }
+
+    private static void AssertNoTemporaryPointers(string storePath)
+    {
+        Assert(Directory.GetFiles(storePath, ".current-*.tmp").Length == 0, "Pointer publication must not leave temporary pointer files.");
     }
 
     private static void DiskFullDoesNotReplaceCurrent()
