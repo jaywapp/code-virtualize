@@ -1,0 +1,355 @@
+{
+  "schemaVersion": "rev2-corpus-manifest-v1",
+  "protocolRevision": "rev2-adr005",
+  "generatedAt": "2026-09-23T08:00:00Z",
+  "randomizationSeed": 20260920,
+  "phase": "TASK-027 Phase A (preparation) — clones, independent syntax tool, grading, NAV candidate order, DIFF commit pairs. No expected.json / no static-reference answers in this file (Phase B).",
+  "measurementTool": {
+    "name": "CorpusSyntaxTool",
+    "version": "1.0.0",
+    "path": "benchmarks/corpora/tools/CorpusSyntaxTool",
+    "dependsOnCodeVirtualize": false,
+    "addedToSolution": false,
+    "roslynPackageVersion": "4.14.0",
+    "lockFile": "benchmarks/corpora/tools/CorpusSyntaxTool/packages.lock.json",
+    "modesUsed": ["grade", "nav-candidates", "select-nav", "select-diff"]
+  },
+  "environment": {
+    "dotnetSdkVersion": "9.0.310",
+    "gitVersion": "2.50.1.windows.1",
+    "ripgrepVersion": "15.2.0",
+    "os": "Windows 11 Pro 10.0.26200"
+  },
+  "gradeThresholds": {
+    "source": "benchmarks/protocol.md R2-1",
+    "csFileCount": { "small": "<=100", "medium": "150-2500", "large": ">=8000" },
+    "csBytes": { "small": "<=1MB", "medium": "0.9-16MB", "large": ">=60MB" },
+    "csprojCount": { "small": "<=5", "medium": "5-100", "large": ">=300" },
+    "declaredSymbolCount_expected": { "small": "<2000", "medium": "2000-80000", "large": ">=80000" },
+    "nameReferenceCount_expected": { "small": "<20000", "medium": "20000-3000000", "large": ">=3000000" },
+    "gradeAssignmentRule": "Grade is decided ONLY by csFileCount/csBytes/csprojCount all falling in the same band (protocol.md: '등급 배정은 앞의 세 지표가 모두 한 구간에 들어갈 때 정해진다'). declaredSymbolCount/nameReferenceCount are expected-range checks only; out-of-range values are reported as deviations and do not change grade or corpus (protocol.md: '기대 구간을 벗어나면 편차로 보고하되 등급과 corpus는 바꾸지 않는다')."
+  },
+  "corpora": [
+    {
+      "alias": "medium-litedb",
+      "repository": "litedb-org/LiteDB",
+      "branch": "dev",
+      "pinnedCommit": "0fd277aaed127b9dec99524277fb4173a2351167",
+      "pinnedCommitDateUtc": "2026-09-22T14:11:53Z",
+      "firstParentHistoryDepthAvailable": 1580,
+      "license": {
+        "spdx": "MIT",
+        "filePath": "LICENSE",
+        "reconfirmedAtPinnedCommit": true,
+        "matchesTask023Candidate": true
+      },
+      "trainingExposure": "보통 (TASK-023/corpus-candidates.md 평가, 재평가하지 않음)",
+      "historyObservations": {
+        "note": "R2-1 GitHub API로 고정한 실제 upstream 저장소(litedb-org/LiteDB)의 관찰 사실만 기록한다. 이력의 성격에 대한 추정은 적지 않는다.",
+        "firstParent500CommitRange": { "oldestUtc": "2020-01-11T18:48:06Z", "newestUtc": "2026-09-22T14:11:53Z (pinned commit)" },
+        "identicalCommitterTimestamps": [
+          { "timestampUtc": "2026-09-18T22:47:25Z", "commitCount": 48 },
+          { "timestampUtc": "2026-09-18T17:37:55Z", "commitCount": 28 },
+          { "timestampUtc": "2026-09-19T16:32:00Z", "commitCount": 14 },
+          { "timestampUtc": "2026-09-19T00:00:52Z", "commitCount": 5 }
+        ],
+        "rootLevelAiAgentToolingFiles": ["AGENTS.md", "CLAUDE.md"]
+      },
+      "grade": "medium",
+      "gradeMetrics": {
+        "csFileCount": 1087,
+        "csBytes": 5186699,
+        "csprojCount": 28,
+        "declaredSymbolCount": 11760,
+        "nameReferenceCount": 210609
+      },
+      "declaredSymbolBreakdown": {
+        "type": 1769, "method": 5746, "constructor": 404, "property": 2054,
+        "indexer": 27, "event": 1, "fieldVariable": 1477, "enumMember": 224,
+        "delegate": 7, "operator": 51
+      },
+      "nameReferenceBreakdown": {
+        "identifierOrGenericNameNodesTotal": 213088,
+        "excludedDeclarationNameNodes": 2479
+      },
+      "expectedRangeDeviations": [],
+      "matchesTask023CandidateFigures": {
+        "csFileCount": true, "csBytes": true, "csprojCount": true,
+        "note": "All three primary indicators match benchmarks/corpus-candidates.md exactly (1087 / 5,186,699 / 28)."
+      },
+      "checkout": {
+        "coreAutocrlf": false,
+        "coreEolOverrideNeeded": false,
+        "gitattributesTextAuto": false,
+        "byteExactVerification": "full scan, all 1087 .cs blobs vs working-tree bytes, 0 mismatches",
+        "workingTreeBytesMatchBlobBytes": true
+      },
+      "navCandidateOrder": {
+        "rule": "R2-2 rule 1-3: ordinary MethodDeclarationSyntax outside generated paths (*.g.cs, *.Designer.cs, *.generated.cs, /Generated/, /obj/); filtered to names occurring on 2-40 lines corpus-wide via `rg -c -w --type cs`; sorted by (path ordinal, line); Fisher-Yates shuffle with System.Random(20260920).",
+        "totalOrdinaryMethodCandidatesBeforeGeneratedExclusion": 5746,
+        "candidatesAfterGeneratedPathExclusion": 5746,
+        "candidatesAfterOccurrenceFilter": 2471,
+        "listedCandidateCount": 12,
+        "note": "Candidate 0 is tuning. Final NAV-01..NAV-06 IDs are assigned in TASK-027 Phase B by walking this order and keeping the first 6 candidates (in order, starting from 0) with >=1 independently-read static reference, skipping any with 0 (R2-2 rule 3 last sentence).",
+        "candidates": [
+          { "order": 0, "role": "tuning", "simpleName": "WithoutParameters", "qualifiedName": "LiteDB.BsonExpression.WithoutParameters", "parameterTypes": [], "path": "LiteDB/Document/Expression/BsonExpression.Binding.cs", "line": 22, "nameLineOccurrences": 6 },
+          { "order": 1, "role": "held-out candidate", "simpleName": "MarkAsInvalidState", "qualifiedName": "LiteDB.Engine.DiskService.MarkAsInvalidState", "parameterTypes": [], "path": "LiteDB/Engine/Disk/DiskService.cs", "line": 319, "nameLineOccurrences": 2 },
+          { "order": 2, "role": "held-out candidate", "simpleName": "CreateDisposedDatabaseReferences", "qualifiedName": "LiteDB.Tests.Engine.MemoryManagement_Tests.CreateDisposedDatabaseReferences", "parameterTypes": [], "path": "LiteDB.Tests/Engine/MemoryManagement_Tests.cs", "line": 441, "nameLineOccurrences": 2 },
+          { "order": 3, "role": "held-out candidate", "simpleName": "AddNode", "qualifiedName": "LiteDB.Engine.IndexService.AddNode", "parameterTypes": ["CollectionIndex", "BsonValue", "PageAddress", "byte", "IndexNode"], "path": "LiteDB/Engine/Services/IndexService.cs", "line": 86, "nameLineOccurrences": 8 },
+          { "order": 4, "role": "held-out candidate", "simpleName": "Scan", "qualifiedName": "LiteDB.Shell.StringScanner.Scan", "parameterTypes": ["Regex"], "path": "LiteDB.Shell/Utils/StringScanner.cs", "line": 64, "nameLineOccurrences": 27 },
+          { "order": 5, "role": "held-out candidate", "simpleName": "Recover", "qualifiedName": "LiteDB.Internals.WalTestDatabase.Recover", "parameterTypes": ["string", "bool"], "path": "LiteDB.Tests/Internals/WalTestDatabase.cs", "line": 41, "nameLineOccurrences": 13 },
+          { "order": 6, "role": "held-out candidate", "simpleName": "ReadLive", "qualifiedName": "LiteDB.Tests.Engine.RebuildFaultRun.ReadLive", "parameterTypes": [], "path": "LiteDB.Tests/Engine/RebuildFaultHarness.cs", "line": 264, "nameLineOccurrences": 2 },
+          { "order": 7, "role": "held-out candidate", "simpleName": "TranslateUnary", "qualifiedName": "LiteDB.LinqExpressionTranslator.TranslateUnary", "parameterTypes": ["UnaryExpression"], "path": "LiteDB/Client/Mapper/Linq/LinqExpressionTranslator.cs", "line": 331, "nameLineOccurrences": 2 },
+          { "order": 8, "role": "held-out candidate", "simpleName": "DOUBLE", "qualifiedName": "LiteDB.BsonExpressionMethods.DOUBLE", "parameterTypes": ["BsonValue", "BsonValue"], "path": "LiteDB/Document/Expression/Methods/DataTypes.cs", "line": 126, "nameLineOccurrences": 8 },
+          { "order": 9, "role": "held-out candidate", "simpleName": "AssertRejectedOpensDidNotChangeFile", "qualifiedName": "LiteDB.Tests.Issues.Issue2824_Tests.AssertRejectedOpensDidNotChangeFile", "parameterTypes": ["string", "Action"], "path": "LiteDB.Tests/Issues/Issue2824_Tests.cs", "line": 204, "nameLineOccurrences": 5 },
+          { "order": 10, "role": "held-out candidate", "simpleName": "Connection_string_key_is_parsed_and_reaches_the_engine_settings", "qualifiedName": "LiteDB.Tests.Issues.Issue2357InvalidTime_Tests.Connection_string_key_is_parsed_and_reaches_the_engine_settings", "parameterTypes": ["string"], "path": "LiteDB.Tests/Issues/Issue2357InvalidTime_Tests.cs", "line": 230, "nameLineOccurrences": 2 },
+          { "order": 11, "role": "held-out candidate", "simpleName": "AsciiEqualsIgnoreCase", "qualifiedName": "LiteDB.Engine.BorrowedDocumentReader.AsciiEqualsIgnoreCase", "parameterTypes": ["byte", "byte"], "path": "LiteDB/Engine/Disk/Serializer/BorrowedDocumentReader.cs", "line": 246, "nameLineOccurrences": 2 }
+        ]
+      },
+      "diffPairs": {
+        "rule": "R2-2 DIFF commit-selection rules 1-5: first-parent walk up to 500 commits from pinned commit; eligible commit = 1-10 changed .cs files (generated paths excluded) and 2-400 added+deleted .cs lines (git diff --numstat, git's own default rename detection, verified ON in this environment) and non-empty git diff -w; sliding-window pairing newest-first, tree(c)->tree(c') capped at 20 files / 800 lines.",
+        "maxCommitsWalked": 500,
+        "eligibleCommitCount": 360,
+        "pairsFound": 6,
+        "rejectedCandidateCount": 7,
+        "renameDetectionCheck": {
+          "eligibleCommitCountWithNoRenames": 358,
+          "eligibleCommitCountWithDefaultRenameDetection": 360,
+          "pairsIdentical": true,
+          "rejectedCandidatesIdentical": true,
+          "note": "Recomputed with git's default rename detection (no -M/--no-renames override) per team-lead direction (R2-2 rules 2/3 say 'git diff --numstat' literally). 2 additional commits became eligible (rename-adjusted diff size now within rule 2 bounds), but the final 6 pairs and all rejected candidates are byte-for-byte identical to the earlier --no-renames run."
+        },
+        "pairs": [
+          { "order": 0, "role": "tuning", "p": "1c10567869bf7d1b969cbedf08b314473a873b34", "c": "b3e2bafcb055f48c51118abb5f101112641b2536", "cPrime": "6fbc81b7648d78d8519481d1feb0681f9bb37aca", "cDateUtc": "2026-09-21T15:03:00Z", "cPrimeDateUtc": "2026-09-21T15:03:04Z", "cFilesChanged": 2, "cLinesChanged": 128, "rangeFilesChanged": 4, "rangeLinesChanged": 123 },
+          { "order": 1, "role": "held-out", "p": "ffc3edfc9728cc8cceccd8337f4a31a6817d2b37", "c": "ec8de1ca83d711807f921a0028d2db04c60ed0d9", "cPrime": "a460a660bb7351da8df3f6b06ba65bd1084a14ca", "cDateUtc": "2026-09-20T22:17:15Z", "cPrimeDateUtc": "2026-09-20T22:18:08Z", "cFilesChanged": 2, "cLinesChanged": 71, "rangeFilesChanged": 2, "rangeLinesChanged": 101 },
+          { "order": 2, "role": "held-out", "p": "ab9c69da942f6acdc4c8dbcab3d0f4da761aa7df", "c": "1b69713044b630b36fee0e7f616fda7f081fe828", "cPrime": "1ac0faf57f9e2bf64845be68a1900a61a1474728", "cDateUtc": "2026-09-19T16:32:00Z", "cPrimeDateUtc": "2026-09-19T16:32:00Z", "cFilesChanged": 6, "cLinesChanged": 361, "rangeFilesChanged": 9, "rangeLinesChanged": 284 },
+          { "order": 3, "role": "held-out", "p": "fb7a59b218d6a72a923813f68959073b31f03e42", "c": "2f1b114aaea1f30ec42466e9a5b68adee9fa7f5c", "cPrime": "f0afcc13ffdab1aacf5f9d2b69824a88e225646a", "cDateUtc": "2026-09-19T00:00:52Z", "cPrimeDateUtc": "2026-09-19T00:00:52Z", "cFilesChanged": 10, "cLinesChanged": 375, "rangeFilesChanged": 5, "rangeLinesChanged": 230 },
+          { "order": 4, "role": "held-out", "p": "2472a9651b8ae63e2e9fd47ef82700596eda926e", "c": "b93a0d43aa6cd85893de33c3515c8c0dc9c902ad", "cPrime": "fb7a59b218d6a72a923813f68959073b31f03e42", "cDateUtc": "2026-09-19T00:00:52Z", "cPrimeDateUtc": "2026-09-19T00:00:52Z", "cFilesChanged": 3, "cLinesChanged": 94, "rangeFilesChanged": 2, "rangeLinesChanged": 62 },
+          { "order": 5, "role": "held-out", "p": "760766c7f5959630a65d101d898fbe8a07094ae2", "c": "9c7425428a965e6fd09c3e4dffeb297566a12b6d", "cPrime": "2472a9651b8ae63e2e9fd47ef82700596eda926e", "cDateUtc": "2026-09-18T22:47:25Z", "cPrimeDateUtc": "2026-09-18T22:47:25Z", "cFilesChanged": 2, "cLinesChanged": 52, "rangeFilesChanged": 2, "rangeLinesChanged": 30 }
+        ]
+      },
+      "substitution": null
+    },
+    {
+      "alias": "medium-quartznet",
+      "repository": "quartznet/quartznet",
+      "branch": "main",
+      "pinnedCommit": "1e039471fc457f6efa1d3bf1224324b82236b759",
+      "pinnedCommitDateUtc": "2026-09-22T19:53:00Z",
+      "firstParentHistoryDepthAvailable": 2870,
+      "license": {
+        "spdx": "Apache-2.0",
+        "filePath": "license.txt",
+        "reconfirmedAtPinnedCommit": true,
+        "matchesTask023Candidate": true
+      },
+      "trainingExposure": "보통 (TASK-023/corpus-candidates.md 평가, 재평가하지 않음)",
+      "historyObservations": {
+        "note": "R2-1 GitHub API로 고정한 실제 upstream 저장소(quartznet/quartznet)의 관찰 사실만 기록한다. 이력의 성격에 대한 추정은 적지 않는다.",
+        "firstParent500CommitRange": { "oldestUtc": "2026-08-26T21:34:32Z", "newestUtc": "2026-09-22T19:53:00Z (pinned commit)" },
+        "identicalCommitterTimestamps": [
+          { "timestampUtc": "2026-09-02T23:38:11Z", "commitCount": 22 },
+          { "timestampUtc": "2026-09-02T06:20:24Z", "commitCount": 13 },
+          { "timestampUtc": "2026-09-11T19:36:46Z", "commitCount": 11 },
+          { "timestampUtc": "2026-09-02T20:22:35Z", "commitCount": 11 },
+          { "timestampUtc": "2026-09-19T20:51:50Z", "commitCount": 10 }
+        ],
+        "rootLevelAiAgentToolingFiles": ["AGENTS.md", "CLAUDE.md", ".aider.conf.yml", ".fallout/", ".gemini/", ".squad/"]
+      },
+      "grade": "medium",
+      "gradeMetrics": {
+        "csFileCount": 1466,
+        "csBytes": 14488437,
+        "csprojCount": 32,
+        "declaredSymbolCount": 25030,
+        "nameReferenceCount": 372561
+      },
+      "declaredSymbolBreakdown": {
+        "type": 2892, "method": 14439, "constructor": 715, "property": 2947,
+        "indexer": 8, "event": 2, "fieldVariable": 3776, "enumMember": 229,
+        "delegate": 4, "operator": 18
+      },
+      "nameReferenceBreakdown": {
+        "identifierOrGenericNameNodesTotal": 377061,
+        "excludedDeclarationNameNodes": 4500
+      },
+      "expectedRangeDeviations": [],
+      "matchesTask023CandidateFigures": {
+        "csFileCount": true, "csBytes": true, "csprojCount": true,
+        "note": "All three primary indicators match benchmarks/corpus-candidates.md exactly (1466 / 14,488,437 / 32)."
+      },
+      "checkout": {
+        "coreAutocrlf": false,
+        "coreEolOverrideNeeded": true,
+        "gitattributesTextAuto": true,
+        "byteExactVerification": "full scan, all 1466 .cs blobs vs working-tree bytes, 0 mismatches (after core.eol=lf fix)",
+        "workingTreeBytesMatchBlobBytes": true
+      },
+      "navCandidateOrder": {
+        "rule": "R2-2 rule 1-3: ordinary MethodDeclarationSyntax outside generated paths (*.g.cs, *.Designer.cs, *.generated.cs, /Generated/, /obj/); filtered to names occurring on 2-40 lines corpus-wide via `rg -c -w --type cs`; sorted by (path ordinal, line); Fisher-Yates shuffle with System.Random(20260920).",
+        "totalOrdinaryMethodCandidatesBeforeGeneratedExclusion": 14439,
+        "candidatesAfterGeneratedPathExclusion": 14439,
+        "candidatesAfterOccurrenceFilter": 5490,
+        "listedCandidateCount": 12,
+        "note": "Candidate 0 is tuning. Final NAV-01..NAV-06 IDs are assigned in TASK-027 Phase B by walking this order and keeping the first 6 candidates (in order, starting from 0) with >=1 independently-read static reference, skipping any with 0 (R2-2 rule 3 last sentence).",
+        "candidates": [
+          { "order": 0, "role": "tuning", "simpleName": "TheMigrationsTheMessageNamesAreTheOnesThatMakeTheSchemaStart", "qualifiedName": "Quartz.Tests.Unit.Impl.AdoJobStore.UnmigratedSchemaRefusalSqliteTest.TheMigrationsTheMessageNamesAreTheOnesThatMakeTheSchemaStart", "parameterTypes": [], "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs", "line": 203, "nameLineOccurrences": 2 },
+          { "order": 1, "role": "held-out candidate", "simpleName": "NotifySchedulerListenersJobDeleted", "qualifiedName": "Quartz.Tests.Unit.Simpl.RAMJobStoreTest.SampleSignaler.NotifySchedulerListenersJobDeleted", "parameterTypes": ["JobKey", "CancellationToken"], "path": "src/Quartz.Tests.Unit/Simpl/RAMJobStoreTest.cs", "line": 1371, "nameLineOccurrences": 18 },
+          { "order": 2, "role": "held-out candidate", "simpleName": "GetEnumerator", "qualifiedName": "Quartz.Tests.Unit.Impl.AdoJobStore.FakeParameterCollection.GetEnumerator", "parameterTypes": [], "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/FakeDriverDoubles.cs", "line": 159, "nameLineOccurrences": 37 },
+          { "order": 3, "role": "held-out candidate", "simpleName": "CreateHostedService", "qualifiedName": "Quartz.Tests.Unit.QuartzHostedServiceTests.CreateHostedService", "parameterTypes": ["Lifetime", "ISchedulerFactory", "bool", "bool", "bool"], "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 976, "nameLineOccurrences": 6 },
+          { "order": 4, "role": "held-out candidate", "simpleName": "JobScheduled", "qualifiedName": "Quartz.Tests.Unit.SchedulerListenerTest.Qtz205ScheListener.JobScheduled", "parameterTypes": ["IScheduler", "ITrigger", "CancellationToken"], "path": "src/Quartz.Tests.Unit/SchedulerListenerTest.cs", "line": 68, "nameLineOccurrences": 11 },
+          { "order": 5, "role": "held-out candidate", "simpleName": "DeadNode", "qualifiedName": "Quartz.Tests.Unit.Impl.AdoJobStore.AdoJobStoreBaseTest.DeadNode", "parameterTypes": [], "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3657, "nameLineOccurrences": 18 },
+          { "order": 6, "role": "held-out candidate", "simpleName": "Disarm", "qualifiedName": "Quartz.Benchmark.Competitors.Completion.Disarm", "parameterTypes": [], "path": "src/Quartz.Benchmark.Competitors/Completion.cs", "line": 122, "nameLineOccurrences": 4 },
+          { "order": 7, "role": "held-out candidate", "simpleName": "GetJobListener", "qualifiedName": "Quartz.IListenerManager.GetJobListener", "parameterTypes": ["string"], "path": "src/Quartz/IListenerManager.cs", "line": 105, "nameLineOccurrences": 6 },
+          { "order": 8, "role": "held-out candidate", "simpleName": "RecordPeak", "qualifiedName": "Quartz.Tests.Integration.Impl.AdoJobStore.ClusteredSerialJobTestBase.SerialJob.RecordPeak", "parameterTypes": ["int"], "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs", "line": 146, "nameLineOccurrences": 4 },
+          { "order": 9, "role": "held-out candidate", "simpleName": "APreferredNodeOfStarIsAnAutomaticPin", "qualifiedName": "Quartz.Tests.Unit.Xml.XmlSchedulingDataProcessorTest.APreferredNodeOfStarIsAnAutomaticPin", "parameterTypes": [], "path": "src/Quartz.Tests.Unit/Xml/XmlSchedulingDataProcessorTest.cs", "line": 1744, "nameLineOccurrences": 2 },
+          { "order": 10, "role": "held-out candidate", "simpleName": "ConfigureScope", "qualifiedName": "Quartz.Tests.Unit.Simpl.MicrosoftDependencyInjectionJobFactoryTest.TenantSettingJobFactory.ConfigureScope", "parameterTypes": ["IServiceScope", "TriggerFiredBundle", "IScheduler"], "path": "src/Quartz.Tests.Unit/Simpl/MicrosoftDependencyInjectionJobFactoryTest.cs", "line": 263, "nameLineOccurrences": 15 },
+          { "order": 11, "role": "held-out candidate", "simpleName": "AssertRoundTripped", "qualifiedName": "Quartz.Tests.Unit.Simpl.BuiltInTriggerSerializerDerivationTest.AssertRoundTripped", "parameterTypes": ["ReportTrigger"], "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs", "line": 75, "nameLineOccurrences": 3 }
+        ]
+      },
+      "diffPairs": {
+        "rule": "R2-2 DIFF commit-selection rules 1-5: first-parent walk up to 500 commits from pinned commit; eligible commit = 1-10 changed .cs files (generated paths excluded) and 2-400 added+deleted .cs lines (git diff --numstat, git's own default rename detection, verified ON in this environment) and non-empty git diff -w; sliding-window pairing newest-first, tree(c)->tree(c') capped at 20 files / 800 lines.",
+        "maxCommitsWalked": 500,
+        "eligibleCommitCount": 259,
+        "pairsFound": 6,
+        "rejectedCandidateCount": 2,
+        "note": "Pair 0's c' equals the pinned commit itself (the pinned commit was eligible against its own first parent); expected under R2-2 rule 1/4, not an error.",
+        "renameDetectionCheck": {
+          "eligibleCommitCountWithNoRenames": 258,
+          "eligibleCommitCountWithDefaultRenameDetection": 259,
+          "pairsIdentical": true,
+          "rejectedCandidatesIdentical": true,
+          "note": "Recomputed with git's default rename detection (no -M/--no-renames override) per team-lead direction (R2-2 rules 2/3 say 'git diff --numstat' literally). 1 additional commit became eligible, but the final 6 pairs and all rejected candidates are byte-for-byte identical to the earlier --no-renames run."
+        },
+        "pairs": [
+          { "order": 0, "role": "tuning", "p": "f79b16772a29caf432fcd369f3083649682b5034", "c": "907c86c8c878d197c44358b3a5728e5025ac3434", "cPrime": "1e039471fc457f6efa1d3bf1224324b82236b759", "cDateUtc": "2026-09-22T19:53:00Z", "cPrimeDateUtc": "2026-09-22T19:53:00Z", "cFilesChanged": 5, "cLinesChanged": 204, "rangeFilesChanged": 1, "rangeLinesChanged": 80 },
+          { "order": 1, "role": "held-out", "p": "85211444d47e36c0dcb51fe8814ffa3a1a1fc53a", "c": "8699baf26c196c44e50e19fee77c094410f09738", "cPrime": "f79b16772a29caf432fcd369f3083649682b5034", "cDateUtc": "2026-09-22T19:53:00Z", "cPrimeDateUtc": "2026-09-22T19:53:00Z", "cFilesChanged": 3, "cLinesChanged": 206, "rangeFilesChanged": 2, "rangeLinesChanged": 162 },
+          { "order": 2, "role": "held-out", "p": "6d99e5d934d10eec283b1bfc568596dbc11e93fe", "c": "b6651cd26ee35830dde06c3cb18871b325c5d0b8", "cPrime": "85211444d47e36c0dcb51fe8814ffa3a1a1fc53a", "cDateUtc": "2026-09-22T19:53:00Z", "cPrimeDateUtc": "2026-09-22T19:53:00Z", "cFilesChanged": 6, "cLinesChanged": 390, "rangeFilesChanged": 3, "rangeLinesChanged": 74 },
+          { "order": 3, "role": "held-out", "p": "e5b0c8499ee1d5c7e333d269d06e1071b4326f3f", "c": "0cc34e335097dff1d5b6646b4eac4c1acd1e7e81", "cPrime": "10bdb516f3c7d927a81456769900f50245a606b0", "cDateUtc": "2026-09-22T18:56:36Z", "cPrimeDateUtc": "2026-09-22T18:56:36Z", "cFilesChanged": 1, "cLinesChanged": 34, "rangeFilesChanged": 1, "rangeLinesChanged": 6 },
+          { "order": 4, "role": "held-out", "p": "26f0915d9201eda85b94de22a15f4c0a43e21065", "c": "0fedf8557e8b1263043c767a3ead26d95c08d866", "cPrime": "e5b0c8499ee1d5c7e333d269d06e1071b4326f3f", "cDateUtc": "2026-09-20T06:55:46Z", "cPrimeDateUtc": "2026-09-20T06:55:46Z", "cFilesChanged": 2, "cLinesChanged": 302, "rangeFilesChanged": 1, "rangeLinesChanged": 12 },
+          { "order": 5, "role": "held-out", "p": "55c8eb80c080c0e9bdd4dcdaa3d99198b15a705d", "c": "add7809473c62aa7d83639947e06acd5f733f31e", "cPrime": "59d9a58a0a25df31ab901f680188fbd03d4fdaaf", "cDateUtc": "2026-09-19T21:36:42Z", "cPrimeDateUtc": "2026-09-19T21:36:42Z", "cFilesChanged": 2, "cLinesChanged": 130, "rangeFilesChanged": 1, "rangeLinesChanged": 7 }
+        ]
+      },
+      "substitution": null
+    },
+    {
+      "alias": "large-aspnetcore",
+      "repository": "dotnet/aspnetcore",
+      "branch": "main",
+      "pinnedCommit": "7cc41c501115f365c0b7f1b50ebaa134a328f0e5",
+      "pinnedCommitDateUtc": "2026-09-22T15:56:37Z",
+      "firstParentHistoryDepthAvailable": 15078,
+      "license": {
+        "spdx": "MIT",
+        "filePath": "LICENSE.txt",
+        "reconfirmedAtPinnedCommit": true,
+        "matchesTask023Candidate": true
+      },
+      "trainingExposure": "매우 높음 (TASK-023/corpus-candidates.md 평가, 재평가하지 않음)",
+      "historyObservations": {
+        "note": "R2-1 GitHub API로 고정한 실제 upstream 저장소(dotnet/aspnetcore)의 관찰 사실만 기록한다. 이력의 성격에 대한 추정은 적지 않는다.",
+        "firstParent500CommitRange": { "oldestUtc": "2026-07-09T16:14:02Z", "newestUtc": "2026-09-22T15:56:37Z (pinned commit)" },
+        "identicalCommitterTimestamps": [],
+        "identicalCommitterTimestampsNote": "first-parent 500개 커밋 중 committer timestamp가 겹치는 쌍 없음(모두 고유, 확인 시각 기준 최대 중복 수 1)",
+        "rootLevelAiAgentToolingFiles": [".claude/"]
+      },
+      "grade": "large",
+      "gradeMetrics": {
+        "csFileCount": 10705,
+        "csBytes": 70807910,
+        "csprojCount": 628,
+        "declaredSymbolCount": 131427,
+        "nameReferenceCount": 2339695
+      },
+      "declaredSymbolBreakdown": {
+        "type": 18180, "method": 68210, "constructor": 6439, "property": 20272,
+        "indexer": 218, "event": 63, "fieldVariable": 15663, "enumMember": 2216,
+        "delegate": 53, "operator": 113
+      },
+      "nameReferenceBreakdown": {
+        "identifierOrGenericNameNodesTotal": 2379731,
+        "excludedDeclarationNameNodes": 40036
+      },
+      "expectedRangeDeviations": [
+        {
+          "metric": "nameReferenceCount",
+          "value": 2339695,
+          "expectedRangeForLarge": ">=3000000",
+          "assessment": "below the large-grade expected range (falls in the medium expected range 20000-3000000 instead)",
+          "protocolHandling": "R2-1: grade is decided only by csFileCount/csBytes/csprojCount, all three of which are solidly within the large band, so grade stays 'large' and the corpus is not substituted. This deviation is reported only, per protocol ('기대 구간을 벗어나면 편차로 보고하되 등급과 corpus는 바꾸지 않는다')."
+        }
+      ],
+      "matchesTask023CandidateFigures": {
+        "csFileCount": true, "csBytes": true, "csprojCount": true,
+        "note": "All three primary indicators match benchmarks/corpus-candidates.md exactly (10,705 / 70,807,910 / 628)."
+      },
+      "checkout": {
+        "coreAutocrlf": false,
+        "coreEolOverrideNeeded": true,
+        "coreLongpathsOverrideNeeded": true,
+        "gitattributesTextAuto": true,
+        "byteExactVerification": "git cat-file batch-check total vs PowerShell Get-ChildItem recursive byte sum over all 10,705 .cs files: both equal 70,807,910, exact match",
+        "workingTreeBytesMatchBlobBytes": true
+      },
+      "navCandidateOrder": {
+        "rule": "R2-2 rule 1-3: ordinary MethodDeclarationSyntax outside generated paths (*.g.cs, *.Designer.cs, *.generated.cs, /Generated/, /obj/); filtered to names occurring on 2-40 lines corpus-wide via `rg -c -w --type cs`; sorted by (path ordinal, line); Fisher-Yates shuffle with System.Random(20260920).",
+        "totalOrdinaryMethodCandidatesBeforeGeneratedExclusion": 68210,
+        "candidatesAfterGeneratedPathExclusion": 67893,
+        "candidatesAfterOccurrenceFilter": 25694,
+        "listedCandidateCount": 12,
+        "note": "Candidate 0 is tuning. Final NAV-01..NAV-06 IDs are assigned in TASK-027 Phase B by walking this order and keeping the first 6 candidates (in order, starting from 0) with >=1 independently-read static reference, skipping any with 0 (R2-2 rule 3 last sentence).",
+        "candidates": [
+          { "order": 0, "role": "tuning", "simpleName": "ResolveDocumentNames", "qualifiedName": "AdditionalDocumentNamesResolver.ResolveDocumentNames", "parameterTypes": [], "path": "src/OpenApi/sample/Program.cs", "line": 106, "nameLineOccurrences": 4 },
+          { "order": 1, "role": "held-out candidate", "simpleName": "GetHref", "qualifiedName": "Microsoft.AspNetCore.Components.BasePathTest.GetHref", "parameterTypes": ["TestRenderer", "int"], "path": "src/Components/Endpoints/test/Routing/BasePathTest.cs", "line": 54, "nameLineOccurrences": 3 },
+          { "order": 2, "role": "held-out candidate", "simpleName": "EchoPetWithClassifier", "qualifiedName": "FormatterWebSite.Controllers.UnionsController.EchoPetWithClassifier", "parameterTypes": ["UnionPetWithClassifier"], "path": "src/Mvc/test/WebSites/FormatterWebSite/Controllers/UnionsController.cs", "line": 205, "nameLineOccurrences": 2 },
+          { "order": 3, "role": "held-out candidate", "simpleName": "DoesNotOverrideExistingMapping", "qualifiedName": "Microsoft.Extensions.DependencyInjection.XmlDataContractSerializerMvcOptionsSetupTest.DoesNotOverrideExistingMapping", "parameterTypes": [], "path": "src/Mvc/Mvc.Formatters.Xml/test/DependencyInjection/XmlDataContractSerializerMvcOptionsSetupTest.cs", "line": 28, "nameLineOccurrences": 2 },
+          { "order": 4, "role": "held-out candidate", "simpleName": "CreateMissingToken", "qualifiedName": "Microsoft.AspNetCore.Analyzers.Infrastructure.RoutePattern.RoutePatternHelpers.CreateMissingToken", "parameterTypes": ["RoutePatternKind"], "path": "src/Framework/AspNetCoreAnalyzers/src/Analyzers/Infrastructure/RoutePattern/RoutePatternHelpers.cs", "line": 19, "nameLineOccurrences": 6 },
+          { "order": 5, "role": "held-out candidate", "simpleName": "LocalRedirect_WithNullStringUrl_ThrowsArgException", "qualifiedName": "Microsoft.AspNetCore.Http.HttpResults.TypedResultsTests.LocalRedirect_WithNullStringUrl_ThrowsArgException", "parameterTypes": [], "path": "src/Http/Http.Results/test/TypedResultsTests.cs", "line": 919, "nameLineOccurrences": 2 },
+          { "order": 6, "role": "held-out candidate", "simpleName": "GetWrittenBytes", "qualifiedName": "Microsoft.AspNetCore.Mvc.Infrastructure.JsonResultExecutorTestBase.GetWrittenBytes", "parameterTypes": ["HttpContext"], "path": "src/Mvc/Mvc.Core/test/Infrastructure/JsonResultExecutorTestBase.cs", "line": 496, "nameLineOccurrences": 19 },
+          { "order": 7, "role": "held-out candidate", "simpleName": "EnsureDataSource", "qualifiedName": "Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.DynamicPageEndpointSelectorCache.EnsureDataSource", "parameterTypes": ["int"], "path": "src/Mvc/Mvc.RazorPages/src/Infrastructure/DynamicPageEndpointSelectorCache.cs", "line": 39, "nameLineOccurrences": 4 },
+          { "order": 8, "role": "held-out candidate", "simpleName": "OnPageHandlerSelected", "qualifiedName": "Microsoft.AspNetCore.Mvc.RazorPages.PageModel.OnPageHandlerSelected", "parameterTypes": ["PageHandlerSelectedContext"], "path": "src/Mvc/Mvc.RazorPages/src/PageModel.cs", "line": 1666, "nameLineOccurrences": 27 },
+          { "order": 9, "role": "held-out candidate", "simpleName": "UnixOpenSslCertificateDirectoryOverridePresent", "qualifiedName": "Microsoft.AspNetCore.Certificates.Generation.CertificateManager.CertificateManagerEventSource.UnixOpenSslCertificateDirectoryOverridePresent", "parameterTypes": ["string"], "path": "src/Shared/CertificateGeneration/CertificateManager.cs", "line": 1299, "nameLineOccurrences": 2 },
+          { "order": 10, "role": "held-out candidate", "simpleName": "DeveloperCertificateNotTrusted", "qualifiedName": "Microsoft.AspNetCore.Server.Kestrel.Core.Internal.LoggerExtensions.DeveloperCertificateNotTrusted", "parameterTypes": ["ILogger<KestrelServer>"], "path": "src/Servers/Kestrel/Core/src/Internal/LoggerExtensions.cs", "line": 42, "nameLineOccurrences": 3 },
+          { "order": 11, "role": "held-out candidate", "simpleName": "GetReceiverType", "qualifiedName": "Microsoft.AspNetCore.Components.Analyzers.InvokeAsyncOfObjectAnalyzer.GetReceiverType", "parameterTypes": ["IInvocationOperation"], "path": "src/Components/Analyzers/src/InvokeAsyncOfObjectAnalyzer.cs", "line": 87, "nameLineOccurrences": 10 }
+        ]
+      },
+      "diffPairs": {
+        "rule": "R2-2 DIFF commit-selection rules 1-5: first-parent walk up to 500 commits from pinned commit; eligible commit = 1-10 changed .cs files (generated paths excluded) and 2-400 added+deleted .cs lines (git diff --numstat, git's own default rename detection, verified ON in this environment) and non-empty git diff -w; sliding-window pairing newest-first, tree(c)->tree(c') capped at 20 files / 800 lines.",
+        "maxCommitsWalked": 500,
+        "eligibleCommitCount": 192,
+        "pairsFound": 6,
+        "rejectedCandidateCount": 2,
+        "renameDetectionCheck": {
+          "eligibleCommitCountWithNoRenames": 191,
+          "eligibleCommitCountWithDefaultRenameDetection": 192,
+          "pairsIdentical": true,
+          "rejectedCandidatesIdentical": true,
+          "note": "Recomputed with git's default rename detection (no -M/--no-renames override) per team-lead direction (R2-2 rules 2/3 say 'git diff --numstat' literally). 1 additional commit became eligible, but the final 6 pairs and all rejected candidates are byte-for-byte identical to the earlier --no-renames run."
+        },
+        "pairs": [
+          { "order": 0, "role": "tuning", "p": "8d321a88f375c5418086f153a2eb40fc2c930ced", "c": "26e9547de9301d6da2aa0f3a1a52eca6350060c5", "cPrime": "e47e89d2c8c69381d4f0dfbe334e2d76776def65", "cDateUtc": "2026-09-21T19:16:27Z", "cPrimeDateUtc": "2026-09-22T13:06:17Z", "cFilesChanged": 3, "cLinesChanged": 59, "rangeFilesChanged": 3, "rangeLinesChanged": 32 },
+          { "order": 1, "role": "held-out", "p": "f5930dbb4ea7d3b2d4940f06c018a9f5651e84d4", "c": "e10a071e2c7744370cb4652bfc40b31c9de7853b", "cPrime": "60d2043c192aca6529546096d8fbb08fe26aeb84", "cDateUtc": "2026-09-21T13:51:17Z", "cPrimeDateUtc": "2026-09-21T16:57:56Z", "cFilesChanged": 1, "cLinesChanged": 5, "rangeFilesChanged": 5, "rangeLinesChanged": 264 },
+          { "order": 2, "role": "held-out", "p": "80ce68b5280ef01757bdf9d94b653da62e5724d5", "c": "9817792d3ba9aa6f6c9ac5804a672ce5954f3288", "cPrime": "f5930dbb4ea7d3b2d4940f06c018a9f5651e84d4", "cDateUtc": "2026-09-21T09:58:46Z", "cPrimeDateUtc": "2026-09-21T12:28:15Z", "cFilesChanged": 5, "cLinesChanged": 201, "rangeFilesChanged": 4, "rangeLinesChanged": 35 },
+          { "order": 3, "role": "held-out", "p": "8821f7eb710e9ab70f1493e9be6fb9d5cff3d75b", "c": "905287949f949a686bccd2fb5f1d096ffbd02f95", "cPrime": "443b141661671e4cf9f33ece77f1a0d5e036bf80", "cDateUtc": "2026-09-18T10:56:06Z", "cPrimeDateUtc": "2026-09-18T13:40:42Z", "cFilesChanged": 3, "cLinesChanged": 33, "rangeFilesChanged": 1, "rangeLinesChanged": 178 },
+          { "order": 4, "role": "held-out", "p": "79afe979a028e7823b3c1bda2c34e60b86afc39a", "c": "f509e3d50f6c18f4d1ee89703eb1635f87a244b9", "cPrime": "84ee09314ff93187dea88d1c2207d99091609e76", "cDateUtc": "2026-09-16T07:21:41Z", "cPrimeDateUtc": "2026-09-16T15:16:02Z", "cFilesChanged": 5, "cLinesChanged": 256, "rangeFilesChanged": 12, "rangeLinesChanged": 205 },
+          { "order": 5, "role": "held-out", "p": "c6bffb3a075720353418b41787132799b9f041e3", "c": "061691db08006bd4d573d7c074ab1e3c6e6e0bdd", "cPrime": "480b1324632716d8fa79c80331ef5dd084f92f2b", "cDateUtc": "2026-09-15T18:52:37Z", "cPrimeDateUtc": "2026-09-15T19:54:42Z", "cFilesChanged": 1, "cLinesChanged": 12, "rangeFilesChanged": 1, "rangeLinesChanged": 10 }
+        ]
+      },
+      "substitution": null
+    }
+  ],
+  "substitutionOrder": {
+    "note": "protocol.md R2-1 대체 순서 medium Polly -> Hangfire -> Serilog / large runtime -> roslyn. 세 corpus 모두 등급 배정·NAV 12개·DIFF 6쌍 확보에 성공해 대체를 적용하지 않았다.",
+    "medium": "not needed",
+    "large": "not needed"
+  },
+  "runnerChangeLog": [],
+  "interpretationNotes": [
+    "nameReferenceCount excludes IdentifierName/GenericName nodes that ARE a declaration's own name in Roslyn's syntax tree (only NamespaceDeclaration/FileScopedNamespaceDeclaration.Name and a using-alias's own NameEquals.Name are represented this way; verified by hand-trace on a synthetic sample, see QA report). All other declaration names (type/method/property/etc.) are plain identifier tokens, not IdentifierName/GenericName nodes, so no further exclusion was needed or applied.",
+    "Generated-path exclusion for NAV candidates and DIFF file-count/line-count checks applies literally the five patterns in protocol.md R2-2 rule 1 (*.g.cs, *.Designer.cs, *.generated.cs, /Generated/, /obj/) via case-insensitive suffix/substring match on the corpus-relative path. Files with other 'generated-looking' names that do not match these five literal patterns (e.g. '*.g.verified.cs' snapshot test fixtures found in large-aspnetcore) are NOT excluded, since the protocol text specifies exact patterns rather than a general heuristic.",
+    "select-diff's DiffCsNumstat step uses `git diff --numstat` with git's own default rename-detection behavior (no -M, no --no-renames), per team-lead direction: R2-2 rules 2/3 say literally 'git diff --numstat' with no flag, and on this tool's git installation (2.50.1.windows.1, diff.renames unset everywhere) that default is empirically rename detection ON (confirmed identical to an explicit -M on a synthetic rename). Rename records are parsed unambiguously via `-z` (NUL-delimited output) rather than the human-readable 'old => new' / 'dir/{old => new}/rest' compaction, and are accounted under the new (post-rename) path as a single changed file. An earlier implementation forced `--no-renames`; recomputing all three corpora with the default-rename-detection implementation produced byte-identical final 6 pairs and rejected-candidate lists for every corpus (see each corpus's `diffPairs.renameDetectionCheck`) — only `eligibleCommitCount` shifted by 1-2 (commits that were not needed to fill the 6 pairs either way).",
+    "For medium-quartznet and large-aspnetcore, `core.autocrlf=false` alone left CRLF line endings in the working tree (confirmed by byte-level diff against `git show <commit>:<path>`), because both repositories' .gitattributes set `* text=auto`, which makes checkout line-ending normalization follow `core.eol` (default native/CRLF on Windows) regardless of core.autocrlf. Fixed by also setting `core.eol=lf` and forcing a full re-checkout; verified byte-exact afterwards (see each corpus's `checkout` block). This is a general risk for any future corpus acquisition (e.g. TASK-029) on Windows and is documented in `benchmarks/corpora/tools/README.md`.",
+    "The DIFF commit-pair task cards' provenance note (pair k's p sometimes equals pair k+1's c') reflects the sliding-window algorithm continuing from the next unused eligible commit after each accepted pair; it is expected, not a defect.",
+    "Each corpus's `historyObservations` records only directly observed facts about its pinned first-parent-500 commit range, root-level file listing, and committer timestamps (per team-lead direction) — no characterization of why those facts exist. All three corpora are the actual GitHub upstream repositories pinned by TASK-023/protocol.md R2-1; this task re-verified the pinned commit SHA (`git rev-parse HEAD` after checkout) and the pinned-commit LICENSE content locally, but did not re-query the GitHub API (that was TASK-023/024's step, see corpus-candidates.md)."
+  ]
+}
