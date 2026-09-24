@@ -21,6 +21,31 @@ internal static class LifecycleTests
         ConcurrentReaderAndUpdatePreserveFreshness();
         BoundedFallbackRepairsAStaleSource();
         FailedSessionCaptureDoesNotDamageAnotherSession();
+        SessionCloseSurvivesTransientMetadataHolder();
+    }
+
+    private static void SessionCloseSurvivesTransientMetadataHolder()
+    {
+        using var fixture = new LifecycleFixture();
+        new CSharpLifecycleService().StartSession(new(fixture.WorkspacePath, fixture.StorePath, "session-held"));
+        var metadataPath = Path.Combine(fixture.StorePath, "sessions", "session-held", "session.json");
+
+        // Mimics an on-access scanner holding session.json while Close renames over it.
+        var holder = new FileStream(metadataPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var release = Task.Run(() =>
+        {
+            Thread.Sleep(100);
+            holder.Dispose();
+        });
+        var snapshots = new SessionSnapshotStore();
+        snapshots.Close(fixture.StorePath, "session-held");
+        release.GetAwaiter().GetResult();
+
+        Assert(File.ReadAllText(metadataPath).Contains("\"state\":\"closed\"", StringComparison.Ordinal),
+            "Closing a session must replace its metadata after a transient holder releases it.");
+        Assert(!snapshots.IsPinned(fixture.StorePath, "session-held"), "Closing a session must release its pin.");
+        Assert(Directory.GetFiles(Path.GetDirectoryName(metadataPath)!, "*.tmp").Length == 0,
+            "Session metadata replacement must not leave temporary files.");
     }
 
     private static void SessionSnapshotPreservesDirtyStartAndSessionIsolation()

@@ -147,7 +147,7 @@ public sealed class GenerationStore
             }
 
             PathBoundary.EnsureNotReparsePoint(pointerPath);
-            var pointerBytes = ReadBoundedBytes(pointerPath, MaxManifestByteLength);
+            var pointerBytes = ReadPointerBytes(pointerPath);
             CurrentPointer pointer;
             try
             {
@@ -506,12 +506,11 @@ public sealed class GenerationStore
             if (File.Exists(pointerPath))
             {
                 PathBoundary.EnsureNotReparsePoint(pointerPath);
-                File.Replace(temporaryPointerPath, pointerPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
             }
-            else
-            {
-                File.Move(temporaryPointerPath, pointerPath);
-            }
+
+            // A same-volume overwrite rename swaps the name in one step, so readers see either the
+            // old or the new complete pointer and never a missing one (File.Replace leaves a gap).
+            TransientFileConflict.Retry(() => File.Move(temporaryPointerPath, pointerPath, overwrite: true));
         }
         finally
         {
@@ -621,6 +620,23 @@ public sealed class GenerationStore
         }
 
         return File.ReadAllBytes(path);
+    }
+
+    // Delete sharing avoids denying the publisher's overwrite rename where the file system honors it;
+    // NTFS still refuses to rename over an open file, so the short read keeps the hold brief and the
+    // publisher retries. A reader that loses the race keeps the complete previous pointer, whose
+    // generation is never deleted. The open itself can collide with the rename, so it retries too.
+    private static byte[] ReadPointerBytes(string path)
+    {
+        using var stream = TransientFileConflict.Retry(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete));
+        if (stream.Length > MaxManifestByteLength)
+        {
+            throw new StorageException(StorageErrorCodes.CorruptGeneration, "A storage metadata file exceeds the size limit.");
+        }
+
+        var bytes = new byte[stream.Length];
+        stream.ReadExactly(bytes);
+        return bytes;
     }
 
     private static void WriteDurableFile(string path, ReadOnlySpan<byte> bytes)
