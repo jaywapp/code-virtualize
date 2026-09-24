@@ -392,7 +392,7 @@ public sealed class SymbolDiffService
             "remark-changed", before.RemarkLines, after.RemarkLines, before.RemarkPath, after.RemarkPath, baseHash, targetHash, budget);
     }
 
-    // --- Changed-line coverage safety net (N1) --------------------------------------------------------
+    // --- Changed-line coverage safety net (N1, hardened per X1-X4) --------------------------------------
 
     private const string UnattributedLineChangedEvidenceKind = "span-adjacent-line-changed";
     private const string ChangedLineAttributedLimitation = "diff-span-adjacent-line-attributed";
@@ -411,11 +411,20 @@ public sealed class SymbolDiffService
         var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var baseSourcesByPath = baseSnapshot.Sources.ToDictionary(source => DiffSnapshotReader.NormalizePath(source.Path), pathComparer);
         var targetSourcesByPath = targetSnapshot.Sources.ToDictionary(source => DiffSnapshotReader.NormalizePath(source.Path), pathComparer);
-        var changedPaths = baseSourcesByPath.Keys.Intersect(targetSourcesByPath.Keys, pathComparer)
+
+        var commonPairs = baseSourcesByPath.Keys.Intersect(targetSourcesByPath.Keys, pathComparer)
             .Where(path => !string.Equals(baseSourcesByPath[path].ContentHash, targetSourcesByPath[path].ContentHash, StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
+            .Select(path => (BasePath: path, TargetPath: path));
+
+        // X3: a file that was renamed/moved (present only in base, matched by a different only-in-target
+        // path) still needs whole-file attribution — pair each base-only path with whichever target-only
+        // path shares the most symbol IDs (the file that "became" it), not just paths with the same name.
+        var renamedPairs = FindRenamedFilePairs(baseSnapshot, targetSnapshot, baseSourcesByPath, targetSourcesByPath, pathComparer);
+
+        var filePairs = commonPairs.Concat(renamedPairs)
+            .OrderBy(pair => pair.BasePath, StringComparer.Ordinal).ThenBy(pair => pair.TargetPath, StringComparer.Ordinal)
             .ToArray();
-        if (changedPaths.Length == 0)
+        if (filePairs.Length == 0)
         {
             return new SafetyNetResult([], [], false);
         }
@@ -427,14 +436,72 @@ public sealed class SymbolDiffService
         var baseBySymbolId = baseSnapshot.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
         var targetBySymbolId = targetSnapshot.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
 
-        var pendingBySymbol = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        // Substantive changes take priority over whitespace-only ones for the same symbol (X4): if a symbol
+        // ends up in both buckets, the whitespace-only entries are dropped in favor of the real one.
+        var pendingBodyChanged = new Dictionary<string, HashSet<(string BasePath, string TargetPath)>>(StringComparer.Ordinal);
+        var pendingFormattingOnly = new Dictionary<string, HashSet<(string BasePath, string TargetPath)>>(StringComparer.Ordinal);
         var limitations = new List<string>();
         var coverageTruncated = false;
 
-        foreach (var path in changedPaths)
+        void ProcessUnit(
+            string basePath, string targetPath,
+            IReadOnlyList<LineHunkBuilder.SourceLine> baseFileLines, IReadOnlyList<LineHunkBuilder.SourceLine> targetFileLines,
+            LineHunkBuilder.Edit? deleteEdit, LineHunkBuilder.Edit? insertEdit)
         {
-            var baseText = baseSources[DiffSnapshotReader.NormalizePath(path)].Text;
-            var targetText = targetSources[DiffSnapshotReader.NormalizePath(path)].Text;
+            var baseLine = deleteEdit is { } de ? baseFileLines[de.BaseIndex].LineNumber : (int?)null;
+            var targetLine = insertEdit is { } ie ? targetFileLines[ie.TargetIndex].LineNumber : (int?)null;
+
+            var baseAttributed = baseLine is int bl && attributedBase.TryGetValue(basePath, out var bLines) && bLines.Contains(bl);
+            var targetAttributed = targetLine is int tl && attributedTarget.TryGetValue(targetPath, out var tLines) && tLines.Contains(tl);
+            if (baseAttributed || targetAttributed)
+            {
+                // X1: attribution is decided per delete/insert PAIR (or lone unpaired line), never for the
+                // whole run — an already-attributed neighbor sharing a run with a genuinely unattributed
+                // line (e.g. two adjacent edited field declarations) must not suppress the latter. Either
+                // side being attributed is conclusive for the pair as a whole: e.g. adding an enum member on
+                // a shared line is already fully explained by that member's own Added entry (whose location
+                // covers the target line) - the untouched siblings on the same line must not also be flagged
+                // (M2), even though the base side of that same replace pair has no entry of its own.
+                return;
+            }
+
+            var coveringSymbol = baseLine is int blCover ? FindCoveringSymbol(baseSnapshot, baseBySymbolId, basePath, blCover, pathComparer) : null;
+            coveringSymbol ??= targetLine is int tlCover ? FindCoveringSymbol(targetSnapshot, targetBySymbolId, targetPath, tlCover, pathComparer) : null;
+            if (coveringSymbol is null)
+            {
+                // Outside every indexed symbol's declaration range (a using/namespace line, blank line
+                // between top-level types, etc.). Out of scope for this safety net; existing behavior
+                // (silently not represented per-symbol) is unchanged for these lines.
+                return;
+            }
+
+            var baseText = deleteEdit is { } deText ? baseFileLines[deText.BaseIndex].Text : null;
+            var targetText = insertEdit is { } ieText ? targetFileLines[ieText.TargetIndex].Text : null;
+            var whitespaceOnly = IsWhitespaceOnlyChange(baseText, targetText);
+
+            var isContainer = (baseView.TryGetValue(coveringSymbol.SymbolId, out var baseCoveringView) && baseCoveringView.IsContainer) ||
+                               (targetView.TryGetValue(coveringSymbol.SymbolId, out var targetCoveringView) && targetCoveringView.IsContainer);
+
+            if (whitespaceOnly)
+            {
+                // X4 / U2 rule 3: a container's own self text ignores whitespace-only differences entirely
+                // (no entry at all); a leaf's whitespace-only edit is still reported, but as formatting_only.
+                if (isContainer)
+                {
+                    return;
+                }
+
+                Accumulate(pendingFormattingOnly, coveringSymbol.SymbolId, basePath, targetPath);
+                return;
+            }
+
+            Accumulate(pendingBodyChanged, coveringSymbol.SymbolId, basePath, targetPath);
+        }
+
+        foreach (var (basePath, targetPath) in filePairs)
+        {
+            var baseText = baseSources[basePath].Text;
+            var targetText = targetSources[targetPath].Text;
             var baseFileLines = DiffSnapshotReader.AllLines(baseText);
             var targetFileLines = DiffSnapshotReader.AllLines(targetText);
             var edits = LineHunkBuilder.Diff(
@@ -444,14 +511,17 @@ public sealed class SymbolDiffService
 
             if (edits is null)
             {
-                // The whole-file edit distance exceeded the line-diff cap (an unusually large rewrite).
-                // If some ordinary entry already mentions this file, trust that entry and move on; if not,
-                // this file's changes are entirely unaccounted for — say so explicitly instead of a silent
-                // complete-looking empty diff.
-                var hasEntryForPath = existingChanges.Any(change => HasLocationForPath(change.Contract, path, pathComparer));
+                // X2: the whole-file edit distance exceeded the line-diff cap (an unusually large rewrite).
+                // This must be flagged regardless of whether some ordinary entry already mentions the file —
+                // an existing entry (e.g. a fingerprint-only per-symbol entry for one huge method) says
+                // nothing about whether OTHER, smaller changes elsewhere in the same file were missed. The
+                // coverage downgrade to Partial/Truncated is reserved for the case where nothing at all
+                // represents this file, so a fully-covered-by-ordinary-entries file isn't wrongly demoted.
+                limitations.Add(UnattributedChangeBudgetLimitation);
+                var hasEntryForPath = existingChanges.Any(change =>
+                    HasLocationForPath(change.Contract, basePath, pathComparer) || HasLocationForPath(change.Contract, targetPath, pathComparer));
                 if (!hasEntryForPath)
                 {
-                    limitations.Add(UnattributedChangeBudgetLimitation);
                     coverageTruncated = true;
                 }
                 continue;
@@ -459,65 +529,41 @@ public sealed class SymbolDiffService
 
             foreach (var (start, end) in ChangeRuns(edits))
             {
-                var runAttributed = false;
-                for (var i = start; i <= end && !runAttributed; i++)
+                var deletes = new List<LineHunkBuilder.Edit>();
+                var inserts = new List<LineHunkBuilder.Edit>();
+                for (var i = start; i <= end; i++)
                 {
-                    var edit = edits[i];
-                    if (edit.Kind != LineHunkBuilder.EditKind.Insert &&
-                        attributedBase.TryGetValue(path, out var baseLines) && baseLines.Contains(baseFileLines[edit.BaseIndex].LineNumber))
+                    if (edits[i].Kind == LineHunkBuilder.EditKind.Delete)
                     {
-                        runAttributed = true;
+                        deletes.Add(edits[i]);
                     }
-                    else if (edit.Kind != LineHunkBuilder.EditKind.Delete &&
-                        attributedTarget.TryGetValue(path, out var targetLines) && targetLines.Contains(targetFileLines[edit.TargetIndex].LineNumber))
+                    else
                     {
-                        runAttributed = true;
+                        inserts.Add(edits[i]);
                     }
                 }
 
-                if (runAttributed)
+                // X1: pair the k-th deleted line with the k-th inserted line by position within the run
+                // (Myers already emits deletes before inserts within one run), not the run as a whole.
+                var pairCount = Math.Min(deletes.Count, inserts.Count);
+                for (var k = 0; k < pairCount; k++)
                 {
-                    // Already represented by an existing entry on at least one side (e.g. adding an enum
-                    // member changes the shared declaration line; the member's own Added entry already
-                    // covers it, so the "before" line on the same run must not get a second entry — M2/M3
-                    // regressions must not reappear here).
-                    continue;
+                    ProcessUnit(basePath, targetPath, baseFileLines, targetFileLines, deletes[k], inserts[k]);
                 }
-
-                SymbolContract? coveringSymbol = null;
-                for (var i = start; i <= end && coveringSymbol is null; i++)
+                for (var k = pairCount; k < deletes.Count; k++)
                 {
-                    var edit = edits[i];
-                    if (edit.Kind != LineHunkBuilder.EditKind.Insert)
-                    {
-                        coveringSymbol = FindCoveringSymbol(baseSnapshot, baseBySymbolId, path, baseFileLines[edit.BaseIndex].LineNumber, pathComparer);
-                    }
-                    if (coveringSymbol is null && edit.Kind != LineHunkBuilder.EditKind.Delete)
-                    {
-                        coveringSymbol = FindCoveringSymbol(targetSnapshot, targetBySymbolId, path, targetFileLines[edit.TargetIndex].LineNumber, pathComparer);
-                    }
+                    ProcessUnit(basePath, targetPath, baseFileLines, targetFileLines, deletes[k], null);
                 }
-
-                if (coveringSymbol is null)
+                for (var k = pairCount; k < inserts.Count; k++)
                 {
-                    // Outside every indexed symbol's declaration range (a using/namespace line, blank line
-                    // between top-level types, etc.). Out of scope for this safety net; existing behavior
-                    // (silently not represented per-symbol) is unchanged for these lines.
-                    continue;
+                    ProcessUnit(basePath, targetPath, baseFileLines, targetFileLines, null, inserts[k]);
                 }
-
-                if (!pendingBySymbol.TryGetValue(coveringSymbol.SymbolId, out var paths))
-                {
-                    paths = new SortedSet<string>(StringComparer.Ordinal);
-                    pendingBySymbol[coveringSymbol.SymbolId] = paths;
-                }
-
-                paths.Add(path);
             }
         }
 
         var changes = new List<SymbolDiffChange>();
-        foreach (var (symbolId, paths) in pendingBySymbol.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        var symbolIds = pendingBodyChanged.Keys.Concat(pendingFormattingOnly.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        foreach (var symbolId in symbolIds)
         {
             var baseSymbolView = baseView.GetValueOrDefault(symbolId);
             var targetSymbolView = targetView.GetValueOrDefault(symbolId);
@@ -526,20 +572,29 @@ public sealed class SymbolDiffService
                 continue;
             }
 
-            var kind = baseSymbolView is not null && targetSymbolView is not null ? DiffKind.BodyChanged
-                : baseSymbolView is not null ? DiffKind.Deleted
-                : DiffKind.Added;
+            DeclarationView? FindDeclaration(SymbolView? view, string path) =>
+                view?.Declarations.FirstOrDefault(declaration =>
+                    declaration.Location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(declaration.Location.Path), path));
 
-            var evidences = paths.Select(path =>
+            if (pendingBodyChanged.TryGetValue(symbolId, out var bodyPairs) && bodyPairs.Count > 0)
             {
-                var baseDeclaration = baseSymbolView?.Declarations.FirstOrDefault(
-                    declaration => declaration.Location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(declaration.Location.Path), path));
-                var targetDeclaration = targetSymbolView?.Declarations.FirstOrDefault(
-                    declaration => declaration.Location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(declaration.Location.Path), path));
-                return BuildUnattributedLineHunkEvidence(baseDeclaration, targetDeclaration, budget);
-            }).ToList();
-
-            changes.Add(BuildChange(kind, baseSymbolView, targetSymbolView, 1m, evidences));
+                var kind = baseSymbolView is not null && targetSymbolView is not null ? DiffKind.BodyChanged
+                    : baseSymbolView is not null ? DiffKind.Deleted
+                    : DiffKind.Added;
+                var evidences = bodyPairs.OrderBy(pair => pair.BasePath, StringComparer.Ordinal).ThenBy(pair => pair.TargetPath, StringComparer.Ordinal)
+                    .Select(pair => BuildUnattributedLineHunkEvidence(
+                        FindDeclaration(baseSymbolView, pair.BasePath), FindDeclaration(targetSymbolView, pair.TargetPath), budget))
+                    .ToList();
+                changes.Add(BuildChange(kind, baseSymbolView, targetSymbolView, 1m, evidences));
+            }
+            else if (pendingFormattingOnly.TryGetValue(symbolId, out var formattingPairs) && formattingPairs.Count > 0)
+            {
+                var evidences = formattingPairs.OrderBy(pair => pair.BasePath, StringComparer.Ordinal).ThenBy(pair => pair.TargetPath, StringComparer.Ordinal)
+                    .Select(pair => BuildUnattributedFingerprintEvidence(
+                        FindDeclaration(baseSymbolView, pair.BasePath), FindDeclaration(targetSymbolView, pair.TargetPath)))
+                    .ToList();
+                changes.Add(BuildChange(DiffKind.FormattingOnly, baseSymbolView, targetSymbolView, 1m, evidences));
+            }
         }
 
         if (changes.Count > 0)
@@ -548,6 +603,124 @@ public sealed class SymbolDiffService
         }
 
         return new SafetyNetResult(changes, limitations, coverageTruncated);
+    }
+
+    private static void Accumulate(
+        Dictionary<string, HashSet<(string BasePath, string TargetPath)>> bucket, string symbolId, string basePath, string targetPath)
+    {
+        if (!bucket.TryGetValue(symbolId, out var pairs))
+        {
+            pairs = [];
+            bucket[symbolId] = pairs;
+        }
+
+        pairs.Add((basePath, targetPath));
+    }
+
+    /// <summary>
+    /// A delete/insert pair (or a lone unpaired delete or insert) is whitespace-only when, after the same
+    /// whitespace normalization used elsewhere for formatting_only classification, the two sides read the
+    /// same — or, for an unpaired line (pure blank-line insertion/deletion), when that single line is blank.
+    /// </summary>
+    private static bool IsWhitespaceOnlyChange(string? baseText, string? targetText)
+    {
+        if (baseText is not null && targetText is not null)
+        {
+            return NormalizeWhitespace(baseText) == NormalizeWhitespace(targetText);
+        }
+
+        var only = baseText ?? targetText;
+        return only is not null && NormalizeWhitespace(only).Length == 0;
+    }
+
+    /// <summary>
+    /// X3: pairs each base-only source path with the target-only path that shares the most symbol IDs (a
+    /// file rename/move keeps most of its symbols' deterministic IDs, since those do not depend on path).
+    /// Each target-only path is used for at most one match; ties break on the ordinally smallest target
+    /// path. A base-only path with no overlapping target-only path is left unmatched (existing behavior:
+    /// out of scope for this safety net, same as any other file-level-only change).
+    /// </summary>
+    private static IReadOnlyList<(string BasePath, string TargetPath)> FindRenamedFilePairs(
+        SymbolDiffSnapshot baseSnapshot,
+        SymbolDiffSnapshot targetSnapshot,
+        IReadOnlyDictionary<string, DiffSourceDocument> baseSourcesByPath,
+        IReadOnlyDictionary<string, DiffSourceDocument> targetSourcesByPath,
+        StringComparer pathComparer)
+    {
+        var baseOnlyPaths = baseSourcesByPath.Keys.Except(targetSourcesByPath.Keys, pathComparer).Order(StringComparer.Ordinal).ToArray();
+        if (baseOnlyPaths.Length == 0)
+        {
+            return [];
+        }
+
+        var targetOnlyPaths = new List<string>(targetSourcesByPath.Keys.Except(baseSourcesByPath.Keys, pathComparer).Order(StringComparer.Ordinal));
+        if (targetOnlyPaths.Count == 0)
+        {
+            return [];
+        }
+
+        var baseSymbolsByPath = SymbolIdsByPath(baseSnapshot, pathComparer);
+        var targetSymbolsByPath = SymbolIdsByPath(targetSnapshot, pathComparer);
+
+        var pairs = new List<(string BasePath, string TargetPath)>();
+        foreach (var basePath in baseOnlyPaths)
+        {
+            if (!baseSymbolsByPath.TryGetValue(basePath, out var baseSymbolIds) || baseSymbolIds.Count == 0)
+            {
+                continue;
+            }
+
+            string? bestTarget = null;
+            var bestOverlap = 0;
+            foreach (var targetPath in targetOnlyPaths)
+            {
+                if (!targetSymbolsByPath.TryGetValue(targetPath, out var targetSymbolIds))
+                {
+                    continue;
+                }
+
+                var overlap = baseSymbolIds.Count(targetSymbolIds.Contains);
+                if (overlap > bestOverlap)
+                {
+                    bestOverlap = overlap;
+                    bestTarget = targetPath;
+                }
+            }
+
+            if (bestTarget is not null)
+            {
+                pairs.Add((basePath, bestTarget));
+                targetOnlyPaths.Remove(bestTarget);
+            }
+        }
+
+        return pairs;
+    }
+
+    private static Dictionary<string, HashSet<string>> SymbolIdsByPath(SymbolDiffSnapshot snapshot, StringComparer pathComparer)
+    {
+        var result = new Dictionary<string, HashSet<string>>(pathComparer);
+        foreach (var symbol in snapshot.Symbols)
+        {
+            foreach (var declaration in symbol.Declarations)
+            {
+                if (declaration.Location.Path is null)
+                {
+                    continue;
+                }
+
+                var path = DiffSnapshotReader.NormalizePath(declaration.Location.Path);
+                if (!result.TryGetValue(path, out var ids))
+                {
+                    ids = new HashSet<string>(StringComparer.Ordinal);
+                    result[path] = ids;
+                }
+
+                ids.Add(symbol.SymbolId);
+            }
+        }
+
+        return result;
     }
 
     private static Dictionary<string, HashSet<int>> AttributedLines(
@@ -677,6 +850,15 @@ public sealed class SymbolDiffService
         return BuildLineHunkFromLines(
             UnattributedLineChangedEvidenceKind, baseLines, targetLines,
             baseDeclaration?.Location.Path, targetDeclaration?.Location.Path, baseHash, targetHash, budget);
+    }
+
+    /// <summary>X4: a whitespace-only (formatting_only) safety-net attribution reports only a fingerprint —
+    /// there is no substantive text difference worth rendering as a hunk.</summary>
+    private static DiffEvidenceContract BuildUnattributedFingerprintEvidence(DeclarationView? baseDeclaration, DeclarationView? targetDeclaration)
+    {
+        var baseHash = baseDeclaration is null ? null : DiffDigests.Utf8(baseDeclaration.RawText);
+        var targetHash = targetDeclaration is null ? null : DiffDigests.Utf8(targetDeclaration.RawText);
+        return new DiffEvidenceContract(UnattributedLineChangedEvidenceKind, DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false, baseHash, targetHash);
     }
 
     // ----------------------------------------------------------------------------------------------------

@@ -113,6 +113,12 @@ internal static class DiffTests
         FileLineDiffBudgetExceededWithNoEntriesIsExplicit();
         RealAnalyzerAttributeOnSameLineEndToEnd();
         ContainerRenameCandidateSurvivesMemberBodyEdit();
+        AdjacentFieldEditsAreBothAttributed();
+        FileLineDiffBudgetLimitationAppearsEvenWithExistingEntries();
+        RenamedFileAttributeChangeIsStillAttributed();
+        BlankLineDeletionBetweenMembersIsNotReportedAsContainerChange();
+        FieldReindentationIsReportedAsFormattingOnly();
+        ChangedLineCoverageSafetyNetPropertyTest();
     }
 
     /// <summary>
@@ -852,6 +858,495 @@ internal static class DiffTests
             "The renamed container must not also be reported as deleted.");
         Assert(!result.Changes.Any(change => change.Kind == DiffKind.Added && change.TargetSymbol?.SymbolId == targetContainerId),
             "The renamed container must not also be reported as added (i.e. not a spurious delete+add pair alongside the rename candidate).");
+    }
+
+    // --- TASK-028 third confirmation review fixes (X1-X4) + invariant property test ---------------------
+
+    private static void AdjacentFieldEditsAreBothAttributed()
+    {
+        // X1: Myers groups the two adjacent changed lines into ONE run (2 deletes, 2 inserts). Before the
+        // fix, hp being already-attributed (its own declarator text changed) caused the *whole run* -
+        // including speed's unrelated attribute-only edit on the adjacent line - to be skipped.
+        var baseSource = "namespace Fixture.X1;\npublic class X1Target\n{\n    [Range(0, 10)] private int speed;\n    private int hp = 5;\n}\n";
+        var targetSource = "namespace Fixture.X1;\npublic class X1Target\n{\n    [Range(0, 99)] private int speed;\n    private int hp = 6;\n}\n";
+
+        var baseSpeed = AdHocSymbol(baseSource, "X1Mixed.cs", "x1-project", "field", "speed", "Fixture.X1.X1Target.speed", "private int speed", "speed");
+        var targetSpeed = AdHocSymbol(targetSource, "X1Mixed.cs", "x1-project", "field", "speed", "Fixture.X1.X1Target.speed", "private int speed", "speed");
+        var baseHp = AdHocSymbol(baseSource, "X1Mixed.cs", "x1-project", "field", "hp", "Fixture.X1.X1Target.hp", "private int hp", "hp = 5");
+        var targetHp = AdHocSymbol(targetSource, "X1Mixed.cs", "x1-project", "field", "hp", "Fixture.X1.X1Target.hp", "private int hp", "hp = 6");
+        Assert(baseSpeed.SymbolId == targetSpeed.SymbolId && baseHp.SymbolId == targetHp.SymbolId, "Sanity: both fields' identities are stable.");
+
+        var baseSnapshot = BuildSnapshot("x1-mixed-base", "X1Mixed.cs", baseSource, [baseSpeed, baseHp]);
+        var targetSnapshot = BuildSnapshot("x1-mixed-target", "X1Mixed.cs", targetSource, [targetSpeed, targetHp]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "x1-mixed-base", "x1-mixed-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.Name == "hp"),
+            "hp's own initializer change must still be reported.");
+        Assert(result.Changes.Any(change => change.BaseSymbol?.SymbolId == baseSpeed.SymbolId || change.TargetSymbol?.SymbolId == baseSpeed.SymbolId),
+            "X1: speed's attribute-only change must not be silently dropped just because it shares a Myers change-run with hp's already-attributed adjacent edit.");
+    }
+
+    private static void FileLineDiffBudgetLimitationAppearsEvenWithExistingEntries()
+    {
+        const int lineCount = 2100;
+        var baseBody = string.Join("\n", Enumerable.Range(0, lineCount).Select(i => $"        // base-only-bigfile-{i}-aaaaaaaaaa"));
+        var targetBody = string.Join("\n", Enumerable.Range(0, lineCount).Select(i => $"        // target-only-bigfile-{i}-bbbbbbbbbb"));
+        var baseSource = $"namespace Fixture.X2;\npublic class X2Target\n{{\n    [Range(0, 10)] private int speed;\n    public static void M()\n    {{\n{baseBody}\n    }}\n}}\n";
+        var targetSource = $"namespace Fixture.X2;\npublic class X2Target\n{{\n    [Range(0, 99)] private int speed;\n    public static void M()\n    {{\n{targetBody}\n    }}\n}}\n";
+
+        var baseSpeed = AdHocSymbol(baseSource, "X2Big.cs", "x2-project", "field", "speed", "Fixture.X2.X2Target.speed", "private int speed", "speed");
+        var targetSpeed = AdHocSymbol(targetSource, "X2Big.cs", "x2-project", "field", "speed", "Fixture.X2.X2Target.speed", "private int speed", "speed");
+        var baseMethodText = $"public static void M()\n    {{\n{baseBody}\n    }}";
+        var targetMethodText = $"public static void M()\n    {{\n{targetBody}\n    }}";
+        var baseMethod = AdHocSymbol(baseSource, "X2Big.cs", "x2-project", "method", "M", "Fixture.X2.X2Target.M", "public static void M()", baseMethodText);
+        var targetMethod = AdHocSymbol(targetSource, "X2Big.cs", "x2-project", "method", "M", "Fixture.X2.X2Target.M", "public static void M()", targetMethodText);
+        Assert(baseMethod.SymbolId == targetMethod.SymbolId, "Sanity: method identity stable.");
+        Assert(baseSpeed.SymbolId == targetSpeed.SymbolId, "Sanity: speed identity stable.");
+
+        var baseSnapshot = BuildSnapshot("x2-big-base", "X2Big.cs", baseSource, [baseSpeed, baseMethod]);
+        var targetSnapshot = BuildSnapshot("x2-big-target", "X2Big.cs", targetSource, [targetSpeed, targetMethod]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "x2-big-base", "x2-big-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        var methodChange = result.Changes.Single(change => change.BaseSymbol?.SymbolId == baseMethod.SymbolId);
+        Assert(methodChange.Contract.Evidence.Single().TextMode == DiffEvidenceTextMode.FingerprintOnly,
+            "Sanity: the huge method's own per-symbol diff must still hit the line-hunk budget and downgrade to fingerprint_only.");
+        Assert(result.Contract.Limitations.Contains("diff-unattributed-change-budget-exceeded", StringComparer.Ordinal),
+            "X2: the whole-file safety-net diff hitting its own budget must be flagged even when an ordinary entry (M) already exists for the file - " +
+            "that entry says nothing about whether OTHER changes (speed's attribute) were also missed.");
+    }
+
+    private static void RenamedFileAttributeChangeIsStillAttributed()
+    {
+        // X3: Old.cs -> New.cs (same class/field, moved to a differently-named file) while ALSO changing the
+        // attribute argument on the same line as the field. Before the fix, the safety net only considered
+        // the INTERSECTION of base and target paths, so a moved file's changes were entirely invisible.
+        var baseSource = "namespace Fixture.X3;\npublic class X3Target\n{\n    [Range(0, 10)] private int speed;\n}\n";
+        var targetSource = "namespace Fixture.X3;\npublic class X3Target\n{\n    [Range(0, 99)] private int speed;\n}\n";
+
+        var baseSpeed = AdHocSymbol(baseSource, "Old.cs", "x3-project", "field", "speed", "Fixture.X3.X3Target.speed", "private int speed", "speed");
+        var targetSpeed = AdHocSymbol(targetSource, "New.cs", "x3-project", "field", "speed", "Fixture.X3.X3Target.speed", "private int speed", "speed");
+        Assert(baseSpeed.SymbolId == targetSpeed.SymbolId, "Sanity: moving files does not change a symbol's deterministic identity.");
+
+        var baseSnapshot = BuildSnapshot("x3-base", "Old.cs", baseSource, [baseSpeed]);
+        var targetSnapshot = BuildSnapshot("x3-target", "New.cs", targetSource, [targetSpeed]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "x3-base", "x3-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count != 0,
+            "X3: an attribute-only edit on a field whose file was also renamed/moved must not be silently dropped just because the safety net only looked at same-named paths.");
+        var change = result.Changes.Single();
+        Assert(change.BaseSymbol?.SymbolId == baseSpeed.SymbolId && change.TargetSymbol?.SymbolId == baseSpeed.SymbolId,
+            "The change must still be attributed to speed even though its file moved.");
+    }
+
+    private static void BlankLineDeletionBetweenMembersIsNotReportedAsContainerChange()
+    {
+        var baseSource = string.Join("\n",
+            "namespace Fixture.X4;", "public class X4BlankTarget", "{", "    public static int A() => 1;", "",
+            "    public static int B() => 1;", "}", string.Empty);
+        var targetSource = string.Join("\n",
+            "namespace Fixture.X4;", "public class X4BlankTarget", "{", "    public static int A() => 1;",
+            "    public static int B() => 1;", "}", string.Empty);
+
+        var containerBase = AdHocSymbol(baseSource, "X4Blank.cs", "x4-project", "class", "X4BlankTarget", "Fixture.X4.X4BlankTarget", "public class X4BlankTarget",
+            "public class X4BlankTarget\n{\n    public static int A() => 1;\n\n    public static int B() => 1;\n}");
+        var containerTarget = AdHocSymbol(targetSource, "X4Blank.cs", "x4-project", "class", "X4BlankTarget", "Fixture.X4.X4BlankTarget", "public class X4BlankTarget",
+            "public class X4BlankTarget\n{\n    public static int A() => 1;\n    public static int B() => 1;\n}");
+        Assert(containerBase.SymbolId == containerTarget.SymbolId, "Sanity: container identity stable.");
+        var containerId = containerBase.SymbolId;
+
+        SymbolContract Member(string source, string name) => AdHocSymbol(
+            source, "X4Blank.cs", "x4-project", "method", name, $"Fixture.X4.X4BlankTarget.{name}", $"public static int {name}()", $"public static int {name}() => 1;", containerId);
+
+        var baseSnapshot = BuildSnapshot("x4-blank-base", "X4Blank.cs", baseSource, [containerBase, Member(baseSource, "A"), Member(baseSource, "B")]);
+        var targetSnapshot = BuildSnapshot("x4-blank-target", "X4Blank.cs", targetSource, [containerTarget, Member(targetSource, "A"), Member(targetSource, "B")]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "x4-blank-base", "x4-blank-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(!result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && (change.BaseSymbol?.SymbolId == containerId || change.TargetSymbol?.SymbolId == containerId)),
+            "X4: deleting a single blank line between members is a whitespace-only change to the container's self text and must not be reported as body_changed (U2 rule 3).");
+        Assert(!result.Changes.Any(change => change.BaseSymbol?.Name is "A" or "B" || change.TargetSymbol?.Name is "A" or "B"),
+            "Members whose own declarations did not change must not appear either.");
+    }
+
+    private static void FieldReindentationIsReportedAsFormattingOnly()
+    {
+        var baseSource = "namespace Fixture.X4;\npublic class X4ReindentTarget\n{\n    private int X;\n}\n";
+        var targetSource = "namespace Fixture.X4;\npublic class X4ReindentTarget\n{\n        private int X;\n}\n";
+
+        var baseField = AdHocSymbol(baseSource, "X4Reindent.cs", "x4-reindent-project", "field", "X", "Fixture.X4.X4ReindentTarget.X", "private int X", "private int X;");
+        var targetField = AdHocSymbol(targetSource, "X4Reindent.cs", "x4-reindent-project", "field", "X", "Fixture.X4.X4ReindentTarget.X", "private int X", "private int X;");
+        Assert(baseField.SymbolId == targetField.SymbolId, "Sanity: identity unaffected by indentation.");
+
+        var baseSnapshot = BuildSnapshot("x4-reindent-base", "X4Reindent.cs", baseSource, [baseField]);
+        var targetSnapshot = BuildSnapshot("x4-reindent-target", "X4Reindent.cs", targetSource, [targetField]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "x4-reindent-base", "x4-reindent-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count != 0, "The indentation change must still be reported (not silently dropped).");
+        var change = result.Changes.Single();
+        Assert(change.Kind == DiffKind.FormattingOnly,
+            $"X4: a whitespace-only (indentation) change must be classified as formatting_only, not body_changed. Actual: {change.Kind}.");
+        Assert(change.BaseSymbol?.SymbolId == baseField.SymbolId, "Must be attributed to the field on that line.");
+        Assert(change.Contract.Evidence.Single().TextMode == DiffEvidenceTextMode.FingerprintOnly,
+            "Formatting-only safety-net evidence must be fingerprint-only, not a rendered hunk.");
+    }
+
+    // --- Mandatory invariant property test (X1-X4 confirmation) -------------------------------------------
+
+    private sealed record PropertyTemplateState(
+        int AttrValue, string Comment, int AValue, int BValue, int MethodValue,
+        IReadOnlyList<string> EnumMembers, bool EnumOneLine, bool BlankLineAfterFieldB,
+        int Line3IndentSpaces, int Line4IndentSpaces, string FileName);
+
+    private sealed record PropertyEdit(string Name, bool WhitespaceOnly, Func<PropertyTemplateState, Random, PropertyTemplateState> Apply);
+
+    private static void ChangedLineCoverageSafetyNetPropertyTest()
+    {
+        const int seed = 20260924;
+        const int iterations = 520;
+        var rng = new Random(seed);
+        var edits = BuildPropertyEditCatalog();
+        var failures = new List<string>();
+
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), $"cv-safety-net-property-{Guid.NewGuid():N}");
+        var workspace = Path.Combine(temporaryRoot, "workspace");
+        var store = Path.Combine(temporaryRoot, "store");
+        Directory.CreateDirectory(workspace);
+        File.WriteAllText(Path.Combine(workspace, "Property.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup></Project>");
+
+        try
+        {
+            for (var iteration = 0; iteration < iterations; iteration++)
+            {
+                var initial = new PropertyTemplateState(
+                    AttrValue: rng.Next(0, 100),
+                    Comment: $"units-{rng.Next(0, 100)}",
+                    AValue: rng.Next(0, 100),
+                    BValue: rng.Next(0, 100),
+                    MethodValue: rng.Next(0, 100),
+                    EnumMembers: rng.Next(2) == 0 ? ["Red", "Green"] : ["Red", "Green", "Blue"],
+                    EnumOneLine: rng.Next(2) == 0,
+                    BlankLineAfterFieldB: true,
+                    Line3IndentSpaces: 4,
+                    Line4IndentSpaces: 4,
+                    FileName: "Property.cs");
+
+                var editCount = rng.Next(1, 4);
+                var chosenEdits = new List<PropertyEdit>();
+                for (var e = 0; e < editCount; e++)
+                {
+                    chosenEdits.Add(edits[rng.Next(edits.Count)]);
+                }
+
+                var target = initial;
+                foreach (var edit in chosenEdits)
+                {
+                    target = edit.Apply(target, rng);
+                }
+
+                var allWhitespaceOnly = chosenEdits.All(edit => edit.WhitespaceOnly);
+                var editNames = string.Join(",", chosenEdits.Select(edit => edit.Name));
+
+                try
+                {
+                    RunPropertyIteration(workspace, store, initial, target, allWhitespaceOnly);
+                }
+                catch (Exception exception)
+                {
+                    failures.Add($"iteration={iteration} seed={seed} edits=[{editNames}]: {exception.Message}");
+                    if (failures.Count >= 5)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(temporaryRoot))
+            {
+                Directory.Delete(temporaryRoot, recursive: true);
+            }
+        }
+
+        Assert(failures.Count == 0,
+            $"Changed-line coverage safety net property test found {failures.Count} counterexample(s) out of {iterations} deterministic (seed={seed}) iterations:\n{string.Join("\n", failures)}");
+    }
+
+    private static List<PropertyEdit> BuildPropertyEditCatalog() =>
+    [
+        new PropertyEdit("change-attr-value", false, (s, rng) => s with { AttrValue = rng.Next(0, 1000) }),
+        new PropertyEdit("change-comment", false, (s, rng) => s with { Comment = $"units-{rng.Next(0, 1000)}" }),
+        new PropertyEdit("change-field-a-value", false, (s, rng) => s with { AValue = rng.Next(0, 1000) }),
+        new PropertyEdit("change-method-body", false, (s, rng) => s with { MethodValue = rng.Next(0, 1000) }),
+        new PropertyEdit("add-enum-member", false, (s, rng) => s with { EnumMembers = [.. s.EnumMembers, $"Member{rng.Next(1000, 9999)}"] }),
+        new PropertyEdit("remove-enum-member", false, (s, _) => s.EnumMembers.Count > 1 ? s with { EnumMembers = s.EnumMembers.Take(s.EnumMembers.Count - 1).ToArray() } : s),
+        new PropertyEdit("delete-blank-line", true, (s, _) => s with { BlankLineAfterFieldB = false }),
+        new PropertyEdit("add-blank-line", true, (s, _) => s with { BlankLineAfterFieldB = true }),
+        new PropertyEdit("reindent-line3", true, (s, _) => s with { Line3IndentSpaces = s.Line3IndentSpaces == 4 ? 8 : 4 }),
+        new PropertyEdit("reindent-line4", true, (s, _) => s with { Line4IndentSpaces = s.Line4IndentSpaces == 4 ? 8 : 4 }),
+        new PropertyEdit("rename-file", true, (s, rng) => s with { FileName = $"Renamed{rng.Next(0, 100000)}.cs" }),
+    ];
+
+    private static string RenderPropertyTemplate(PropertyTemplateState state)
+    {
+        var indent3 = new string(' ', state.Line3IndentSpaces);
+        var indent4 = new string(' ', state.Line4IndentSpaces);
+        var lines = new List<string>
+        {
+            "namespace Fixture.Property;",
+            "public class PropertyTarget",
+            "{",
+            $"{indent3}[Range(0, {state.AttrValue})] private int speed; // {state.Comment}",
+            $"{indent4}private int a = {state.AValue}, b = {state.BValue};",
+        };
+        if (state.BlankLineAfterFieldB)
+        {
+            lines.Add(string.Empty);
+        }
+        lines.Add("    public static int Compute()");
+        lines.Add("    {");
+        lines.Add($"        return {state.MethodValue};");
+        lines.Add("    }");
+        lines.Add("}");
+        lines.Add(string.Empty);
+        if (state.EnumOneLine)
+        {
+            lines.Add($"public enum ColorProperty {{ {string.Join(", ", state.EnumMembers)} }}");
+        }
+        else
+        {
+            lines.Add("public enum ColorProperty");
+            lines.Add("{");
+            for (var i = 0; i < state.EnumMembers.Count; i++)
+            {
+                lines.Add($"    {state.EnumMembers[i]}{(i < state.EnumMembers.Count - 1 ? "," : string.Empty)}");
+            }
+            lines.Add("}");
+        }
+        lines.Add(string.Empty);
+        return string.Join("\n", lines);
+    }
+
+    private static void RunPropertyIteration(string workspace, string store, PropertyTemplateState initial, PropertyTemplateState target, bool allWhitespaceOnly)
+    {
+        foreach (var existing in Directory.GetFiles(workspace, "*.cs"))
+        {
+            File.Delete(existing);
+        }
+
+        var baseSourceText = RenderPropertyTemplate(initial);
+        File.WriteAllText(Path.Combine(workspace, initial.FileName), baseSourceText, new UTF8Encoding(false));
+        var baseBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(workspace, store));
+        var baseSnapshot = new SymbolDiffSnapshot(
+            $"prop-base-{Guid.NewGuid():N}", baseBuild.Manifest.InputFingerprint, DateTimeOffset.UtcNow, baseBuild.Manifest.Coverage,
+            baseBuild.Symbols, ReadSourceDocuments(workspace, baseBuild.Manifest), []);
+
+        if (!string.Equals(initial.FileName, target.FileName, StringComparison.Ordinal))
+        {
+            File.Delete(Path.Combine(workspace, initial.FileName));
+        }
+
+        var targetSourceText = RenderPropertyTemplate(target);
+        File.WriteAllText(Path.Combine(workspace, target.FileName), targetSourceText, new UTF8Encoding(false));
+        var targetBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(workspace, store));
+        var targetSnapshot = new SymbolDiffSnapshot(
+            $"prop-target-{Guid.NewGuid():N}", targetBuild.Manifest.InputFingerprint, DateTimeOffset.UtcNow, targetBuild.Manifest.Coverage,
+            targetBuild.Symbols, ReadSourceDocuments(workspace, targetBuild.Manifest), []);
+
+        var baseline = new BaselineContract(
+            BaselineKind.Vcs, "git", baseSnapshot.SnapshotId, targetSnapshot.SnapshotId, null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        result.Contract.Validate();
+
+        VerifyChangedLineCoverage(result, initial.FileName, baseSourceText, target.FileName, targetSourceText);
+
+        if (allWhitespaceOnly)
+        {
+            Assert(!result.Changes.Any(change => change.Kind == DiffKind.BodyChanged),
+                "Whitespace-only edits alone must never produce a body_changed entry.");
+        }
+    }
+
+    private static IReadOnlyList<DiffSourceDocument> ReadSourceDocuments(string workspace, ManifestContract manifest) =>
+        manifest.Files.Select(file =>
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(workspace, file.Path));
+            return new DiffSourceDocument(file.Path, bytes, file.Encoding, file.ContentHash);
+        }).ToArray();
+
+    /// <summary>
+    /// Invariant 1 (X1-X4 confirmation): every SUBSTANTIVE line-level change between the base and target file
+    /// text is covered by some reported entry's declaration range on at least one side, or the file carries
+    /// the diff-unattributed-change-budget-exceeded limitation. Uses an independent (non-Myers, DP-based LCS)
+    /// line diff so this check does not share an implementation with the code under test, but deliberately
+    /// mirrors the production ATTRIBUTION semantics it is verifying (X1's per-pair positional delete/insert
+    /// pairing within each changed run; "covered on either side is sufficient", not both):
+    ///
+    /// - A whitespace-only pair (or a lone blank line, added or removed) is exempt from the coverage
+    ///   requirement entirely - production may legitimately suppress it outright (a container's own
+    ///   self-text ignores whitespace-only differences, X4/U2 rule 3) or report it as formatting_only; either
+    ///   is acceptable and neither is required by this invariant.
+    /// - A substantive pair (or lone line) only needs coverage on ONE side, not both: e.g. appending a new
+    ///   enum member on a line shared with unrelated existing members is already fully explained by that
+    ///   member's own Added entry (target side only) - the untouched siblings on the same line correctly get
+    ///   no entry of their own (M2), so the base side of that same line is never independently covered, and
+    ///   must not be required to be.
+    /// </summary>
+    private static void VerifyChangedLineCoverage(SymbolDiffResult result, string basePath, string baseSourceText, string targetPath, string targetSourceText)
+    {
+        var baseLines = baseSourceText.Split('\n');
+        var targetLines = targetSourceText.Split('\n');
+        var edits = IndependentLineDiff(baseLines, targetLines);
+
+        var hasBudgetLimitation = result.Contract.Limitations.Contains("diff-unattributed-change-budget-exceeded", StringComparer.Ordinal);
+
+        var coveredBase = new HashSet<int>();
+        var coveredTarget = new HashSet<int>();
+        foreach (var entry in result.Contract.Entries)
+        {
+            foreach (var location in entry.BaseLocations.Where(item => string.Equals(item.Path, basePath, StringComparison.Ordinal)))
+            {
+                for (var line = location.Span.StartLine; line <= location.Span.EndLine; line++)
+                {
+                    coveredBase.Add(line);
+                }
+            }
+
+            foreach (var location in entry.TargetLocations.Where(item => string.Equals(item.Path, targetPath, StringComparison.Ordinal)))
+            {
+                for (var line = location.Span.StartLine; line <= location.Span.EndLine; line++)
+                {
+                    coveredTarget.Add(line);
+                }
+            }
+        }
+
+        var i = 0;
+        while (i < edits.Count)
+        {
+            if (edits[i].Kind == IndependentLineEditKind.Equal)
+            {
+                i++;
+                continue;
+            }
+
+            var start = i;
+            while (i < edits.Count && edits[i].Kind != IndependentLineEditKind.Equal)
+            {
+                i++;
+            }
+
+            var deletes = new List<IndependentLineEdit>();
+            var inserts = new List<IndependentLineEdit>();
+            for (var j = start; j < i; j++)
+            {
+                (edits[j].Kind == IndependentLineEditKind.Delete ? deletes : inserts).Add(edits[j]);
+            }
+
+            var pairCount = Math.Min(deletes.Count, inserts.Count);
+            for (var k = 0; k < pairCount; k++)
+            {
+                VerifyPair(deletes[k], inserts[k]);
+            }
+            for (var k = pairCount; k < deletes.Count; k++)
+            {
+                VerifyPair(deletes[k], null);
+            }
+            for (var k = pairCount; k < inserts.Count; k++)
+            {
+                VerifyPair(null, inserts[k]);
+            }
+        }
+
+        void VerifyPair(IndependentLineEdit? delete, IndependentLineEdit? insert)
+        {
+            var baseLine = delete is { } d ? d.BaseIndex + 1 : (int?)null;
+            var targetLine = insert is { } ins ? ins.TargetIndex + 1 : (int?)null;
+            var baseText = delete is { } dt ? baseLines[dt.BaseIndex] : null;
+            var targetText = insert is { } it ? targetLines[it.TargetIndex] : null;
+
+            var whitespaceOnly = baseText is not null && targetText is not null
+                ? PropertyNormalizeWhitespace(baseText) == PropertyNormalizeWhitespace(targetText)
+                : PropertyNormalizeWhitespace(baseText ?? targetText ?? string.Empty).Length == 0;
+            if (whitespaceOnly)
+            {
+                return;
+            }
+
+            var covered = (baseLine is int bl && coveredBase.Contains(bl)) || (targetLine is int tl && coveredTarget.Contains(tl));
+            Assert(covered || hasBudgetLimitation,
+                $"Changed line not covered by any entry and no budget limitation is present. " +
+                $"BaseLine={baseLine?.ToString() ?? "-"} ('{baseText}'), TargetLine={targetLine?.ToString() ?? "-"} ('{targetText}').");
+        }
+    }
+
+    private static string PropertyNormalizeWhitespace(string value) => string.Concat(value.Where(character => !char.IsWhiteSpace(character)));
+
+    private enum IndependentLineEditKind { Equal, Delete, Insert }
+
+    private sealed record IndependentLineEdit(IndependentLineEditKind Kind, int BaseIndex, int TargetIndex);
+
+    /// <summary>Simple O(N*M) LCS-based line diff, deliberately independent of the production Myers
+    /// implementation under test. Returns an ordered edit script (equal/delete/insert) covering every line
+    /// of both files, so callers can group changes into runs and pair deletes/inserts positionally exactly
+    /// as the production safety net does (X1), without sharing any code with it.</summary>
+    private static List<IndependentLineEdit> IndependentLineDiff(IReadOnlyList<string> baseLines, IReadOnlyList<string> targetLines)
+    {
+        var n = baseLines.Count;
+        var m = targetLines.Count;
+        var dp = new int[n + 1, m + 1];
+        for (var i = n - 1; i >= 0; i--)
+        {
+            for (var j = m - 1; j >= 0; j--)
+            {
+                dp[i, j] = baseLines[i] == targetLines[j] ? dp[i + 1, j + 1] + 1 : Math.Max(dp[i + 1, j], dp[i, j + 1]);
+            }
+        }
+
+        var result = new List<IndependentLineEdit>();
+        var a = 0;
+        var b = 0;
+        while (a < n && b < m)
+        {
+            if (baseLines[a] == targetLines[b])
+            {
+                result.Add(new IndependentLineEdit(IndependentLineEditKind.Equal, a, b));
+                a++;
+                b++;
+            }
+            else if (dp[a + 1, b] >= dp[a, b + 1])
+            {
+                result.Add(new IndependentLineEdit(IndependentLineEditKind.Delete, a, -1));
+                a++;
+            }
+            else
+            {
+                result.Add(new IndependentLineEdit(IndependentLineEditKind.Insert, -1, b));
+                b++;
+            }
+        }
+        while (a < n)
+        {
+            result.Add(new IndependentLineEdit(IndependentLineEditKind.Delete, a, -1));
+            a++;
+        }
+        while (b < m)
+        {
+            result.Add(new IndependentLineEdit(IndependentLineEditKind.Insert, -1, b));
+            b++;
+        }
+
+        return result;
     }
 
     // -------------------------------------------------------------------------------------------------------
