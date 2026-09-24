@@ -13,7 +13,7 @@
 
 ## 실행 상태와 gate
 
-`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐다. TASK-018·019는 아래 재개 조건이 남은 `Blocked` 상태이고, TASK-020은 종결(Won't do), TASK-021은 삭제 없는 측정·정책 제안까지는 착수 가능하며 GC 구현과 자동 삭제 활성화는 수치 확정 후로 `Blocked`다. TASK-022·023·025·032는 완료됐고 TASK-024·026이 `Ready`다. 세부 순서는 아래 후속 실행 계획을 따른다.
+`Complete`는 산출물과 검증이 끝난 작업, `Ready`는 현재 실행 가능한 작업, `Blocked`는 외부 입력·새 결정이 필요한 작업이다. TASK-001~017은 완료됐다. TASK-018·019는 아래 재개 조건이 남은 `Blocked` 상태이고, TASK-020은 종결(Won't do), TASK-021은 삭제 없는 측정·정책 제안까지는 착수 가능하며 GC 구현과 자동 삭제 활성화는 수치 확정 후로 `Blocked`다. TASK-022~025·032는 완료됐고 TASK-026·042가 진행 중이며 TASK-027·031이 `Ready`다. 세부 순서는 아래 후속 실행 계획을 따른다.
 
 | Gate | 결과·조건 | 영향 |
 |---|---|---|
@@ -887,7 +887,7 @@ TASK-023 후보에서 medium/large corpus를 선정하고 NAV·DIFF task 확장,
 TASK-023
 
 ### Status
-Ready — TASK-023 완료
+Complete — 2026-09-23 G2 사용자 승인 (ADR 005 Accepted)
 
 ## TASK-025 — source-byte 반환 계약 개선 설계
 
@@ -945,7 +945,7 @@ locked restore, Release build, Core/CSharp/CLI/Integration 테스트, fixture ve
 TASK-025 설계 확인
 
 ### Status
-Ready — TASK-025 설계 승인
+진행 중 — 구현 `dd9470f`, TASK-028 지적(H1·M1~M4·L1·L2·L6) 수정 중
 
 ## TASK-027 — 새 corpus fixture와 독립 정답
 
@@ -971,10 +971,10 @@ TASK-024, G2
 | Reason | 정답 오류는 측정 전체를 무효로 만들므로 구현과 분리된 검증 역할이 맡는다. |
 
 ### Blocked By
-G2 (ADR 005 승인)
+없음 — G2 승인 (2026-09-23)
 
 ### Status
-Blocked — TASK-024·G2 선행
+Ready — G2 승인
 
 ## TASK-028 — 반환 계약 구현 코드 리뷰
 
@@ -1003,7 +1003,7 @@ stale 원문 오반환·조용한 partial 0 유지, coverage·freshness 표시, 
 TASK-026
 
 ### Status
-Blocked — TASK-026 선행
+진행 중 — 1차 리뷰 완료(High 1·Medium 4·Low 6), 수정 확인 리뷰 대기
 
 ## TASK-029 — source-byte gate 재측정
 
@@ -1029,10 +1029,10 @@ run manifest와 schema 집계가 재현 가능하고, 메인 에이전트가 ver
 | Reason | Go/No-Go 근거가 되는 측정의 정확성 판단이다. |
 
 ### Blocked By
-TASK-027, TASK-028
+TASK-027, TASK-028, TASK-042
 
 ### Status
-Blocked — TASK-026~028 선행
+Blocked — TASK-026~028·042 선행
 
 ## TASK-030 — 재측정 결과 ADR 006
 
@@ -1090,7 +1090,7 @@ TASK-023의 공개 corpus에서 build/update를 반복해 generation 크기·증
 TASK-023
 
 ### Status
-Blocked — TASK-023 선행
+Ready — 착수는 TASK-026·042 병합 뒤(측정 대상 코드 확정과 게시 실패 제거)
 
 ## TASK-032 — config 시스템과 GC 설계
 
@@ -1381,6 +1381,64 @@ plan·architecture·design·user-confirm의 상태를 최종 결과로 갱신하
 
 ### Status
 Blocked — 앞 단계 선행
+
+## TASK-042 — generation pointer 게시 간헐 실패 수정
+
+### Goal
+Windows에서 `cv-build`·`cv-update`가 간헐적으로 실패하는 pointer 게시 문제를 원인부터 고친다.
+
+### Dependencies
+없음 — master부터 있던 결함(2026-09-23 발견)
+
+### Scope
+외부 on-access 필터가 방금 교체한 `current.json`을 잠깐 열어 `File.Replace`가 오류 1175·32로 실패한다. C: `%TEMP%`에서 재현되며 변경 없는 master에서도 Integration 러너가 약 20% 실패했다. 오류 코드를 한정한 유한 재시도를 넣고 reader는 Delete 공유로 연다. `File.Replace`가 교체 중 pointer 이름을 잠깐 없애 동시 reader가 generation을 찾지 못하는 결함도 원자적 overwrite rename으로 없앤다. `SessionSnapshotStore`의 같은 위험에도 재시도를 적용한다.
+
+### Files
+`src/CodeVirtualize.Core/Storage/` / `src/CodeVirtualize.Core/Snapshots/SessionSnapshotStore.cs` / `tests/Integration.Tests/Storage/` / `docs/decisions/004-cache-policy.md`(28행 구현 설명)
+
+### Validation
+Integration 러너를 20회 이상 반복해 실패 0, 동시 reader가 pointer 부재를 한 번도 보지 않음, 원자성·crash 의미와 fault injection 지점 보존.
+
+| 배정 | 값 |
+|---|---|
+| Agent | `developer` |
+| Model | opus |
+| Reason | 원인 규명이 필요한 동시성·파일시스템 디버깅이다. |
+
+### Blocked By
+없음
+
+### Status
+진행 중 — 1차 수정(오류 한정 재시도) 완료, 원자적 rename 전환 중
+
+## TASK-043 — TASK-028 Low 지적 후속
+
+### Goal
+재측정 결과에 영향이 작은 diff·lazy resolve 세부 결함을 정리한다.
+
+### Dependencies
+TASK-026 병합
+
+### Scope
+L3 header_only에도 entry 예산 적용, 예산 소진 뒤 항목별 판단, 큰 교체 hunk를 trim할 때 양쪽 보존. L4 생략 줄 수를 선언별로 계산, container에서 member만 바뀐 선언 쌍의 잡음 evidence 제거. L5 `DiffSourceResolver`가 필요한 문서만 decode, `Baseline.InputFingerprint` 검증, 도달 불가 분기 제거, `GenerationId`에 SnapshotId를 넣는 문제의 문서화 또는 별도 필드.
+
+### Files
+`src/CodeVirtualize.Core/Diff/` / `tests/Integration.Tests/Diff/` / `docs/contracts/cli.md`
+
+### Validation
+기존 전체 러너가 통과하고 지적마다 회귀 테스트가 있다.
+
+| 배정 | 값 |
+|---|---|
+| Agent | `developer` |
+| Model | sonnet |
+| Reason | 리뷰로 명세된 결함의 수정이다. |
+
+### Blocked By
+TASK-026 병합. `cv_diff`를 노출하기 전에는 반드시 끝낸다.
+
+### Status
+Blocked — TASK-026 선행
 
 ## 요구사항과 결정 추적
 
