@@ -107,6 +107,12 @@ internal static class DiffTests
         PartialDeclarationsPairByPathNotIndex();
         EolOnlyChangeIsReportedAsFormattingOnly();
         PureInsertionUsesPrecedingLineAnchor();
+        AttributeOnSameLineAsFieldIsNotSilentlyDropped();
+        TrailingCommentOnSameLineAsFieldIsNotSilentlyDropped();
+        AttributeOnSeparateLineIsAttributedToCoveringSymbol();
+        FileLineDiffBudgetExceededWithNoEntriesIsExplicit();
+        RealAnalyzerAttributeOnSameLineEndToEnd();
+        ContainerRenameCandidateSurvivesMemberBodyEdit();
     }
 
     /// <summary>
@@ -637,6 +643,218 @@ internal static class DiffTests
         Assert(evidence.TextualHunk!.Contains("@@ -6,0 +", StringComparison.Ordinal),
             $"A pure insertion's base anchor must be the preceding base line (6), not 0.\n{evidence.TextualHunk}");
     }
+
+    // --- TASK-028 confirmation review fixes (N1, N2) ----------------------------------------------------
+
+    private static void AttributeOnSameLineAsFieldIsNotSilentlyDropped()
+    {
+        // N1 repro 1: the field's own indexed span (VariableDeclaratorSyntax) is just "speed" - the leading
+        // attribute on the same physical line is outside it, and there is no container symbol here to catch
+        // it via self text either. Before the changed-line safety net, this edit produced zero entries even
+        // though the file's digest genuinely changed.
+        var baseSource = "namespace Fixture.N1;\npublic class N1Target\n{\n    [Range(0, 10)] private int speed;\n}\n";
+        var targetSource = "namespace Fixture.N1;\npublic class N1Target\n{\n    [Range(0, 99)] private int speed;\n}\n";
+
+        var baseField = AdHocSymbol(baseSource, "N1.cs", "n1-project", "field", "speed", "Fixture.N1.N1Target.speed", "private int speed", "speed");
+        var targetField = AdHocSymbol(targetSource, "N1.cs", "n1-project", "field", "speed", "Fixture.N1.N1Target.speed", "private int speed", "speed");
+        Assert(baseField.SymbolId == targetField.SymbolId, "Sanity: only the attribute argument changes, so the field's identity must be stable.");
+
+        var baseSnapshot = BuildSnapshot("n1-attr-base", "N1.cs", baseSource, [baseField]);
+        var targetSnapshot = BuildSnapshot("n1-attr-target", "N1.cs", targetSource, [targetField]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "n1-attr-base", "n1-attr-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count != 0,
+            "N1 repro 1: an attribute-argument-only edit on the same line as a field must not silently vanish (0 entries) just because the field's own declarator span is unchanged.");
+        var change = result.Changes.Single();
+        Assert(change.BaseSymbol?.SymbolId == baseField.SymbolId && change.TargetSymbol?.SymbolId == baseField.SymbolId,
+            "The attribute change must be attributed to the field on that line (the only indexed symbol whose range covers it).");
+        var evidence = change.Contract.Evidence.Single();
+        Assert(evidence.TextMode == DiffEvidenceTextMode.LineHunks && evidence.TextualHunk!.Contains("Range(0, 99)", StringComparison.Ordinal),
+            "The safety-net entry's evidence must show the actual changed text, not just a bare fingerprint.");
+        Assert(result.Contract.Limitations.Contains("diff-span-adjacent-line-attributed", StringComparer.Ordinal),
+            "The diff must flag that this entry came from the changed-line safety net, not an ordinary per-symbol comparison.");
+    }
+
+    private static void TrailingCommentOnSameLineAsFieldIsNotSilentlyDropped()
+    {
+        // N1 repro 2: same underlying cause, but with a trailing same-line comment instead of a leading
+        // attribute.
+        var baseSource = "namespace Fixture.N1;\npublic class N1TrailingTarget\n{\n    public int Reading; // units: ms\n}\n";
+        var targetSource = "namespace Fixture.N1;\npublic class N1TrailingTarget\n{\n    public int Reading; // units: s\n}\n";
+
+        var baseField = AdHocSymbol(baseSource, "N1Trailing.cs", "n1-trailing-project", "field", "Reading", "Fixture.N1.N1TrailingTarget.Reading", "public int Reading", "Reading");
+        var targetField = AdHocSymbol(targetSource, "N1Trailing.cs", "n1-trailing-project", "field", "Reading", "Fixture.N1.N1TrailingTarget.Reading", "public int Reading", "Reading");
+        Assert(baseField.SymbolId == targetField.SymbolId, "Sanity: identity must be stable across a trailing-comment-only edit.");
+
+        var baseSnapshot = BuildSnapshot("n1-trail-base", "N1Trailing.cs", baseSource, [baseField]);
+        var targetSnapshot = BuildSnapshot("n1-trail-target", "N1Trailing.cs", targetSource, [targetField]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "n1-trail-base", "n1-trail-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count != 0, "N1 repro 2: a trailing-comment-only edit on a field's own line must not silently vanish.");
+        var change = result.Changes.Single();
+        Assert(change.BaseSymbol?.SymbolId == baseField.SymbolId, "The trailing comment must be attributed to the field on the same line.");
+        Assert(change.Contract.Evidence.Single().TextualHunk!.Contains("units: s", StringComparison.Ordinal),
+            "The evidence must show the new comment text.");
+    }
+
+    private static void AttributeOnSeparateLineIsAttributedToCoveringSymbol()
+    {
+        // Recorded outcome: unlike the same-line cases above, an attribute on its OWN line does not fall
+        // within the field's own (single-line) span, but it DOES fall within the containing class's self
+        // text range (member line-exclusion only removes the field's own line, not the attribute's line
+        // above it). So this case is already caught by the pre-existing container self-text mechanism
+        // (M3), and is attributed to the class, not to the field itself.
+        var baseSource = "namespace Fixture.N1;\npublic class N1SeparateTarget\n{\n    [Range(0, 10)]\n    private int speed;\n}\n";
+        var targetSource = "namespace Fixture.N1;\npublic class N1SeparateTarget\n{\n    [Range(0, 99)]\n    private int speed;\n}\n";
+
+        var containerBase = AdHocSymbol(baseSource, "N1Separate.cs", "n1-separate-project", "class", "N1SeparateTarget", "Fixture.N1.N1SeparateTarget", "public class N1SeparateTarget",
+            "public class N1SeparateTarget\n{\n    [Range(0, 10)]\n    private int speed;\n}");
+        var containerTarget = AdHocSymbol(targetSource, "N1Separate.cs", "n1-separate-project", "class", "N1SeparateTarget", "Fixture.N1.N1SeparateTarget", "public class N1SeparateTarget",
+            "public class N1SeparateTarget\n{\n    [Range(0, 99)]\n    private int speed;\n}");
+        Assert(containerBase.SymbolId == containerTarget.SymbolId, "Sanity: container identity must be stable.");
+        var containerId = containerBase.SymbolId;
+
+        var baseField = AdHocSymbol(baseSource, "N1Separate.cs", "n1-separate-project", "field", "speed", "Fixture.N1.N1SeparateTarget.speed", "private int speed", "speed", containerId);
+        var targetField = AdHocSymbol(targetSource, "N1Separate.cs", "n1-separate-project", "field", "speed", "Fixture.N1.N1SeparateTarget.speed", "private int speed", "speed", containerId);
+
+        var baseSnapshot = BuildSnapshot("n1-sep-base", "N1Separate.cs", baseSource, [containerBase, baseField]);
+        var targetSnapshot = BuildSnapshot("n1-sep-target", "N1Separate.cs", targetSource, [containerTarget, targetField]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "n1-sep-base", "n1-sep-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count != 0,
+            "An attribute on its own separate line (not sharing the decorated field's line) must not be silently dropped either.");
+        var change = result.Changes.Single();
+        Assert(change.BaseSymbol?.SymbolId == containerId && change.TargetSymbol?.SymbolId == containerId,
+            $"Recorded attribution: a leading-attribute-only edit on its own separate line is attributed to the containing class's self text (M3's existing mechanism), not to the field itself. Actual: base={change.BaseSymbol?.Name}, target={change.TargetSymbol?.Name}.");
+    }
+
+    private static void FileLineDiffBudgetExceededWithNoEntriesIsExplicit()
+    {
+        const int lineCount = 5000;
+        var baseBody = string.Join("\n", Enumerable.Range(0, lineCount).Select(i => $"// base-only-safety-net-{i}-aaaaaaaaaa"));
+        var targetBody = string.Join("\n", Enumerable.Range(0, lineCount).Select(i => $"// target-only-safety-net-{i}-bbbbbbbbbb"));
+        var baseSource = baseBody + "\n";
+        var targetSource = targetBody + "\n";
+        var baseBytes = new UTF8Encoding(false).GetBytes(baseSource);
+        var targetBytes = new UTF8Encoding(false).GetBytes(targetSource);
+
+        // No symbols at all reference this file, so no ordinary per-symbol entry will ever mention it - the
+        // safety net's own whole-file diff is the only thing that could say anything about it, and here that
+        // diff itself exceeds the line-diff budget (same near-total-rewrite shape as M1's regression test).
+        var baseSnapshot = new SymbolDiffSnapshot("n1-budget-base", HashUtf8Bytes(baseBytes), DateTimeOffset.UtcNow, Coverage(), [],
+            [new DiffSourceDocument("Untracked.cs", baseBytes, "utf-8", HashUtf8Bytes(baseBytes))], []);
+        var targetSnapshot = new SymbolDiffSnapshot("n1-budget-target", HashUtf8Bytes(targetBytes), DateTimeOffset.UtcNow, Coverage(), [],
+            [new DiffSourceDocument("Untracked.cs", targetBytes, "utf-8", HashUtf8Bytes(targetBytes))], []);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "n1-budget-base", "n1-budget-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count == 0, "Sanity: no symbols reference this file, so no ordinary entry exists for it.");
+        Assert(result.Contract.Limitations.Contains("diff-unattributed-change-budget-exceeded", StringComparer.Ordinal),
+            "When the whole-file line diff itself hits the edit-distance/trace budget and no entry already covers that file, this must be surfaced explicitly as a limitation, not a silently complete-looking empty diff.");
+        Assert(result.Contract.Coverage.Truncated && result.Contract.Coverage.Level == CoverageLevel.Partial,
+            "Coverage must also reflect the truncation explicitly, not just the limitation string.");
+    }
+
+    private static void RealAnalyzerAttributeOnSameLineEndToEnd()
+    {
+        using var fixture = new GitDiffFixture();
+        File.WriteAllText(Path.Combine(fixture.RepositoryPath, "N1RealAnalyzer.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup></Project>");
+        var provider = new GitBaselineProvider();
+        var service = new SymbolDiffService();
+        var store = Path.Combine(fixture.RootPath, "n1-real-analyzer-store");
+
+        string Source(int rangeMax) => string.Join("\n",
+            "namespace Fixture.N1RealAnalyzer;",
+            "public class N1RealAnalyzerTarget",
+            "{",
+            $"    [System.ComponentModel.DataAnnotations.Range(0, {rangeMax})] private int speed;",
+            "}",
+            string.Empty);
+
+        fixture.Write(Source(10));
+        fixture.CommitAndTag("n1-real-analyzer-base");
+        var baseBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(fixture.RepositoryPath, store));
+        var baseSpeed = baseBuild.Symbols.Single(symbol => symbol.Kind == "field" && symbol.Name == "speed");
+        Assert(baseSpeed.ContainerId is not null, "Sanity: the real analyzer must populate containerId for this field (it is a member of the class).");
+        var baseSnapshot = provider.CaptureRevision(new GitRevisionSnapshotRequest(
+            fixture.RepositoryPath, "n1-real-analyzer-base", baseBuild.Manifest.Coverage, baseBuild.Symbols, []));
+
+        // The attribute and the field are on the SAME physical line, so even the container's self text
+        // excludes this whole line (member-line exclusion is line-granular) - neither the leaf field nor the
+        // containing class's self-text entry can see this change without the safety net.
+        fixture.Write(Source(99));
+        var targetBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(fixture.RepositoryPath, store));
+        var targetSpeed = targetBuild.Symbols.Single(symbol => symbol.Kind == "field" && symbol.Name == "speed");
+        Assert(targetSpeed.SymbolId == baseSpeed.SymbolId, "Sanity: only the attribute argument changed, so the field's identity must be stable.");
+        var targetSnapshot = provider.CaptureWorkingTree(new GitWorkingTreeSnapshotRequest(
+            fixture.RepositoryPath, targetBuild.Manifest.Coverage, targetBuild.Symbols, []));
+
+        var result = service.Compare(new SymbolDiffRequest(provider.CreateBaseline(baseSnapshot, targetSnapshot), baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Count != 0,
+            "With symbols produced by the real C# analyzer (not a hand-built test double), a same-line attribute-only edit must not silently vanish end to end (N1), even though the field is inside an indexed container class.");
+        Assert(result.Changes.Any(change => change.BaseSymbol?.SymbolId == baseSpeed.SymbolId || change.TargetSymbol?.SymbolId == baseSpeed.SymbolId),
+            "The change must be attributed to the speed field specifically (the innermost symbol covering that line).");
+    }
+
+    private static void ContainerRenameCandidateSurvivesMemberBodyEdit()
+    {
+        // N2: renaming a container while ALSO editing a member's body must still match as a rename
+        // candidate. Before N2's fix, the container's rename "shape" used FullText (which embeds every
+        // member's full text), so the unrelated member body edit made the shapes differ and broke the
+        // match, reporting a spurious delete+add pair for the container instead of a rename candidate.
+        var baseSource = "namespace Fixture.N2;\npublic class Widget\n{\n    public int Value() => 1;\n}\n";
+        var targetSource = "namespace Fixture.N2;\npublic class Gadget\n{\n    public int Value() => 2;\n}\n";
+
+        var baseContainerIdentity = new SymbolIdentityContract("n2-project", AnalysisKey, "class", "Fixture.N2.Widget", 0, [], null);
+        var baseContainerId = DeterministicSymbolId.Create(baseContainerIdentity);
+        var targetContainerIdentity = new SymbolIdentityContract("n2-project", AnalysisKey, "class", "Fixture.N2.Gadget", 0, [], null);
+        var targetContainerId = DeterministicSymbolId.Create(targetContainerIdentity);
+        Assert(baseContainerId != targetContainerId, "Sanity: renaming the class changes its deterministic ID (the name is part of the qualified metadata name).");
+
+        var baseContainer = new SymbolContract(baseContainerId, "n2-project", AnalysisKey, "class", "Widget", "Fixture.N2.Widget", "public class Widget",
+            "public", null, 0, IdentityQuality.Semantic, [], null,
+            [new DeclarationContract(baseContainerId, FragmentLocation(baseSource, "N2.cs", "public class Widget\n{\n    public int Value() => 1;\n}"), DocumentKind.Source)], []);
+        var targetContainer = new SymbolContract(targetContainerId, "n2-project", AnalysisKey, "class", "Gadget", "Fixture.N2.Gadget", "public class Gadget",
+            "public", null, 0, IdentityQuality.Semantic, [], null,
+            [new DeclarationContract(targetContainerId, FragmentLocation(targetSource, "N2.cs", "public class Gadget\n{\n    public int Value() => 2;\n}"), DocumentKind.Source)], []);
+
+        var baseValueIdentity = new SymbolIdentityContract("n2-project", AnalysisKey, "method", "Fixture.N2.Widget.Value", 0, [], null);
+        var baseValueId = DeterministicSymbolId.Create(baseValueIdentity);
+        var targetValueIdentity = new SymbolIdentityContract("n2-project", AnalysisKey, "method", "Fixture.N2.Gadget.Value", 0, [], null);
+        var targetValueId = DeterministicSymbolId.Create(targetValueIdentity);
+
+        var baseValue = new SymbolContract(baseValueId, "n2-project", AnalysisKey, "method", "Value", "Fixture.N2.Widget.Value", "public int Value()",
+            "public", baseContainerId, 0, IdentityQuality.Semantic, [], null,
+            [new DeclarationContract(baseValueId, FragmentLocation(baseSource, "N2.cs", "public int Value() => 1;"), DocumentKind.Source)], []);
+        var targetValue = new SymbolContract(targetValueId, "n2-project", AnalysisKey, "method", "Value", "Fixture.N2.Gadget.Value", "public int Value()",
+            "public", targetContainerId, 0, IdentityQuality.Semantic, [], null,
+            [new DeclarationContract(targetValueId, FragmentLocation(targetSource, "N2.cs", "public int Value() => 2;"), DocumentKind.Source)], []);
+
+        var baseSnapshot = BuildSnapshot("n2-base", "N2.cs", baseSource, [baseContainer, baseValue]);
+        var targetSnapshot = BuildSnapshot("n2-target", "N2.cs", targetSource, [targetContainer, targetValue]);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "n2-base", "n2-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+
+        Assert(result.Changes.Any(change => change.Kind == DiffKind.RenameCandidate &&
+                change.BaseSymbol?.SymbolId == baseContainerId && change.TargetSymbol?.SymbolId == targetContainerId),
+            "N2: renaming a container while also editing a member's body must still be matched as a rename candidate for the container.");
+        Assert(!result.Changes.Any(change => change.Kind == DiffKind.Deleted && change.BaseSymbol?.SymbolId == baseContainerId),
+            "The renamed container must not also be reported as deleted.");
+        Assert(!result.Changes.Any(change => change.Kind == DiffKind.Added && change.TargetSymbol?.SymbolId == targetContainerId),
+            "The renamed container must not also be reported as added (i.e. not a spurious delete+add pair alongside the rename candidate).");
+    }
+
+    // -------------------------------------------------------------------------------------------------------
 
     private static SymbolContract AdHocSymbol(
         string source, string path, string projectIdentity, string kind, string name, string qualifiedName, string signature,

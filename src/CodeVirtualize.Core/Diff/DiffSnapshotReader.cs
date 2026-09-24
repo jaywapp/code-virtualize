@@ -109,6 +109,22 @@ internal static class DiffSnapshotReader
         return result;
     }
 
+    /// <summary>
+    /// All logical lines of a fully decoded file, with real (1-based) line numbers, independent of any
+    /// symbol's declaration span. Used by the changed-line coverage safety net (N1) to whole-file diff a
+    /// changed source document and find lines that no reported entry's declaration range covers.
+    /// </summary>
+    internal static IReadOnlyList<LineHunkBuilder.SourceLine> AllLines(string text)
+    {
+        if (text.Length == 0)
+        {
+            return [];
+        }
+
+        var totalLines = SourceResolver.Line(text, text.Length);
+        return FullLines(text, new TextSpanContract(0, text.Length, 1, totalLines), null);
+    }
+
     /// <summary>Header-only lines: the declaration span text up to (excluding) its first '{' or '=&gt;', as raw span text (no full-line leading indentation).</summary>
     internal static IReadOnlyList<LineHunkBuilder.SourceLine> HeaderLines(string text, TextSpanContract span)
     {

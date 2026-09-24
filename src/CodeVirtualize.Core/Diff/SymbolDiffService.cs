@@ -53,10 +53,25 @@ public sealed class SymbolDiffService
             changes.Add(BuildChange(DiffKind.Added, null, after, 1m, BuildAddedOrDeletedEvidence("symbol-added", after, budget)));
         }
 
+        // Changed-line coverage safety net (N1): every entry computed so far only reports a symbol when its
+        // OWN declaration span text differs. A symbol's span can leave out text on the same physical line
+        // (an attribute, a modifier, a trailing comment) that this project's C# extractor does not index
+        // separately, so an edit confined to that leftover text would otherwise vanish from the diff
+        // entirely (a "silent partial" — the file digest changed but the diff reports nothing). This pass
+        // whole-file diffs every digest-changed source, and for any changed line not already covered by an
+        // existing entry's declaration range, attributes it to the innermost indexed symbol whose range
+        // covers that line and reports it there, rather than dropping it.
+        var symbolOrdered = changes.OrderBy(change => change.Kind)
+            .ThenBy(change => SortKey(change.BaseSymbol ?? change.TargetSymbol!), StringComparer.Ordinal)
+            .ToArray();
+        var safetyNet = ComputeChangedLineSafetyNet(request.Base, request.Target, baseView, targetView, symbolOrdered, budget);
+        changes.AddRange(safetyNet.Changes);
+
         var ordered = changes.OrderBy(change => change.Kind)
             .ThenBy(change => SortKey(change.BaseSymbol ?? change.TargetSymbol!), StringComparer.Ordinal)
             .ToArray();
         var limitations = request.Base.Coverage.Limitations.Concat(request.Target.Coverage.Limitations)
+            .Concat(safetyNet.Limitations)
             .Distinct(StringComparer.Ordinal).ToList();
         if (ordered.Any(change => change.Kind == DiffKind.RenameCandidate))
         {
@@ -70,6 +85,15 @@ public sealed class SymbolDiffService
         }
 
         var coverage = CombineCoverage(request.Base.Coverage, request.Target.Coverage, limitations);
+        if (safetyNet.CoverageTruncated)
+        {
+            // A changed file's edit distance exceeded the line-diff cap before the safety net could even
+            // determine whether any of its changes were unattributed, and no ordinary entry mentions that
+            // file at all — make that explicit via coverage rather than silently returning a complete-looking
+            // empty diff for it.
+            coverage = coverage with { Level = CoverageLevel.Partial, Truncated = true };
+        }
+
         var contract = new DiffContract(
             request.Baseline,
             ordered.Select(change => change.Contract).ToArray(),
@@ -368,6 +392,295 @@ public sealed class SymbolDiffService
             "remark-changed", before.RemarkLines, after.RemarkLines, before.RemarkPath, after.RemarkPath, baseHash, targetHash, budget);
     }
 
+    // --- Changed-line coverage safety net (N1) --------------------------------------------------------
+
+    private const string UnattributedLineChangedEvidenceKind = "span-adjacent-line-changed";
+    private const string ChangedLineAttributedLimitation = "diff-span-adjacent-line-attributed";
+    private const string UnattributedChangeBudgetLimitation = "diff-unattributed-change-budget-exceeded";
+
+    private sealed record SafetyNetResult(List<SymbolDiffChange> Changes, List<string> Limitations, bool CoverageTruncated);
+
+    private static SafetyNetResult ComputeChangedLineSafetyNet(
+        SymbolDiffSnapshot baseSnapshot,
+        SymbolDiffSnapshot targetSnapshot,
+        IReadOnlyDictionary<string, SymbolView> baseView,
+        IReadOnlyDictionary<string, SymbolView> targetView,
+        IReadOnlyList<SymbolDiffChange> existingChanges,
+        EvidenceBudget budget)
+    {
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var baseSourcesByPath = baseSnapshot.Sources.ToDictionary(source => DiffSnapshotReader.NormalizePath(source.Path), pathComparer);
+        var targetSourcesByPath = targetSnapshot.Sources.ToDictionary(source => DiffSnapshotReader.NormalizePath(source.Path), pathComparer);
+        var changedPaths = baseSourcesByPath.Keys.Intersect(targetSourcesByPath.Keys, pathComparer)
+            .Where(path => !string.Equals(baseSourcesByPath[path].ContentHash, targetSourcesByPath[path].ContentHash, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (changedPaths.Length == 0)
+        {
+            return new SafetyNetResult([], [], false);
+        }
+
+        var attributedBase = AttributedLines(existingChanges, useBase: true, baseView, pathComparer);
+        var attributedTarget = AttributedLines(existingChanges, useBase: false, targetView, pathComparer);
+        var baseSources = DiffSnapshotReader.DecodeSources(baseSnapshot);
+        var targetSources = DiffSnapshotReader.DecodeSources(targetSnapshot);
+        var baseBySymbolId = baseSnapshot.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
+        var targetBySymbolId = targetSnapshot.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
+
+        var pendingBySymbol = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        var limitations = new List<string>();
+        var coverageTruncated = false;
+
+        foreach (var path in changedPaths)
+        {
+            var baseText = baseSources[DiffSnapshotReader.NormalizePath(path)].Text;
+            var targetText = targetSources[DiffSnapshotReader.NormalizePath(path)].Text;
+            var baseFileLines = DiffSnapshotReader.AllLines(baseText);
+            var targetFileLines = DiffSnapshotReader.AllLines(targetText);
+            var edits = LineHunkBuilder.Diff(
+                baseFileLines.Select(line => line.Text).ToArray(),
+                targetFileLines.Select(line => line.Text).ToArray(),
+                budget.Options.MaxLinesForLineDiff);
+
+            if (edits is null)
+            {
+                // The whole-file edit distance exceeded the line-diff cap (an unusually large rewrite).
+                // If some ordinary entry already mentions this file, trust that entry and move on; if not,
+                // this file's changes are entirely unaccounted for — say so explicitly instead of a silent
+                // complete-looking empty diff.
+                var hasEntryForPath = existingChanges.Any(change => HasLocationForPath(change.Contract, path, pathComparer));
+                if (!hasEntryForPath)
+                {
+                    limitations.Add(UnattributedChangeBudgetLimitation);
+                    coverageTruncated = true;
+                }
+                continue;
+            }
+
+            foreach (var (start, end) in ChangeRuns(edits))
+            {
+                var runAttributed = false;
+                for (var i = start; i <= end && !runAttributed; i++)
+                {
+                    var edit = edits[i];
+                    if (edit.Kind != LineHunkBuilder.EditKind.Insert &&
+                        attributedBase.TryGetValue(path, out var baseLines) && baseLines.Contains(baseFileLines[edit.BaseIndex].LineNumber))
+                    {
+                        runAttributed = true;
+                    }
+                    else if (edit.Kind != LineHunkBuilder.EditKind.Delete &&
+                        attributedTarget.TryGetValue(path, out var targetLines) && targetLines.Contains(targetFileLines[edit.TargetIndex].LineNumber))
+                    {
+                        runAttributed = true;
+                    }
+                }
+
+                if (runAttributed)
+                {
+                    // Already represented by an existing entry on at least one side (e.g. adding an enum
+                    // member changes the shared declaration line; the member's own Added entry already
+                    // covers it, so the "before" line on the same run must not get a second entry — M2/M3
+                    // regressions must not reappear here).
+                    continue;
+                }
+
+                SymbolContract? coveringSymbol = null;
+                for (var i = start; i <= end && coveringSymbol is null; i++)
+                {
+                    var edit = edits[i];
+                    if (edit.Kind != LineHunkBuilder.EditKind.Insert)
+                    {
+                        coveringSymbol = FindCoveringSymbol(baseSnapshot, baseBySymbolId, path, baseFileLines[edit.BaseIndex].LineNumber, pathComparer);
+                    }
+                    if (coveringSymbol is null && edit.Kind != LineHunkBuilder.EditKind.Delete)
+                    {
+                        coveringSymbol = FindCoveringSymbol(targetSnapshot, targetBySymbolId, path, targetFileLines[edit.TargetIndex].LineNumber, pathComparer);
+                    }
+                }
+
+                if (coveringSymbol is null)
+                {
+                    // Outside every indexed symbol's declaration range (a using/namespace line, blank line
+                    // between top-level types, etc.). Out of scope for this safety net; existing behavior
+                    // (silently not represented per-symbol) is unchanged for these lines.
+                    continue;
+                }
+
+                if (!pendingBySymbol.TryGetValue(coveringSymbol.SymbolId, out var paths))
+                {
+                    paths = new SortedSet<string>(StringComparer.Ordinal);
+                    pendingBySymbol[coveringSymbol.SymbolId] = paths;
+                }
+
+                paths.Add(path);
+            }
+        }
+
+        var changes = new List<SymbolDiffChange>();
+        foreach (var (symbolId, paths) in pendingBySymbol.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var baseSymbolView = baseView.GetValueOrDefault(symbolId);
+            var targetSymbolView = targetView.GetValueOrDefault(symbolId);
+            if (baseSymbolView is null && targetSymbolView is null)
+            {
+                continue;
+            }
+
+            var kind = baseSymbolView is not null && targetSymbolView is not null ? DiffKind.BodyChanged
+                : baseSymbolView is not null ? DiffKind.Deleted
+                : DiffKind.Added;
+
+            var evidences = paths.Select(path =>
+            {
+                var baseDeclaration = baseSymbolView?.Declarations.FirstOrDefault(
+                    declaration => declaration.Location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(declaration.Location.Path), path));
+                var targetDeclaration = targetSymbolView?.Declarations.FirstOrDefault(
+                    declaration => declaration.Location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(declaration.Location.Path), path));
+                return BuildUnattributedLineHunkEvidence(baseDeclaration, targetDeclaration, budget);
+            }).ToList();
+
+            changes.Add(BuildChange(kind, baseSymbolView, targetSymbolView, 1m, evidences));
+        }
+
+        if (changes.Count > 0)
+        {
+            limitations.Add(ChangedLineAttributedLimitation);
+        }
+
+        return new SafetyNetResult(changes, limitations, coverageTruncated);
+    }
+
+    private static Dictionary<string, HashSet<int>> AttributedLines(
+        IReadOnlyList<SymbolDiffChange> changes, bool useBase, IReadOnlyDictionary<string, SymbolView> view, StringComparer pathComparer)
+    {
+        var result = new Dictionary<string, HashSet<int>>(pathComparer);
+        foreach (var change in changes)
+        {
+            var symbol = useBase ? change.BaseSymbol : change.TargetSymbol;
+            if (symbol is null || !view.TryGetValue(symbol.SymbolId, out var symbolView))
+            {
+                continue;
+            }
+
+            foreach (var declaration in symbolView.Declarations)
+            {
+                if (declaration.Location.Path is null)
+                {
+                    continue;
+                }
+
+                var path = DiffSnapshotReader.NormalizePath(declaration.Location.Path);
+                if (!result.TryGetValue(path, out var lines))
+                {
+                    lines = [];
+                    result[path] = lines;
+                }
+
+                foreach (var line in declaration.Lines)
+                {
+                    lines.Add(line.LineNumber);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static List<(int Start, int End)> ChangeRuns(IReadOnlyList<LineHunkBuilder.Edit> edits)
+    {
+        var runs = new List<(int, int)>();
+        var i = 0;
+        while (i < edits.Count)
+        {
+            if (edits[i].Kind == LineHunkBuilder.EditKind.Equal)
+            {
+                i++;
+                continue;
+            }
+
+            var start = i;
+            while (i < edits.Count && edits[i].Kind != LineHunkBuilder.EditKind.Equal)
+            {
+                i++;
+            }
+
+            runs.Add((start, i - 1));
+        }
+
+        return runs;
+    }
+
+    /// <summary>
+    /// The innermost (most deeply nested, by containerId chain length) indexed symbol whose declaration
+    /// covers <paramref name="line"/> in <paramref name="path"/>; ties (symbols at the same nesting depth,
+    /// e.g. sibling enum members sharing one line) break on the leftmost declaration span start, so the
+    /// choice is deterministic.
+    /// </summary>
+    private static SymbolContract? FindCoveringSymbol(
+        SymbolDiffSnapshot snapshot, IReadOnlyDictionary<string, SymbolContract> bySymbolId, string path, int line, StringComparer pathComparer)
+    {
+        SymbolContract? best = null;
+        var bestDepth = -1;
+        var bestStart = int.MaxValue;
+        foreach (var symbol in snapshot.Symbols)
+        {
+            foreach (var declaration in symbol.Declarations)
+            {
+                if (declaration.Location.Path is null || !pathComparer.Equals(DiffSnapshotReader.NormalizePath(declaration.Location.Path), path))
+                {
+                    continue;
+                }
+
+                if (line < declaration.Location.Span.StartLine || line > declaration.Location.Span.EndLine)
+                {
+                    continue;
+                }
+
+                var depth = SymbolDepth(symbol, bySymbolId);
+                if (depth > bestDepth || (depth == bestDepth && declaration.Location.Span.Start < bestStart))
+                {
+                    best = symbol;
+                    bestDepth = depth;
+                    bestStart = declaration.Location.Span.Start;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private static int SymbolDepth(SymbolContract symbol, IReadOnlyDictionary<string, SymbolContract> bySymbolId)
+    {
+        var depth = 0;
+        var current = symbol;
+        var guard = 0;
+        while (current.ContainerId is not null && bySymbolId.TryGetValue(current.ContainerId, out var container) && guard++ < 64)
+        {
+            depth++;
+            current = container;
+        }
+
+        return depth;
+    }
+
+    private static bool HasLocationForPath(DiffEntryContract entry, string normalizedPath, StringComparer pathComparer) =>
+        entry.BaseLocations.Concat(entry.TargetLocations)
+            .Any(location => location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(location.Path), normalizedPath));
+
+    private static DiffEvidenceContract BuildUnattributedLineHunkEvidence(
+        DeclarationView? baseDeclaration, DeclarationView? targetDeclaration, EvidenceBudget budget)
+    {
+        var baseLines = baseDeclaration?.Lines ?? [];
+        var targetLines = targetDeclaration?.Lines ?? [];
+        var baseHash = baseDeclaration is null ? null : DiffDigests.Utf8(baseDeclaration.RawText);
+        var targetHash = targetDeclaration is null ? null : DiffDigests.Utf8(targetDeclaration.RawText);
+        return BuildLineHunkFromLines(
+            UnattributedLineChangedEvidenceKind, baseLines, targetLines,
+            baseDeclaration?.Location.Path, targetDeclaration?.Location.Path, baseHash, targetHash, budget);
+    }
+
+    // ----------------------------------------------------------------------------------------------------
+
     private static bool OrderChanged(IReadOnlyList<string> baseOrder, IReadOnlyList<string> targetOrder)
     {
         if (baseOrder.Count == 0 && targetOrder.Count == 0)
@@ -523,10 +836,13 @@ public sealed class SymbolDiffService
     private static string RenameShape(SymbolView view)
     {
         var signature = view.Symbol.Signature.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
-        // Use the declaration's own span text (FullText), not whole source lines, for the same reason as
-        // the leaf change-detection gate above (M2): a rename candidate's "shape" must not be perturbed by
-        // an unrelated neighbor sharing a physical line with this declaration.
-        var source = view.FullText.Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
+        // Leaf symbols use the declaration's own span text (FullText), not whole source lines, for the same
+        // reason as the leaf change-detection gate above (M2): a rename candidate's "shape" must not be
+        // perturbed by an unrelated neighbor sharing a physical line with this declaration. Containers must
+        // keep using their self text (CompareText, members' line ranges excluded) as before M2 (N2): a
+        // container's FullText includes every member's full text, so renaming the type while also editing a
+        // member's body would otherwise change the shape twice over and wrongly break the rename match.
+        var source = (view.IsContainer ? view.CompareText : view.FullText).Replace(view.Symbol.Name, "<name>", StringComparison.Ordinal);
         return NormalizeWhitespace(signature + "\n" + source);
     }
 
