@@ -6,8 +6,23 @@
   "pinnedCommit": "0fd277aaed127b9dec99524277fb4173a2351167",
   "generatedBy": "qa-verifier (TASK-027 Phase B, independent answer authoring)",
   "generatedAt": "2026-09-24T00:00:00Z",
-  "readMe": "tests/fixtures/rev2/medium-litedb/README.md documents methodology, hashing convention and judgment calls without quoting corpus source text.",
+  "readMe": "No separate README.md was created; this file's hashConvention/judgmentCalls/corpusAnomalies/conventionsCompliance/crossCheckPlan fields document methodology without quoting corpus source text.",
   "sourceOfTruth": "All positions and hashes were read by hand from litedb-org/LiteDB at the exact commits below (working tree confirmed byte-identical to pinned blobs per benchmarks/corpora/rev2-manifest.json). No CV output, runner command output, or rg/git-diff output was copied into this file; those tools were used only to enumerate candidate lines, which were then read and judged individually.",
+  "conventionsCompliance": {
+    "conventionsDocument": "tests/fixtures/rev2/CONVENTIONS.md",
+    "conventionsCommit": "7437602 (docs: close rev2 answer convention gaps before any new-corpus result)",
+    "reviewedAt": "2026-09-25",
+    "reviewMethod": "Re-read all 6 pairs' saved p->cPrime and c->cPrime `git diff --find-renames` output (scratchpad task027-litedb/diffs/pair{0..5}_{d1,d2}.diff) plus grep sweeps of that same diff set for attribute lines (`^[+-]\\s*\\[`), XML-doc lines (`^-\\s*///`), plain `//` comment lines, and modifier/field-type changes (`^-\\s+(private|public|internal|protected)\\s+(readonly\\s+|static\\s+)?...`), then re-checked each NAV target's full `rg -n -w` hit list for interface/base receivers, `nameof`, `using static`, method-group, expression-tree-lambda, and `<see cref>` patterns.",
+    "findingsPerRule": [
+      { "rule": "1 attribute change -> signatureChanged", "found": "Only one attribute change exists in the whole corpus's 6 pairs: the [Theory]/[InlineData] attributes on DIFF-04's two renamed Issue2052*_Tests.cs methods. Both are already fully covered by the REMOVED(old declaration incl. old attributes) + ADDED(new declaration incl. new attributes) rename entries (D04-D1-01..04); per CONVENTIONS.md's rename rule a rename is never additionally split into a signatureChanged entry, so no new entry was needed. No other pair has any attribute added/removed/changed on an unrenamed existing member.", "entriesChanged": 0 },
+      { "rule": "2 XML doc remark change -> remarkChanged", "found": "Zero `///` lines appear on either side of any hunk in any of the 6 pairs' diffs (confirmed by grep for `^[+-]\\s*///` across all 12 saved diff files: no matches). No remarkChanged entries exist or are needed for medium-litedb.", "entriesChanged": 0 },
+      { "rule": "3 out-of-range // comments not recorded, in-range = bodyChanged", "found": "Every plain `//` comment line that changed (pair 2: CollectionService.Get, LockService.EnterTransaction, Snapshot ctor, TransactionMonitor.ReleaseTransaction, TransactionService.Commit; pair 3: BsonElementReader.Read, BsonReader.ReadElement) sits inside a method body already recorded as bodyChanged/signatureChanged for unrelated code reasons too, so it changes nothing. No comment-only change (in or out of range) was found on any member that is not already recorded.", "entriesChanged": 0 },
+      { "rule": "4 field/property type and readonly/static modifier -> signatureChanged", "found": "Only one such change exists: pair 2's LockService._transaction field type ReaderWriterLockSlim -> TransactionGate (D03-D1-25), already recorded as signatureChanged. Grep for removed `private/public/internal/protected [readonly|static] Type name` lines across all 6 pairs found no other case.", "entriesChanged": 0 },
+      { "rule": "5 D3 target = first member whose declaration-range text actually differs between p and c' (not just attribute/remark/out-of-range-comment)", "found": "All 6 pairs' existing D3 picks (SharedEngine.OpenDatabase, IndexService.DropIndex, Issue2818_Tests.GatedDurableFile, Issue2052DateBounds_Tests.<removed rename target>, LiteQueryable<T>.Count, BsonExpressionOperators.ARRAY_INDEX) are genuine body or modifier-token text changes inside the declaration range (verified by re-diffing base vs target text), so all 6 remain valid and no pair needed `d3_resolve: null`/`d3NotApplicable: true`. Reason text was reworded to the precise convention phrasing (see each pair's `d3_resolve.reason`).", "entriesChanged": 0 },
+      { "rule": "6 N3: interface/base receiver, nameof/using-static/method-group/expression-tree-lambda, <see cref>, same-name-unrelated-type", "found": "Re-checked all 6 NAV targets' complete rg hit lists (each list's size already matched rev2-manifest.json's nameLineOccurrences exactly, so no hit was missed originally). None of the 21 static references use an interface- or base-typed receiver (all receivers are the target's own declaring concrete type or a variable statically typed to it). No `nameof(...)`, `using static`, bare method-group, or expression-tree-lambda occurrence of any of the 6 target names exists anywhere in the corpus. No `<see cref>` XML-doc reference to any of the 6 targets exists (corpus's XML docs on these files use only prose, no `<see>` tags). NAV-05's already-recorded 'different symbol, same simple name' exclusions (IndexRangeUnion.Scan, VectorIndexQuery.Scan) match rule 6's same-name-unrelated-type category verbatim.", "entriesChanged": 0 }
+    ],
+    "summary": "Zero NAV/DIFF entries were added, removed, or reclassified. medium-litedb's actual code changes happen not to exercise the attribute-change, remark-change, or D3-becomes-null scenarios the convention update clarifies; the original 2026-09-24 answer set already applied the equivalent judgment calls (see judgmentCalls below, now reworded to track CONVENTIONS.md's settled language instead of presenting them as this file's own inference). Item count is unchanged at 214; crossCheckPlan is unchanged."
+  },
   "hashConvention": {
     "algorithm": "SHA-256 over UTF-8 bytes",
     "inputText": "Exact source substring from the first character of startLine through the last character of endLine (inclusive), as it appears in the pinned blob (or, for N4, in the scratch copy after the specified edits). CRLF and lone CR are normalized to LF before hashing (protocol.md R2-4 R3). No BOM. No trailing line terminator is appended after endLine's last character (i.e. this is a substring hash, not a per-line 'content+LF' concatenation like the R3 rule for rg/git-diff/read tool-output byte counting, which is a separate accounting rule this file does not use).",
@@ -17,14 +32,16 @@
   "judgmentCalls": [
     "N3 static-reference classification: only receivers whose static type is provably the target's declaring type (or an assignment-compatible type) were counted as static references; this was checked by reading the enclosing method/constructor for each hit's declared/inferred variable type, not assumed from naming.",
     "Diagnostic/log message strings that merely contain a target member's name as English text (e.g. IndexService.cs:117 `ENSURE(..., \"Detected loop in AddNode({0})\", ...)` for NAV-04) are neither a static reference nor a dynamic/reflection candidate: they are not used to look up or invoke the member. They are excluded from both N3 lists and separately noted per target.",
-    "DIFF symbol identity across a rename (same containing type, different simple name, e.g. pair 3's two Issue2052*_Tests.cs InlineData/method renames): modeled as REMOVED(old-name declaration in base p) + ADDED(new-name declaration in target), not as a single renamed/signatureChanged entry, because member identity for lookup/matching purposes is keyed on qualified name. This makes such renames eligible as D3's 'first deleted member'.",
-    "DIFF kind 'signatureChanged' is used for same-name members whose parameter list, parameter name, return type, or accessibility modifier changed in the declaration line itself (e.g. pair 2's LockService.ExitTransaction()->ExitTransaction(int), pair 5's Collation.Compare(...,rigth)->Compare(...,right), pair 2's GatedDurableFile private->internal). D3's rule text '첫 번째 body 변경 member' is read broadly to include these (protocol.md R2-5 groups body/signature/remark changes under one graded category, and a narrower reading would arbitrarily exclude common single-token accessibility/parameter edits from D3 eligibility).",
+    "DIFF symbol identity across a rename (same containing type, different simple name, e.g. pair 3's two Issue2052*_Tests.cs InlineData/method renames): modeled as REMOVED(old-name declaration, including its old attributes, in base p) + ADDED(new-name declaration, including its new attributes, in target), not as a single renamed/signatureChanged entry. This is no longer just this file's inference: CONVENTIONS.md's 'rename' rule (2026-09-25) settles it explicitly ('rename 한 건으로 합치지 않는다'), including that a rename stays eligible as D3's first-deleted-member candidate. Confirmed unchanged on 2026-09-25 re-review; attribute changes on the renamed pair (the [InlineData] values) do not get a separate signatureChanged entry because the whole old/new declaration is already captured by the removed/added pair.",
+    "DIFF kind 'signatureChanged' is used for same-name members whose parameter list, parameter name, return type, field/property declared type, accessibility modifier, `readonly`/`static` modifier, or attributes changed (e.g. pair 2's LockService.ExitTransaction()->ExitTransaction(int), pair 5's Collation.Compare(...,rigth)->Compare(...,right), pair 2's GatedDurableFile private->internal, pair 2's LockService._transaction field type ReaderWriterLockSlim->TransactionGate). This is now CONVENTIONS.md's explicit definition (2026-09-25 update), not just this file's inference. Re-checked on 2026-09-25 against every pair's saved diff for attribute-only and modifier/field-type changes not previously captured this way; none were found beyond the ones already listed (see conventionsCompliance above).",
     "Preprocessor-directive-only changes that do not alter a symbol's own declaration text (pair 0 LockService.cs: `#if TESTING` -> `#if DEBUG || TESTING` wrapping the pre-existing BeforeTransactionAdmission property, whose own line is byte-identical before/after) are NOT recorded as a symbol change for that untouched property. Only declaration text that itself changed, or new declarations, are recorded.",
     "using/namespace/assembly-attribute-only changes to an EXISTING file would be recorded under nonSymbolChange (protocol.md R2-2 'file-level 변경'); none were found in any of the 6 medium-litedb DIFF pairs (all using changes occur only inside brand-new files, which is not a 'change' to an existing file's usings).",
     "Local functions (e.g. pair 3 QueryExecutor.cs's nested `IEnumerable<BsonDocument> RunQuery()`) are excluded from symbol-diff entries per protocol.md R2-1's declared-symbol taxonomy ('local function 제외'); a body change located inside a local function is attributed to its nearest enclosing non-local-function member.",
     "D1/D2 entries record ONE anchor location per symbol (the line carrying the member's own name/signature token) rather than a full body span, except for the D3-designated symbol which per the spawn instructions needs a full declaration span + hash (same resolution a B/E condition would perform). The anchor line is sufficient to verify R2-5's 'declaration-name line present in added/deleted side' rule for added/removed members and to locate the member for signature/body-changed members; re-deriving the exact changed-line set inside a body is left to the hunk itself during grading, not duplicated here.",
+    "D3 target selection (2026-09-25 CONVENTIONS.md wording, superseding this file's earlier looser 'first body-changed member' phrasing): first removed member in (path ordinal, line) order; if none, the first member in (path ordinal, line) order whose declaration-range text (per the 'declaration span' rule: startLine's own signature/name token through endLine's closing brace, excluding attributes/doc-comments/out-of-range comments) is literally different bytes between base p and target c'. A member changed only in its attributes, only in its XML-doc remark, or only in a comment outside its declaration range is NOT a D3 candidate, because attributes/remarks/out-of-range-comments are excluded from the declaration-range hash the D3 answer reports. Re-verified on 2026-09-25 that all 6 pairs' existing D3 picks satisfy this precise test (each is a genuine in-range body or modifier-token text change); no pair's D3 changed and no pair needed d3_resolve:null.",
     "Private implementation-detail fields (e.g. pair 2's TransactionGate._sync/_readers/_readerCount/_writer/_waitingWriters/_disposed) are listed as distinct added field symbols because 'field(변수별)' is a counted declared-symbol category in protocol.md R2-1's grade metrics, even though they are low-level and non-public.",
-    "Path ordinal = ordinary C ordinal (byte-value) string comparison of the corpus-relative path with '/' separators, matching git's own diff file ordering (verified empirically: every git diff in this corpus already lists files in this order, so D1 file order was used directly as path-ordinal order for D3 selection)."
+    "Path ordinal = ordinary C ordinal (byte-value) string comparison of the corpus-relative path with '/' separators, matching git's own diff file ordering (verified empirically: every git diff in this corpus already lists files in this order, so D1 file order was used directly as path-ordinal order for D3 selection).",
+    "2026-09-25 N3 edge-case re-check (CONVENTIONS.md rules: interface/base receiver, nameof/using-static/method-group/expression-tree-lambda, <see cref>, same-name-unrelated-type): none of these patterns occur for any of the 6 NAV targets in medium-litedb. All 21 recorded static references have a receiver statically typed as the target's own declaring concrete type (never an interface or base type); no `nameof(...)`, `using static`, method-group, or expression-tree-lambda usage of any target name exists in the corpus; no XML `<see cref>` references any target; the only same-name-unrelated-type cases (NAV-05's IndexRangeUnion.Scan and VectorIndexQuery.Scan) were already excluded under this reasoning before the convention was written down. No entries changed; see conventionsCompliance.findingsPerRule[5] for the search method."
   ],
   "corpusAnomalies": {
     "aiAgentInstructionFilesFound": [
@@ -247,9 +264,10 @@
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
-          "reason": "no removed member in D1; first entry in (path ordinal, line) order with kind bodyChanged/signatureChanged is D01-D1-11 (LiteDB.SharedEngine.OpenDatabase)",
+          "reason": "no removed member in D1; first entry in (path ordinal, line) order whose declaration-range text differs between p and c' is D01-D1-11 (LiteDB.SharedEngine.OpenDatabase, a genuine body edit); re-verified 2026-09-25 against CONVENTIONS.md's D3 rule",
           "symbol": "LiteDB.SharedEngine.OpenDatabase",
-          "base": { "path": "LiteDB/Client/Shared/SharedEngine.cs", "startLine": 44, "endLine": 74, "sha256": "8ceeb257bbe17cc7cb0966d8f2ffa33f7ff1c602ff99f4258f246a77a10098dc" }
+          "base": { "path": "LiteDB/Client/Shared/SharedEngine.cs", "startLine": 44, "endLine": 74, "sha256": "8ceeb257bbe17cc7cb0966d8f2ffa33f7ff1c602ff99f4258f246a77a10098dc" },
+          "d3NotApplicable": false
         },
         "crossCheck": null,
         "notes": "Large refactor adding cooperative Rebuild()/exclusive-admission signalling plus 3 new Issue-repro test files. All D1 changes are either brand-new members or genuine body edits; no renames or removals in this pair."
@@ -282,9 +300,10 @@
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
-          "reason": "no removed member in D1; first bodyChanged/signatureChanged entry in path order is D02-D1-10 (LiteDB.Engine.IndexService.DropIndex)",
+          "reason": "no removed member in D1; first entry in (path ordinal, line) order whose declaration-range text differs between p and c' is D02-D1-10 (LiteDB.Engine.IndexService.DropIndex, a genuine body edit); re-verified 2026-09-25 against CONVENTIONS.md's D3 rule",
           "symbol": "LiteDB.Engine.IndexService.DropIndex(CollectionIndex)",
-          "base": { "path": "LiteDB/Engine/Services/IndexService.cs", "startLine": 309, "endLine": 344, "sha256": "3262edccc92e1ab5843ab7f1c576ab8e7658d2c04a8028bc4ce9c7b870e6a1d6" }
+          "base": { "path": "LiteDB/Engine/Services/IndexService.cs", "startLine": 309, "endLine": 344, "sha256": "3262edccc92e1ab5843ab7f1c576ab8e7658d2c04a8028bc4ce9c7b870e6a1d6" },
+          "d3NotApplicable": false
         },
         "crossCheck": null,
         "notes": "DropIndex now reclaims sentinel-only head/tail index pages after deleting nodes; PersistDirtyPages gained a local var only (p->c, excluded from D2)."
@@ -359,9 +378,10 @@
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
-          "reason": "no removed member in D1; first bodyChanged/signatureChanged entry in path order is D03-D1-15 (Issue2818_Tests.GatedDurableFile, files 1-5 in path order are pure additions)",
+          "reason": "no removed member in D1; files 1-5 in path order (Issue2790ReaderLease_Tests.cs .. Issue2818ReaderStall_Tests.cs) are pure additions, so no member there has differing declaration-range text. The first entry whose declaration-range text differs between p and c' is D03-D1-15 (Issue2818_Tests.GatedDurableFile): its startLine itself is a different byte sequence (`private sealed class ...` vs `internal sealed class ...`), a genuine (if single-token) accessibility-modifier change, not merely an attribute/remark/out-of-range-comment change, so it qualifies under CONVENTIONS.md's D3 rule; re-verified 2026-09-25.",
           "symbol": "LiteDB.Tests.Issues.Issue2818_Tests.GatedDurableFile",
-          "base": { "path": "LiteDB.Tests/Issues/Issue2818_Tests.cs", "startLine": 14, "endLine": 93, "sha256": "ddf8240b87ae8a6ef2470ad511727f6e5cb23daee6826377d68a5c7953b17fdd" }
+          "base": { "path": "LiteDB.Tests/Issues/Issue2818_Tests.cs", "startLine": 14, "endLine": 93, "sha256": "ddf8240b87ae8a6ef2470ad511727f6e5cb23daee6826377d68a5c7953b17fdd" },
+          "d3NotApplicable": false
         },
         "crossCheck": null,
         "notes": "Large concurrency refactor: HeaderPage gains a dedicated PublicationLock so collection-map reads/writes are consistently guarded instead of `lock(this)`; LockService's ReaderWriterLockSlim is replaced by a custom TransactionGate that supports owner-thread-scoped read-lock release (fixing cross-thread cursor disposal); TransactionService.Commit only takes the header lock across persist+confirm when the transaction has header callbacks. This is the largest of the 6 pairs (53 D1 / 21 D2 entries)."
@@ -446,9 +466,10 @@
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
-          "reason": "first entry in (path ordinal, line) order with kind 'removed' is D04-D1-01",
+          "reason": "first entry in (path ordinal, line) order with kind 'removed' is D04-D1-01 (a rename, per CONVENTIONS.md modeled as REMOVED+ADDED and explicitly still eligible as D3's first-deleted-member); re-verified 2026-09-25",
           "symbol": "LiteDB.Tests.Issues.Issue2052DateBounds_Tests.First_out_of_range_millisecond_has_a_structured_format_error(long)",
-          "base": { "path": "LiteDB.Tests/Issues/Issue2052DateBounds_Tests.cs", "startLine": 12, "endLine": 18, "sha256": "9b5febf877c8a43c049c3d97a51d5f686d39c2395ce0f03d085d2983c589564b" }
+          "base": { "path": "LiteDB.Tests/Issues/Issue2052DateBounds_Tests.cs", "startLine": 12, "endLine": 18, "sha256": "9b5febf877c8a43c049c3d97a51d5f686d39c2395ce0f03d085d2983c589564b" },
+          "d3NotApplicable": false
         },
         "crossCheck": null,
         "notes": "Fixes issue #2930/#19: BSON millisecond and index-tick DateTime deserialization now clamps out-of-range values to DateTime.MinValue/MaxValue instead of throwing (4 reader call sites) or silently overflowing (index-seek type-mismatch warning added via new IndexKeyTypeWarning + QueryExecutor.ExplainPlan, gated behind EXPLAIN so normal execution pays nothing extra). Both pre-existing #2052 tests were renamed to match the new clamping behavior (not merely reworded assertions - the InlineData values and assertion logic changed too), which is why this pair has 2 removed+2 added entries instead of 2 bodyChanged. Largest pair by entry count (63 D1 / 22 D2)."
@@ -489,9 +510,10 @@
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
-          "reason": "no removed member in D1; first bodyChanged/signatureChanged entry in path order is D05-D1-15 (files 1-2 in path order, Issue2932_Tests.cs/Issue2933_Tests.cs, are pure additions)",
+          "reason": "no removed member in D1; files 1-2 in path order (Issue2932_Tests.cs, Issue2933_Tests.cs) are pure additions, so the first entry whose declaration-range text differs between p and c' is D05-D1-15 (LiteDB.LiteQueryable<T>.Count, a genuine body edit); re-verified 2026-09-25 against CONVENTIONS.md's D3 rule",
           "symbol": "LiteDB.LiteQueryable<T>.Count",
-          "base": { "path": "LiteDB/Client/Database/LiteQueryable.cs", "startLine": 411, "endLine": 426, "sha256": "a617e3051196f410420f51ee07d20366c86153f7277649ad39cd4b97d87dd0f0" }
+          "base": { "path": "LiteDB/Client/Database/LiteQueryable.cs", "startLine": 411, "endLine": 426, "sha256": "a617e3051196f410420f51ee07d20366c86153f7277649ad39cd4b97d87dd0f0" },
+          "d3NotApplicable": false
         },
         "crossCheck": null,
         "notes": "Fixes #2932 (Count() overflow beyond Int32.MaxValue now throws OverflowException with a LongCount() hint, and COUNT(...) in expressions returns Int64 once the value exceeds Int32) and #2933 (DATEADD/DATEDIFF date-part matching now uses ToLowerInvariant instead of culture-sensitive ToLower, fixing Turkish-locale 'MINUTE' mismatches)."
@@ -524,9 +546,10 @@
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
-          "reason": "no removed member in D1; first bodyChanged/signatureChanged entry in path order is D06-D1-10 (files 1-2 in path order, Issue2928_Tests.cs/Issue2931_Tests.cs, are pure additions)",
+          "reason": "no removed member in D1; files 1-2 in path order (Issue2928_Tests.cs, Issue2931_Tests.cs) are pure additions, so the first entry whose declaration-range text differs between p and c' is D06-D1-10 (LiteDB.BsonExpressionOperators.ARRAY_INDEX, a genuine body edit); re-verified 2026-09-25 against CONVENTIONS.md's D3 rule",
           "symbol": "LiteDB.BsonExpressionOperators.ARRAY_INDEX(BsonValue,int,BsonExpression,BsonDocument,Collation,BsonDocument)",
-          "base": { "path": "LiteDB/Document/Expression/Parser/BsonExpressionOperators.cs", "startLine": 278, "endLine": 303, "sha256": "de7a2bab1fbd83715689ef766c1ee5fa64803709dd392f9f0b4d4a761bd3b051" }
+          "base": { "path": "LiteDB/Document/Expression/Parser/BsonExpressionOperators.cs", "startLine": 278, "endLine": 303, "sha256": "de7a2bab1fbd83715689ef766c1ee5fa64803709dd392f9f0b4d4a761bd3b051" },
+          "d3NotApplicable": false
         },
         "crossCheck": null,
         "notes": "Smallest pair (11 D1 / 4 D2 entries). Fixes #2928 (ARRAY_INDEX's negative-index bound check `arr.Count > idx` could pass for a still-negative idx when |negative index| > array length; replaced with an explicit `idx >= 0 && idx < arr.Count`) and #2931 (Collation.Compare's 2nd parameter had a `rigth` typo, breaking C# named-argument call sites like `Compare(left: ..., right: ...)`)."
