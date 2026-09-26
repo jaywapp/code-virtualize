@@ -71,7 +71,7 @@
           "edit1": { "startLine": 54, "endLine": 79, "sha256": "4c238a75ba6eaca9af7d2ed4b78e31c24114b9870b329ea9773ca6fa1d61f98f", "note": "identical to N2: edit1 is appended at file end, well past this declaration" },
           "edit2": { "description": "first `{` is on line 55; comment inserted immediately after it", "startLine": 54, "endLine": 80, "sha256": "122aa7d063e9d0019a2e131c5dbbfba4f400abeb90abb20712b4eb14b2c8a6c6" }
         },
-        "crossCheck": null
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["NAV01-N1-1"], "method": "read pinned blob directly (path/line/declaration text/N3 call sites), independently confirmed against 7cc41c50...", "result": "ok" }
       },
       {
         "id": "NAV-02",
@@ -97,7 +97,7 @@
           "edit1": { "startLine": 19, "endLine": 20, "sha256": "d433ce91157b39f30f68ed883a1b7b463d95a1ce7e5739ef9eaf8eb4646ce2cf", "note": "identical to N2: edit1 is appended at file end" },
           "edit2": { "description": "declaration has no `{` (2-line expression body); comment inserted immediately before the declaration's last line (the `=> ...;` line), which becomes part of the re-read span since it now sits strictly between the signature line and the line that ends with `;`", "startLine": 19, "endLine": 21, "sha256": "072d1470b25d1ef11b57be6c133de45c6ee544c471e612b25394fd231572698d" }
         },
-        "crossCheck": null
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["NAV02-N1-1", "NAV02-N3-S3"], "method": "read pinned blob directly (declaration span, using-static resolution, call-site text), independently confirmed", "result": "ok" }
       },
       {
         "id": "NAV-03",
@@ -138,7 +138,7 @@
           "edit1": { "startLine": 496, "endLine": 500, "sha256": "a1c05a4732c1ad211e276756245eb946da7af296e09de300daacc825c58e09f2" },
           "edit2": { "description": "first `{` on line 497; comment inserted immediately after it", "startLine": 496, "endLine": 501, "sha256": "d4d470be62373ce68e6d3171fea181571c510c3ee84b551002b244f9cecc3df4" }
         },
-        "crossCheck": null
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["NAV03-N3-S3", "NAV03-N3-S12", "NAV03-N3-S14"], "method": "read pinned blob directly, independently confirmed all 3 call-site lines", "result": "ok" }
       },
       {
         "id": "NAV-04",
@@ -164,7 +164,7 @@
           "edit1": { "startLine": 39, "endLine": 47, "sha256": "8eefa3c6eff752999c599078dc33e7a000d6ec58ba700701218eef14fe0c205f" },
           "edit2": { "description": "first `{` on line 40; comment inserted immediately after it", "startLine": 39, "endLine": 48, "sha256": "0467d7184718738aa4fd6646d1f3a47f369b012cc003c379901e2a72483be740" }
         },
-        "crossCheck": null
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": [], "note": "no NAV-04 item was drawn by the seed-20260920 Fisher-Yates sample (n=50) or fell into the DIFF-05-only supplemental draw; not independently re-read this pass", "result": "not_sampled" }
       },
       {
         "id": "NAV-05",
@@ -213,7 +213,7 @@
           "edit1": { "startLine": 1666, "endLine": 1668, "sha256": "4d82949a64df4ee745dbb0ddcb840638178a6cb39d6684bab49c55f936f0df1e" },
           "edit2": { "description": "first `{` on line 1667; comment inserted immediately after it", "startLine": 1666, "endLine": 1669, "sha256": "86b982b078492b8b75e134996114894ad216b2f44963d0f6c49868e6a402e543" }
         },
-        "crossCheck": null
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["NAV05-N1-1", "NAV05-N3-S1", "NAV05-N3-S3"], "method": "read pinned blob directly (declaration, self-call, Moq expression-tree Setup call with Mock<PageModel> receiver type), independently confirmed", "result": "ok" }
       },
       {
         "id": "NAV-06",
@@ -235,7 +235,7 @@
           "edit1": { "startLine": 1299, "endLine": 1299, "sha256": "66717d0b1963c30a38685aff2426664ddb082f87d5fd858c1a647adcbfb888ea" },
           "edit2": { "description": "declaration has no `{` (single physical line); comment inserted immediately before this only/last line, so it precedes the declaration entirely and the declaration merely shifts down by one line with unchanged content", "startLine": 1300, "endLine": 1300, "sha256": "66717d0b1963c30a38685aff2426664ddb082f87d5fd858c1a647adcbfb888ea" }
         },
-        "crossCheck": null
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["NAV06-N1-1"], "method": "read pinned blob directly, independently confirmed declaration and sole static reference", "result": "ok" }
       }
     ]
   },
@@ -276,7 +276,7 @@
           "symbol": "Microsoft.AspNetCore.Components.E2ETest.ServerExecutionTests.NavigationLockPrerenderingTest.ExternalNavigationIsLockedAfterPrerendering",
           "base": { "path": "src/Components/test/E2ETest/ServerExecutionTests/NavigationLockPrerenderingTest.cs", "startLine": 29, "endLine": 42, "sha256": "fd6f029a90bcd1e89d84ab3fb25882cdbc3645a4a5c9f6246ff7bb15c992cced" }
         },
-        "crossCheck": null,
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["D01-D1-03", "D01-D1-06", "D01-D1-11", "DIFF-01::d3_resolve"], "method": "read both blob versions directly for each sampled entry; re-verified c->c' numstat for the full pair (3 files, byte-identical to d2_note's claim) and recomputed the D3 base hash independently", "result": "ok" },
         "notes": "Adds WebDriver BiDi-based dismissal of the 'beforeunload' confirmation prompt for 2 external-navigation E2E tests (removing their [QuarantinedTest] skips), and unrelated SignalR change rejecting hub methods/classes that specify a nonempty AuthenticationSchemes on [Authorize] (with 2 new test hub classes and 2 new tests)."
       },
       {
@@ -339,7 +339,7 @@
           "symbol": "Microsoft.AspNetCore.Components.E2ETests.ServerRenderingTests.InteractivityTest.SurfacesExceptionThrownDuringWebAssemblyRootComponentActivation()",
           "base": { "path": "src/Components/test/E2ETest/ServerRenderingTests/InteractivityTest.cs", "startLine": 232, "endLine": 246, "sha256": "95e257e8384b13289fd370b6a9630168efcf923fc454f6679c5b2a156473c447" }
         },
-        "crossCheck": null,
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["D02-D1-08", "D02-D1-14", "D02-D1-20", "D02-D1-25", "D02-D1-26", "D02-D1-36", "D02-D1-37", "D02-D1-38", "DIFF-02::d3_resolve"], "method": "read both blob versions directly for each sampled entry (including confirming D02-D1-20's removal and D02-D1-37/38's [Fact]->[ConditionalFact]+[SkipOnHelix] base state); re-verified DIFF-02's D3 removal (D02-D1-01) is absent at cPrime and recomputed its base hash", "result": "ok" },
         "notes": "Removes an obsolete WebAssembly-activation-fault E2E test; makes a virtualization scroll assertion more diagnostic; requires CorsPolicy.SupportsCredentials (not just an origin allow-list) before CSRF trusts a CORS-approved origin, with an extensive DefaultCsrfProtectionTests.cs rewrite splitting each prior '_Allowed' test into WithCredentials/WithoutCredentials pairs plus new coverage tests; and an unrelated F#-template MVC test fix."
       },
       {
@@ -395,7 +395,7 @@
           "symbol": "Microsoft.AspNetCore.Internal.ProcessEx.NUGET_PACKAGES",
           "base": { "path": "src/Shared/Process/ProcessEx.cs", "startLine": 22, "endLine": 22, "sha256": "28e9a98ad1edb3c99d43c427355062e93b4ea62fddc5e3ccde170cc96731938e" }
         },
-        "crossCheck": null,
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["D03-D1-07", "D03-D1-09", "D03-D1-10", "D03-D1-11", "D03-D1-14", "D03-D1-16", "D03-D1-25", "D03-D1-28", "D03-D1-29", "DIFF-03::d3_resolve"], "method": "read both blob versions directly for each sampled entry (all 9 kind/path/line matches confirmed exactly, including D03-D1-29's [QuarantinedTest] base/target state); re-verified DIFF-03's D3 removal (D03-D1-24, ProcessEx.NUGET_PACKAGES) is absent at cPrime and recomputed its base hash", "result": "error", "errorNote": "Item-level data (kind/path/line/hash) for all 10 checked entries is correct. However, this pair's d2_note prose contains factually wrong supporting numstat figures: it claims c->c' numstat for the 4 D2-included files is 'Project.cs 16/2, WebWorkerClient.cs 6/6, WebWorkerTemplateE2ETest.cs 0/1, ProcessEx.cs 13/1' and calls them '5 remaining files' (only 4 are named). Independently re-run `git diff --numstat 9817792d..f5930dbb -- '*.cs'` gives Project.cs 10/11, WebWorkerClient.cs 3/3, WebWorkerTemplateE2ETest.cs 0/1, ProcessEx.cs 4/3 (4 files, not 5) - 3 of 4 cited numbers are wrong. The underlying D2-membership CONCLUSION (D03-D1-19..29 included in D2, D03-D1-01..18 excluded) is separately verified correct: `git diff --numstat 80ce68b5..f5930dbb -- '*.cs'` (p->c') for the same 4 files (10/11, 3/3, 0/1, 4/3) is byte-identical to the c->c' numbers actually observed, confirming these 4 files' entire change happened within the session. So the graded D2 inclusion data is right; only the d2_note's cited supporting figures are fabricated/wrong. Reported per spawn instructions rather than corrected." },
         "notes": "Adds a dev-only fallback '/_framework/dotnet-browser-tools/hot-reload-settings.json' endpoint (reporting hot-reload disabled) to both the Razor Components endpoint pipeline and the Blazor Gateway, guarded by IsDevelopment() && !DOTNET_WATCH; and separately hardens the gateway's listening-URL parser and renames+exposes ProcessEx's NuGet-packages-path resolution as a public static property consumed by Project.cs."
       },
       {
@@ -441,7 +441,7 @@
           "symbol": "Microsoft.AspNetCore.Components.E2ETest.Tests.VirtualizationTest.QuickGrid_AnchorMode_Top_AppendKeepsViewportStable(string,bool)",
           "base": { "path": "src/Components/test/E2ETest/Tests/VirtualizationTest.cs", "startLine": 2219, "endLine": 2241, "sha256": "a66f67c29d5a6fcff8985d34f7d7562e291eac29e2d43484a5679de25824bad7" }
         },
-        "crossCheck": null,
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["D04-D1-05", "D04-D1-10", "D04-D1-14", "D04-D1-15", "D04-D1-20", "DIFF-04::d3_resolve"], "method": "read both blob versions directly for each sampled entry (including D04-D1-20's [QuarantinedTest] base/target state); re-verified DIFF-04's D3 span text genuinely differs base vs target and recomputed its base hash", "result": "ok" },
         "notes": "Reworks QuickGrid/Virtualize E2E 'AnchorMode End' tests to explicitly verify the initial scroll position (top vs. bottom) via 2 new shared helpers (VerifyInitialPosition, AssertAtBottom) before asserting stability, adds a ScrollToTopAndWaitForRender helper reused by several existing tests, adds a new End-mode ItemsProvider-load pin-to-bottom E2E test with simulated network latency (2 more helpers), and separately forwards 2 MSBuild properties (DotNetBuildUseMonoRuntime, ContinuousIntegrationBuild) plus an SDK-path env-var removal into template-project publish/build subprocesses, and adds an unrelated [QuarantinedTest]-removal-only change to BlazorWebTemplateTest.cs (excluded, see judgmentCalls)."
       },
       {
@@ -529,7 +529,7 @@
           "symbol": "Microsoft.AspNetCore.Components.Endpoints.HttpNavigationManager.s_throwNavigationException",
           "base": { "path": "src/Components/Endpoints/src/DependencyInjection/HttpNavigationManager.cs", "startLine": 13, "endLine": 14, "sha256": "6fb21ac0f22d0c589514bc576bfaa910e82aa2921ef28a165c3a38cf12a819a9" }
         },
-        "crossCheck": null,
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["D05-D1-04", "D05-D1-08", "D05-D1-15", "D05-D1-16", "D05-D1-17", "D05-D1-20", "D05-D1-23", "D05-D1-24", "D05-D1-25", "D05-D1-27", "D05-D1-28", "D05-D1-31", "D05-D1-34", "D05-D1-35", "D05-D1-41", "D05-D1-42", "D05-D1-43", "D05-D1-44", "D05-D1-45", "D05-D1-48", "D05-D1-49", "D05-D1-50", "D05-D1-52", "D05-D1-54", "D05-D1-55", "D05-D1-56", "D05-D1-57", "DIFF-05::d3_resolve"], "method": "28 items (15 from the main 50-item sample, 10 from the supplemental DIFF-05-only draw of 10, and all 3 of the pair's attribute/remark entries D05-D1-55/56/57 per spawn-prompt mandate) plus the D3 full check, each read directly from both blob versions where relevant. Also independently re-ran `git diff --numstat` c->c' for the full pair (12 files) and confirmed every add/delete count is byte-identical to the d2_note's claim.", "result": "ok" },
         "notes": "Largest of the 6 pairs (17 changed .cs files). Core change: introduces TestServer.TestFeatureSwitches, a new centralized helper that overrides 3 Components feature switches (throw-navigation-exception, hot-reload-supported, URL-based QuickGrid nav/sorting) AND updates their already-JIT-cached static fields via reflection (fixing issue #66883, servers racing on stale cached switch values), replacing ad hoc AppContext.SetSwitch/reflection call sites across ~9 test-infrastructure and E2E test files (RedirectionTest.cs alone has 17 one-line call-site swaps) and removing the [Experimental]/ASP0030 QuickGrid AnchorMode/ItemComparer opt-in gate. Two unrelated passkey changes ride along: a new PasskeyRegistrationOptions endpoint/enum value/E2E coverage for registering a brand-new (passwordless) account with a passkey, and a SignInManager.cs doc-comment wording fix (excluded, no code change)."
       },
       {
@@ -556,7 +556,7 @@
           "symbol": "Microsoft.AspNetCore.Components.E2ETests.Tests.QuickGridInteractiveCompatTest.PaginatorCorrectItemsPerPage()",
           "base": { "path": "src/Components/test/E2ETest/Tests/QuickGridInteractiveCompatTest.cs", "startLine": 113, "endLine": 129, "sha256": "a1d463c54e32a68382a82db31d6cac37d1059ff98dc08ea77a79718f95dd1500" }
         },
-        "crossCheck": null,
+        "crossCheck": { "checkedBy": "qa-verifier cross-check session (TASK-027 Stage C, 2026-09-25)", "itemsChecked": ["D06-D1-01", "DIFF-06::d3_resolve"], "method": "read both blob versions directly (D06-D1-01 is also this pair's sole D3 candidate); recomputed the base hash and confirmed c->c' numstat matches d2_note's claim exactly", "result": "ok" },
         "notes": "Smallest pair (2 D1 entries). Rewrites a QuickGrid paginator E2E test to use more resilient Selenium selectors/polling (and drops its [QuarantinedTest] skip); separately, ApplicationPublisher.Publish forwards 2 build-mode AppContext switches (DotNetBuildUseMonoRuntime, ContinuousIntegrationBuild) as MSBuild properties to subprocess `dotnet publish` invocations."
       }
     ]
@@ -569,6 +569,6 @@
     "totalItemCountExact": 198,
     "totalItemCountFormula": "sum over nav.targets of (len(n1_declarations)+len(n3_staticReferences)+len(n3_dynamicCandidates)+len(n3_unresolved)) [3+6+17+2+4+2=34] + sum over diff.pairs of (len(d1_pToCPrime_changes) + 1 for d3_resolve) [D01(12+1)+D02(38+1)+D03(29+1)+D04(20+1)+D05(57+1)+D06(2+1) = 13+39+30+21+58+3 = 164]. Updated 2026-09-25 after adding 7 attribute/remark-change D1 entries (D02 +2, D03 +1, D04 +1, D05 +3) per the revised CONVENTIONS.md (commit 7437602); D1 counts moved from 12/36/28/19/54/2 to 12/38/29/20/57/2. Verified programmatically (id-uniqueness, d2Excluded/d2_cToCPrime_changes_ids consistency, and exactly-one-isD3Target-per-pair-with-symbol-matching-d3_resolve all checked by script against this file).",
     "sampleSizeMin": "max(10, ceil(0.25 * 198)) = 50",
-    "status": "not_yet_performed - left for a different session per TASK-027 spawn instructions ('교차 확인 기록 칸은 비워 둠'); every item's `crossCheck` field is null pending that pass. Given DIFF-05 (pair4) is by far the largest single contributor (58 of 198 items, ~29%) and was read with slightly less per-entry redundancy than the other 5 pairs (see judgmentCalls), the cross-check sample should draw at least its proportional share from DIFF-05, and ideally somewhat more."
+    "status": "performed 2026-09-25/26 (TASK-027 Stage C), by a session other than this file's author, per protocol.md R2-2's cross-check clause. Method: (1) built the ordinal-sorted (StringComparer.Ordinal) list of all 198 population IDs (34 NAV n1/n3 ids + 158 DIFF d1_pToCPrime_changes ids + 6 synthetic '<pairId>::d3_resolve' ids, one per pair, since d3_resolve itself carries no `id` field but is counted in totalItemCountExact per this plan's own formula); (2) shuffled with a small .NET console program under the task scratchpad reproducing benchmarks/corpora/tools/CorpusSyntaxTool's exact Fisher-Yates (`new Random(20260920)`, for i=n-1 downto 1: j=random.Next(0,i+1); swap(a[i],a[j])); (3) took the first 50 (= max(10, ceil(0.25*198))) as the main sample; (4) per spawn-prompt direction (author self-reported DIFF-05/pair4 was checked with less redundancy), separately ordinal-sorted and Fisher-Yates-shuffled (same seed 20260920) DIFF-05's 57 D1 ids alone, then took the first 10 of that shuffle NOT already present in the main sample (skipping D05-D1-43 and D05-D1-52, which the main sample had already drawn) as a supplemental draw; (5) independently re-read the pinned blob (and, for DIFF entries, both the base and target/cPrime blob via `git show <commit>:<path>`) for every sampled id, recomputing every hash the item carries; (6) per spawn-prompt mandate, additionally checked all 7 attribute/remark-change entries by id regardless of sampling (D02-D1-37/38, D03-D1-29, D04-D1-20, D05-D1-55/56/57); (7) per spawn-prompt mandate, fully re-verified all 6 pairs' D3 selection/hash and D3-eligibility reasoning (none of the 6 pairs claim d3NotApplicable, so this large-aspnetcore file's D3 logic was not exercised on that branch, unlike medium-quartznet's DIFF-05). Total distinct items independently re-verified: 70 (50 main sample ∪ 10 supplemental DIFF-05 draw ∪ 7 mandatory attribute/remark ∪ 6 mandatory D3 checks, with the expected overlaps). Main sample (50, in drawn order): D05-D1-08, D04-D1-14, D03-D1-28, D05-D1-27, D03-D1-09, D05-D1-52, D05-D1-35, D04-D1-15, D05-D1-43, D03-D1-07, D02-D1-36, NAV03-N3-S12, D02-D1-08, DIFF-04::d3_resolve, D02-D1-25, D03-D1-10, D05-D1-54, D02-D1-20, D05-D1-15, D01-D1-11, NAV05-N3-S3, D05-D1-42, D05-D1-24, NAV01-N1-1, D03-D1-16, D03-D1-11, D04-D1-05, NAV05-N3-S1, NAV03-N3-S14, D02-D1-38, NAV06-N1-1, D05-D1-31, D01-D1-03, NAV02-N1-1, NAV02-N3-S3, D05-D1-25, D01-D1-06, NAV03-N3-S3, D02-D1-26, D05-D1-28, D05-D1-34, D03-D1-25, DIFF-03::d3_resolve, D04-D1-10, D02-D1-14, D03-D1-14, D05-D1-23, NAV05-N1-1, D06-D1-01, D05-D1-50. Supplemental DIFF-05 draw (10, in drawn order, after skipping 2 already-sampled): D05-D1-49, D05-D1-16, D05-D1-17, D05-D1-14, D05-D1-41, D05-D1-04, D05-D1-44, D05-D1-20, D05-D1-48, D05-D1-45. RESULT: 69 of 70 checked items are `ok` (coordinates, kind classification, D2 membership, and hashes all independently reproduced exactly). ONE finding: DIFF-03's `d2_note` prose cites factually wrong supporting `git diff --numstat` figures for 3 of its 4 D2-included files (see diff.pairs[DIFF-03].crossCheck.errorNote for the exact wrong-vs-actual numbers and independent re-derivation) — the underlying graded D2-membership conclusion for those entries was separately confirmed correct, but the note itself contains fabricated-looking citation numbers. Per protocol.md R2-2 ('오류가 하나라도 나오면 그 corpus 정답 전체를 다시 확인한다'), this one error formally requires a full re-check of this corpus's answer file; not performed in this pass per the spawn prompt's explicit instruction to report rather than fix or expand scope. No data fields (id/symbol/kind/path/line/hash) were altered by this cross-check pass; only `crossCheck` (12 target/pair-level fields) and this `crossCheckPlan.status` were written."
   }
 }
