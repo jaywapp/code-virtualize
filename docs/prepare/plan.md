@@ -945,7 +945,7 @@ locked restore, Release build, Core/CSharp/CLI/Integration 테스트, fixture ve
 TASK-025 설계 확인
 
 ### Status
-진행 중 — 구현 `dd9470f`, TASK-028 지적(H1·M1~M4·L1·L2·L6) 수정 중
+Complete — 2026-09-26 (PR #11, `7c95904`). TASK-028 6차 리뷰 통과 commit으로 CV 코드 고정(R2-10)
 
 ## TASK-027 — 새 corpus fixture와 독립 정답
 
@@ -1003,7 +1003,7 @@ stale 원문 오반환·조용한 partial 0 유지, coverage·freshness 표시, 
 TASK-026
 
 ### Status
-진행 중 — 1차 리뷰 완료(High 1·Medium 4·Low 6), 수정 확인 리뷰 대기
+Complete — 2026-09-26 (6차 확인 리뷰에서 Critical·High 0건. 남은 Medium·Low는 TASK-043)
 
 ## TASK-029 — source-byte gate 재측정
 
@@ -1029,10 +1029,10 @@ run manifest와 schema 집계가 재현 가능하고, 메인 에이전트가 ver
 | Reason | Go/No-Go 근거가 되는 측정의 정확성 판단이다. |
 
 ### Blocked By
-TASK-027, TASK-028, TASK-042
+없음 — TASK-026·027·028·042 완료
 
 ### Status
-Blocked — TASK-026~028·042 선행
+Ready
 
 ## TASK-030 — 재측정 결과 ADR 006
 
@@ -1090,7 +1090,7 @@ TASK-023의 공개 corpus에서 build/update를 반복해 generation 크기·증
 TASK-023
 
 ### Status
-Ready — 착수는 TASK-026·042 병합 뒤(측정 대상 코드 확정과 게시 실패 제거)
+Ready — TASK-026·042 병합 완료. TASK-029의 시간 측정 실행과 겹치지 않게 진행
 
 ## TASK-032 — config 시스템과 GC 설계
 
@@ -1420,7 +1420,7 @@ Complete — 2026-09-24 (PR #9)
 TASK-026 병합
 
 ### Scope
-L3 header_only에도 entry 예산 적용, 예산 소진 뒤 항목별 판단, 큰 교체 hunk를 trim할 때 양쪽 보존. L4 생략 줄 수를 선언별로 계산, container에서 member만 바뀐 선언 쌍의 잡음 evidence 제거. L5 `DiffSourceResolver`가 필요한 문서만 decode, `Baseline.InputFingerprint` 검증, 도달 불가 분기 제거, `GenerationId`에 SnapshotId를 넣는 문제의 문서화 또는 별도 필드.
+L3 header_only에도 entry 예산 적용, 예산 소진 뒤 항목별 판단, 큰 교체 hunk를 trim할 때 양쪽 보존. N3·X5 trim 뒤 한쪽만 남은 hunk와 안전망 hunk의 반대쪽 anchor, `maxEditDistance`에 `MaxLinesForLineDiff`를 넘기는 문제와 "edit distance 2,000 이상이면 fingerprint" 문서화. M-1 partial 선언을 같은 type의 다른 partial이 있는 파일로 옮길 때의 선언 짝 어긋남(member ID 겹침 기준 짝짓기), L-1 원본이 남는 파일 분할에서 새 파일의 file-level 비교, property 생성기에 partial 이동·분할 모양 추가. L4 생략 줄 수를 선언별로 계산, container에서 member만 바뀐 선언 쌍의 잡음 evidence 제거. L5 `DiffSourceResolver`가 필요한 문서만 decode, `Baseline.InputFingerprint` 검증, 도달 불가 분기 제거, `GenerationId`에 SnapshotId를 넣는 문제의 문서화 또는 별도 필드.
 
 ### Files
 `src/CodeVirtualize.Core/Diff/` / `tests/Integration.Tests/Diff/` / `docs/contracts/cli.md`
@@ -1438,7 +1438,7 @@ L3 header_only에도 entry 예산 적용, 예산 소진 뒤 항목별 판단, �
 TASK-026 병합. `cv_diff`를 노출하기 전에는 반드시 끝낸다.
 
 ### Status
-Blocked — TASK-026 선행
+Blocked — 착수는 TASK-029 held-out 실행 뒤(CV 코드 고정 유지, R2-10). `cv_diff`를 노출하기 전에는 반드시 끝낸다
 
 ## 요구사항과 결정 추적
 
