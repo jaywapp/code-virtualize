@@ -8,11 +8,19 @@ namespace CodeVirtualize.Core.Diff;
 /// script, then groups changes into hunks separated by more than <c>2 * contextLines</c> unchanged lines,
 /// mirroring conventional unified-diff hunk splitting. A hunk never claims a contiguous line range across
 /// a gap in the underlying <see cref="SourceLine.LineNumber"/> sequence (as happens for a container's
-/// self text, where direct members' line ranges are excluded) — such a gap always forces a hunk break.
+/// self text, where lines holding only member text are left out) — such a gap always forces a hunk break.
 /// </summary>
 internal static class LineHunkBuilder
 {
-    internal readonly record struct SourceLine(int LineNumber, string Text);
+    /// <summary>
+    /// One source line. <paramref name="Text"/> is what a hunk renders; <paramref name="Key"/>, when set, is
+    /// what the line diff compares instead (a container's self text compares lines with member spans masked
+    /// but still renders the original line, so a member-only edit on a shared line is not shown as a change).
+    /// </summary>
+    internal readonly record struct SourceLine(int LineNumber, string Text, string? Key = null)
+    {
+        internal string CompareKey => Key ?? Text;
+    }
 
     internal enum EditKind { Equal, Delete, Insert }
 
@@ -57,7 +65,7 @@ internal static class LineHunkBuilder
         int maxHunkBytes,
         int maxEditDistance)
     {
-        var edits = Diff(baseLines.Select(line => line.Text).ToArray(), targetLines.Select(line => line.Text).ToArray(), maxEditDistance);
+        var edits = Diff(baseLines.Select(line => line.CompareKey).ToArray(), targetLines.Select(line => line.CompareKey).ToArray(), maxEditDistance);
         if (edits is null)
         {
             // The edit distance exceeded the cap before an answer could be computed (or safely stored).
@@ -132,8 +140,8 @@ internal static class LineHunkBuilder
     /// Indices (other than 0) where <see cref="SourceLine.LineNumber"/> stops being consecutive on
     /// whichever side(s) the edit at that index touches, relative to the most recently touched line on
     /// that side. A hunk must never span such an index, since the file lines on either side of it are not
-    /// actually adjacent (this happens for a container's self text, where direct members' line ranges are
-    /// excluded, leaving gaps such as lines 3, 4, 8).
+    /// actually adjacent (this happens for a container's self text, where lines holding only member text are
+    /// left out, leaving gaps such as lines 3, 4, 8).
     /// </summary>
     private static HashSet<int> LineNumberBreaks(
         IReadOnlyList<Edit> edits, IReadOnlyList<SourceLine> baseLines, IReadOnlyList<SourceLine> targetLines)

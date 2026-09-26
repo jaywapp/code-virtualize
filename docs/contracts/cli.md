@@ -123,7 +123,18 @@ Diff entry의 `evidence[]` 항목마다 `textMode`(`line_hunks | header_only | f
 
 `baseContentHash`/`targetContentHash`는 evidence가 가리키는 declaration **원문 span 텍스트**(잘리지 않은 전체 원문)의 SHA-256이다. 이 값은 아래 lazy resolve를 **`part=declaration`으로, 예산 안에서 잘림 없이** 요청했을 때의 source slice `contentHash`와 정확히 같다 — 다른 part(`header`/`body`/`context`)나 budget에 걸려 잘린 응답의 `contentHash`는 이 값과 다르다. entry가 예산 때문에 hunk를 잘랐거나 `textMode`를 낮췄으면 evidence의 `truncated=true`이고, 이때 Diff 최상위 `evidenceTruncated=true`와 `limitations`의 `diff-evidence-budget-exhausted`가 함께 있다. 기본 예산은 `contextLines=1`, entry당 8 KiB, 전체 64 KiB, line diff 상한 20,000줄이다. evidence 생략은 entry 목록의 완전성과 별개 축이라 coverage level을 낮추지 않는다.
 
-type symbol(다른 symbol의 `containerId`가 가리키는 symbol)의 비교 텍스트는 선언 span에서 직계 member의 선언 span을 제외한 자기 텍스트다. member 하나만 바뀌어도 containing type entry는 만들지 않는다(자기 텍스트가 whitespace 정규화 후에도 같으면). member 사이 주석처럼 index되지 않은 변경은 자기 텍스트에 남아 누락되지 않는다. 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다.
+type symbol(다른 symbol의 `containerId`가 가리키는 symbol)의 비교 텍스트는 자기 텍스트다. 자기 텍스트는 선언이 걸친 **줄 전체**(같은 줄의 attribute·modifier·trailing 주석 포함)에서 다른 symbol의 선언 span(자기를 감싸는 type은 제외)을 **문자 단위로** placeholder 하나씩으로 가린 텍스트다. 중첩 type의 자기 텍스트에서는 자기 span 밖 문자를 빼며, 그 문자는 바깥 type의 자기 텍스트에 속한다. 따라서 type 범위 안의 모든 문자는 leaf span 하나 또는 가장 안쪽 type의 자기 텍스트에 속한다. 예를 들어 field symbol의 span은 declarator(`speed`, `hp = 5`)뿐이므로 같은 줄의 `[Range(0, 10)] private int`와 `;`는 containing type의 자기 텍스트다. 비교 규칙은 다음과 같다.
+
+- 공백만 다르면 entry를 만들지 않는다.
+- 차이가 placeholder의 추가·삭제와 각 placeholder에 딸린 구분자(`,`, `;`) 하나뿐이면 member 추가·삭제의 흔적으로 보고 entry를 만들지 않는다(enum member 추가, `int a, b`의 declarator 추가). 추가된 member는 자기 `added` entry로 보고된다.
+- 그 밖의 차이(attribute, 주석, modifier, 필드 선언문 껍데기 `private int ... ;`의 추가·삭제, member와의 상대 위치가 바뀐 텍스트)는 type의 `body_changed`다. 양쪽에 있는 member를 ID로 구분했을 때 텍스트가 다르고 보이는 줄도 공백 외로 달라졌으면(attribute가 다른 field로 옮겨 간 경우) 역시 `body_changed`다.
+- 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다.
+
+type entry의 `body-changed` hunk는 가린 텍스트로 비교하되 **원문 줄**을 렌더링한다(member span과 줄을 공유하는 줄은 원문 전체 줄). member 텍스트만 있는 줄은 hunk 대상에서 빠지므로 불연속 줄은 별도 `@@` hunk가 된다. leaf symbol은 자기 선언 span 원문을 비교한다. 감싸는 type이 index되지 않은 최상위 leaf(namespace 수준 delegate 등)는 자기 줄 전체를 자기 텍스트로 가지며, span이 같아도 그 줄의 나머지가 바뀌면 `body_changed`, 공백만 바뀌면 `formatting_only`(fingerprint)다.
+
+한 symbol의 base·target 선언은 정규화 path로 먼저 짝짓는다. path로 짝지어지지 않은 선언이 양쪽에 정확히 하나씩 남으면 파일 이동(type 추출, 파일 이름 변경·분할)으로 보고 둘을 짝지어 비교하며 hunk 헤더는 `--- a/<base path>`/`+++ b/<target path>`다. 여러 개가 남으면 `declaration-removed`/`declaration-added` header-only 증거로 보고한다.
+
+어떤 선언의 줄에도 속하지 않는 파일 수준 텍스트(using, namespace 줄, 최상위 type 사이 주석)는 symbol에 귀속하지 않는다. 대신 양쪽에 있는 파일에서 이 텍스트가 공백 외로 바뀌었거나(remark span 제외), 한쪽에만 있는 파일이 symbol 선언 없이 공백 외 텍스트를 가지면 `limitations`(와 coverage `limitations`)에 `diff-file-level-text-changed`를 넣는다. coverage level은 바꾸지 않는다.
 
 added/deleted symbol이나 truncated evidence의 전체 원문은 Core `DiffSourceResolver`로 요청 시점에만 읽는다. `SelectionKey`·`Baseline`과 요청한 `side`(base/target)의 snapshot ID가 일치해야 하며, 다르면 `DIFF_SNAPSHOT_INVALID`, 더 최근 diff나 baseline 전환으로 선택이 무효화됐으면 `STALE_DIFF_RESPONSE`다. 원문은 diff 계산에 쓰인 **snapshot이 보존한 bytes**에서만 읽으며 현재 workspace 파일은 절대 열지 않는다 — 그래서 삭제된 symbol의 base source(DIFF-03류 요청)는 현재 파일이 달라져도 항상 선택한 baseline의 snapshot 값을 반환한다. 응답은 `cv-resolve`와 같은 source slice 계약(`contentHash`/`notModified`/`ifNoneMatch` 포함)을 쓰고 `freshness.returnedFiles=verified`(snapshot digest 검증), `freshness.workspace=not_applicable`이다. 이 lazy resolve API는 Core 전용이며 이번 버전에서 `cv-diff` CLI나 `cv_diff` MCP tool로는 노출하지 않는다.
 

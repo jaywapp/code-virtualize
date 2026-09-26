@@ -85,44 +85,20 @@ internal static class DiffSnapshotReader
 
     /// <summary>
     /// Returns the full source lines (with real file line numbers, including leading indentation) for
-    /// <paramref name="span"/>, excluding any line whose number falls within an excluded range. Used both
-    /// for a leaf symbol's own body/signature/remark text and for a container type's self text (with its
-    /// direct members' line ranges excluded).
+    /// <paramref name="span"/>. Used for a leaf symbol's own body/signature/remark text.
     /// </summary>
-    internal static IReadOnlyList<LineHunkBuilder.SourceLine> FullLines(
-        string text, TextSpanContract span, IReadOnlyCollection<(int StartLine, int EndLine)>? excluded = null)
+    internal static IReadOnlyList<LineHunkBuilder.SourceLine> FullLines(string text, TextSpanContract span)
     {
         var starts = SourceResolver.LineStarts(text);
         var result = new List<LineHunkBuilder.SourceLine>();
         for (var line = span.StartLine; line <= span.EndLine; line++)
         {
-            if (excluded is not null && excluded.Any(range => line >= range.StartLine && line <= range.EndLine))
-            {
-                continue;
-            }
-
             var start = starts[line - 1];
             var end = line < starts.Count ? starts[line] : text.Length;
             result.Add(new LineHunkBuilder.SourceLine(line, StripEol(text[start..end])));
         }
 
         return result;
-    }
-
-    /// <summary>
-    /// All logical lines of a fully decoded file, with real (1-based) line numbers, independent of any
-    /// symbol's declaration span. Used by the changed-line coverage safety net (N1) to whole-file diff a
-    /// changed source document and find lines that no reported entry's declaration range covers.
-    /// </summary>
-    internal static IReadOnlyList<LineHunkBuilder.SourceLine> AllLines(string text)
-    {
-        if (text.Length == 0)
-        {
-            return [];
-        }
-
-        var totalLines = SourceResolver.Line(text, text.Length);
-        return FullLines(text, new TextSpanContract(0, text.Length, 1, totalLines), null);
     }
 
     /// <summary>Header-only lines: the declaration span text up to (excluding) its first '{' or '=&gt;', as raw span text (no full-line leading indentation).</summary>
@@ -142,6 +118,25 @@ internal static class DiffSnapshotReader
     }
 
     internal static int LineAt(string text, int offset) => SourceResolver.Line(text, offset);
+
+    internal static List<int> LineStarts(string text) => SourceResolver.LineStarts(text);
+
+    /// <summary>End offset of <paramref name="line"/>'s content, excluding its line terminator.</summary>
+    internal static int LineContentEnd(string text, IReadOnlyList<int> starts, int line)
+    {
+        var end = line < starts.Count ? starts[line] : text.Length;
+        if (end > starts[line - 1] && text[end - 1] == '\n')
+        {
+            end--;
+        }
+
+        if (end > starts[line - 1] && text[end - 1] == '\r')
+        {
+            end--;
+        }
+
+        return end;
+    }
 
     private static string StripEol(string line)
     {

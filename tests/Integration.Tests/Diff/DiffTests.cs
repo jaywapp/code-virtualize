@@ -118,7 +118,8 @@ internal static class DiffTests
         RenamedFileAttributeChangeIsStillAttributed();
         BlankLineDeletionBetweenMembersIsNotReportedAsContainerChange();
         FieldReindentationIsReportedAsFormattingOnly();
-        ChangedLineCoverageSafetyNetPropertyTest();
+        OwnedTextRegressionsWithRealAnalyzer();
+        OwnedTextCoveragePropertyTest();
     }
 
     /// <summary>
@@ -586,13 +587,44 @@ internal static class DiffTests
         var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
         var change = result.Changes.Single(item => item.BaseSymbol?.SymbolId == symbolId || item.TargetSymbol?.SymbolId == symbolId);
 
-        Assert(change.Contract.Evidence.Count == 2, $"Expected exactly two evidence items (B.cs removed, C.cs added); got {change.Contract.Evidence.Count}.");
-        Assert(change.Contract.Evidence.All(item => item.TextMode == DiffEvidenceTextMode.HeaderOnly),
-            "B.cs's removal and C.cs's addition must each be reported as header_only, never as a line-hunk comparing one unrelated file's text to the other's (M4).");
-        Assert(change.Contract.Evidence.Any(item => item.Kind == "declaration-removed" && item.BaseContentHash is not null && item.TargetContentHash is null),
-            "B.cs's declaration must be reported as removed.");
-        Assert(change.Contract.Evidence.Any(item => item.Kind == "declaration-added" && item.TargetContentHash is not null && item.BaseContentHash is null),
-            "C.cs's declaration must be reported as added.");
+        // A.cs pairs with A.cs by path (unchanged, so no evidence). B.cs and C.cs are then the only unpaired
+        // declarations, one on each side, so they are paired as a moved declaration (owned-text redesign) and
+        // compared as B.cs -> C.cs; before the redesign they were reported as removed + added header_only.
+        var evidence = change.Contract.Evidence.Single();
+        Assert(evidence.TextMode == DiffEvidenceTextMode.LineHunks &&
+               evidence.TextualHunk!.Contains("--- a/B.cs\n+++ b/C.cs\n", StringComparison.Ordinal) &&
+               evidence.TextualHunk.Contains("+    // in C", StringComparison.Ordinal) &&
+               !evidence.TextualHunk.Contains("in A", StringComparison.Ordinal),
+            $"A.cs must be paired with A.cs by path (M4) and never compared by index; the single leftover B.cs/C.cs pair is a moved declaration.\n{evidence.TextualHunk}");
+
+        // With more than one unpaired declaration on a side, nothing is guessed: removed/added header_only.
+        var targetFileD = "namespace Fixture.PartialSwap;\npublic partial class SwapTarget\n{\n    // in D\n}\n";
+        var targetDeclD = FragmentLocation(targetFileD, "D.cs", "public partial class SwapTarget\n{\n    // in D\n}");
+        var targetBytesD = new UTF8Encoding(false).GetBytes(targetFileD);
+        var threeWayTarget = new SymbolDiffSnapshot("m4-target-3", HashUtf8Bytes(targetBytesD), DateTimeOffset.UtcNow, Coverage(),
+            [baseSymbol with
+            {
+                Declarations =
+                [
+                    new DeclarationContract(symbolId, targetDeclA, DocumentKind.Source),
+                    new DeclarationContract(symbolId, targetDeclC, DocumentKind.Source),
+                    new DeclarationContract(symbolId, targetDeclD, DocumentKind.Source)
+                ]
+            }],
+            [
+                new DiffSourceDocument("A.cs", targetBytesA, "utf-8", HashUtf8Bytes(targetBytesA)),
+                new DiffSourceDocument("C.cs", targetBytesC, "utf-8", HashUtf8Bytes(targetBytesC)),
+                new DiffSourceDocument("D.cs", targetBytesD, "utf-8", HashUtf8Bytes(targetBytesD))
+            ], []);
+        var threeWay = new SymbolDiffService().Compare(new SymbolDiffRequest(
+            new BaselineContract(BaselineKind.Vcs, "git", "m4-base", "m4-target-3", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint),
+            baseSnapshot, threeWayTarget));
+        var threeWayChange = threeWay.Changes.Single(item => item.BaseSymbol?.SymbolId == symbolId);
+        Assert(threeWayChange.Contract.Evidence.Count == 3 &&
+               threeWayChange.Contract.Evidence.All(item => item.TextMode == DiffEvidenceTextMode.HeaderOnly) &&
+               threeWayChange.Contract.Evidence.Count(item => item.Kind == "declaration-removed") == 1 &&
+               threeWayChange.Contract.Evidence.Count(item => item.Kind == "declaration-added") == 2,
+            "With one removed and two added partial declarations, B.cs must be reported removed and C.cs/D.cs added, never compared line by line (M4).");
     }
 
     private static void EolOnlyChangeIsReportedAsFormattingOnly()
@@ -655,9 +687,9 @@ internal static class DiffTests
     private static void AttributeOnSameLineAsFieldIsNotSilentlyDropped()
     {
         // N1 repro 1: the field's own indexed span (VariableDeclaratorSyntax) is just "speed" - the leading
-        // attribute on the same physical line is outside it, and there is no container symbol here to catch
-        // it via self text either. Before the changed-line safety net, this edit produced zero entries even
-        // though the file's digest genuinely changed.
+        // attribute on the same physical line is outside it. There is no container symbol here, so the field
+        // is a top-level symbol that owns the rest of its own lines (self text) and reports the change itself.
+        // (With a container, the attribute is container self text instead - see the real-analyzer tests.)
         var baseSource = "namespace Fixture.N1;\npublic class N1Target\n{\n    [Range(0, 10)] private int speed;\n}\n";
         var targetSource = "namespace Fixture.N1;\npublic class N1Target\n{\n    [Range(0, 99)] private int speed;\n}\n";
 
@@ -677,10 +709,8 @@ internal static class DiffTests
         Assert(change.BaseSymbol?.SymbolId == baseField.SymbolId && change.TargetSymbol?.SymbolId == baseField.SymbolId,
             "The attribute change must be attributed to the field on that line (the only indexed symbol whose range covers it).");
         var evidence = change.Contract.Evidence.Single();
-        Assert(evidence.TextMode == DiffEvidenceTextMode.LineHunks && evidence.TextualHunk!.Contains("Range(0, 99)", StringComparison.Ordinal),
-            "The safety-net entry's evidence must show the actual changed text, not just a bare fingerprint.");
-        Assert(result.Contract.Limitations.Contains("diff-span-adjacent-line-attributed", StringComparer.Ordinal),
-            "The diff must flag that this entry came from the changed-line safety net, not an ordinary per-symbol comparison.");
+        Assert(evidence.TextMode == DiffEvidenceTextMode.LineHunks && evidence.TextualHunk!.Contains("+    [Range(0, 99)] private int speed;", StringComparison.Ordinal),
+            "The entry's evidence must show the actual changed original line, not just a bare fingerprint.");
     }
 
     private static void TrailingCommentOnSameLineAsFieldIsNotSilentlyDropped()
@@ -709,11 +739,8 @@ internal static class DiffTests
 
     private static void AttributeOnSeparateLineIsAttributedToCoveringSymbol()
     {
-        // Recorded outcome: unlike the same-line cases above, an attribute on its OWN line does not fall
-        // within the field's own (single-line) span, but it DOES fall within the containing class's self
-        // text range (member line-exclusion only removes the field's own line, not the attribute's line
-        // above it). So this case is already caught by the pre-existing container self-text mechanism
-        // (M3), and is attributed to the class, not to the field itself.
+        // Recorded outcome: an attribute outside the field's own span (here on its own line) is the
+        // containing class's self text, so it is attributed to the class, not to the field itself.
         var baseSource = "namespace Fixture.N1;\npublic class N1SeparateTarget\n{\n    [Range(0, 10)]\n    private int speed;\n}\n";
         var targetSource = "namespace Fixture.N1;\npublic class N1SeparateTarget\n{\n    [Range(0, 99)]\n    private int speed;\n}\n";
 
@@ -750,9 +777,11 @@ internal static class DiffTests
         var baseBytes = new UTF8Encoding(false).GetBytes(baseSource);
         var targetBytes = new UTF8Encoding(false).GetBytes(targetSource);
 
-        // No symbols at all reference this file, so no ordinary per-symbol entry will ever mention it - the
-        // safety net's own whole-file diff is the only thing that could say anything about it, and here that
-        // diff itself exceeds the line-diff budget (same near-total-rewrite shape as M1's regression test).
+        // No symbols at all reference this file, so no per-symbol entry will ever mention it. Text outside
+        // every declaration is file-level text, which is not attributed to a symbol; a change to it must be
+        // flagged explicitly instead of silently returning a complete-looking empty diff. (Before the
+        // owned-text redesign this was a whole-file line diff hitting its budget and downgrading coverage;
+        // detection is now an exact text comparison with no edit-distance cap, so no budget can hide it.)
         var baseSnapshot = new SymbolDiffSnapshot("n1-budget-base", HashUtf8Bytes(baseBytes), DateTimeOffset.UtcNow, Coverage(), [],
             [new DiffSourceDocument("Untracked.cs", baseBytes, "utf-8", HashUtf8Bytes(baseBytes))], []);
         var targetSnapshot = new SymbolDiffSnapshot("n1-budget-target", HashUtf8Bytes(targetBytes), DateTimeOffset.UtcNow, Coverage(), [],
@@ -762,10 +791,16 @@ internal static class DiffTests
         var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
 
         Assert(result.Changes.Count == 0, "Sanity: no symbols reference this file, so no ordinary entry exists for it.");
-        Assert(result.Contract.Limitations.Contains("diff-unattributed-change-budget-exceeded", StringComparer.Ordinal),
-            "When the whole-file line diff itself hits the edit-distance/trace budget and no entry already covers that file, this must be surfaced explicitly as a limitation, not a silently complete-looking empty diff.");
-        Assert(result.Contract.Coverage.Truncated && result.Contract.Coverage.Level == CoverageLevel.Partial,
-            "Coverage must also reflect the truncation explicitly, not just the limitation string.");
+        Assert(result.Contract.Limitations.Contains("diff-file-level-text-changed", StringComparer.Ordinal) &&
+               result.Contract.Coverage.Limitations.Contains("diff-file-level-text-changed", StringComparer.Ordinal),
+            "A changed file whose change no symbol owns must be surfaced explicitly as a limitation, not a silently complete-looking empty diff.");
+
+        // Unchanged file-level text must not raise the limitation.
+        var quiet = new SymbolDiffService().Compare(new SymbolDiffRequest(
+            new BaselineContract(BaselineKind.Vcs, "git", "n1-budget-base", "n1-budget-base-2", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint),
+            baseSnapshot, baseSnapshot with { SnapshotId = "n1-budget-base-2" }));
+        Assert(!quiet.Contract.Limitations.Contains("diff-file-level-text-changed", StringComparer.Ordinal),
+            "Identical file-level text must not be flagged.");
     }
 
     private static void RealAnalyzerAttributeOnSameLineEndToEnd()
@@ -793,9 +828,9 @@ internal static class DiffTests
         var baseSnapshot = provider.CaptureRevision(new GitRevisionSnapshotRequest(
             fixture.RepositoryPath, "n1-real-analyzer-base", baseBuild.Manifest.Coverage, baseBuild.Symbols, []));
 
-        // The attribute and the field are on the SAME physical line, so even the container's self text
-        // excludes this whole line (member-line exclusion is line-granular) - neither the leaf field nor the
-        // containing class's self-text entry can see this change without the safety net.
+        // The attribute and the field are on the SAME physical line. The field's span is only "speed"; the
+        // attribute is the containing class's self text (member spans are masked character by character, not
+        // line by line), so the class reports it with the original line in its hunk.
         fixture.Write(Source(99));
         var targetBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(fixture.RepositoryPath, store));
         var targetSpeed = targetBuild.Symbols.Single(symbol => symbol.Kind == "field" && symbol.Name == "speed");
@@ -807,8 +842,12 @@ internal static class DiffTests
 
         Assert(result.Changes.Count != 0,
             "With symbols produced by the real C# analyzer (not a hand-built test double), a same-line attribute-only edit must not silently vanish end to end (N1), even though the field is inside an indexed container class.");
-        Assert(result.Changes.Any(change => change.BaseSymbol?.SymbolId == baseSpeed.SymbolId || change.TargetSymbol?.SymbolId == baseSpeed.SymbolId),
-            "The change must be attributed to the speed field specifically (the innermost symbol covering that line).");
+        Assert(result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.SymbolId == baseSpeed.ContainerId &&
+                change.Contract.Evidence.Any(evidence => evidence.TextualHunk?.Contains(
+                    "+    [System.ComponentModel.DataAnnotations.Range(0, 99)] private int speed;", StringComparison.Ordinal) == true)),
+            "The change must be reported on the containing class (owner of the attribute text) with the changed original line in its hunk.");
+        Assert(!result.Changes.Any(change => change.BaseSymbol?.SymbolId == baseSpeed.SymbolId),
+            "The field's own span did not change, so the field itself must not be reported.");
     }
 
     private static void ContainerRenameCandidateSurvivesMemberBodyEdit()
@@ -914,16 +953,21 @@ internal static class DiffTests
         var methodChange = result.Changes.Single(change => change.BaseSymbol?.SymbolId == baseMethod.SymbolId);
         Assert(methodChange.Contract.Evidence.Single().TextMode == DiffEvidenceTextMode.FingerprintOnly,
             "Sanity: the huge method's own per-symbol diff must still hit the line-hunk budget and downgrade to fingerprint_only.");
-        Assert(result.Contract.Limitations.Contains("diff-unattributed-change-budget-exceeded", StringComparer.Ordinal),
-            "X2: the whole-file safety-net diff hitting its own budget must be flagged even when an ordinary entry (M) already exists for the file - " +
-            "that entry says nothing about whether OTHER changes (speed's attribute) were also missed.");
+        // X2 (owned-text redesign): change detection no longer depends on a capped whole-file line diff, so
+        // the huge rewrite elsewhere in the file cannot hide speed's attribute change - it is reported with
+        // its own hunk rather than merely flagged by a budget limitation.
+        var speedChange = result.Changes.Single(change => change.BaseSymbol?.SymbolId == baseSpeed.SymbolId);
+        Assert(speedChange.Kind == DiffKind.BodyChanged &&
+               speedChange.Contract.Evidence.Any(evidence => evidence.TextualHunk?.Contains("+    [Range(0, 99)] private int speed;", StringComparison.Ordinal) == true),
+            "X2: speed's attribute change must be reported with the changed line even though another symbol in the same file exceeds the line-diff budget.");
     }
 
     private static void RenamedFileAttributeChangeIsStillAttributed()
     {
         // X3: Old.cs -> New.cs (same class/field, moved to a differently-named file) while ALSO changing the
-        // attribute argument on the same line as the field. Before the fix, the safety net only considered
-        // the INTERSECTION of base and target paths, so a moved file's changes were entirely invisible.
+        // attribute argument on the same line as the field. The field's only declaration moved, so its base
+        // and target declarations are paired as a move (one unpaired declaration on each side) and its self
+        // text (a top-level symbol here: no container) is compared across the two files.
         var baseSource = "namespace Fixture.X3;\npublic class X3Target\n{\n    [Range(0, 10)] private int speed;\n}\n";
         var targetSource = "namespace Fixture.X3;\npublic class X3Target\n{\n    [Range(0, 99)] private int speed;\n}\n";
 
@@ -938,10 +982,13 @@ internal static class DiffTests
         var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
 
         Assert(result.Changes.Count != 0,
-            "X3: an attribute-only edit on a field whose file was also renamed/moved must not be silently dropped just because the safety net only looked at same-named paths.");
+            "X3: an attribute-only edit on a field whose file was also renamed/moved must not be silently dropped.");
         var change = result.Changes.Single();
         Assert(change.BaseSymbol?.SymbolId == baseSpeed.SymbolId && change.TargetSymbol?.SymbolId == baseSpeed.SymbolId,
             "The change must still be attributed to speed even though its file moved.");
+        Assert(change.Contract.Evidence.Any(evidence => evidence.TextualHunk?.Contains("--- a/Old.cs\n+++ b/New.cs\n", StringComparison.Ordinal) == true) &&
+               HunkHas(change, "+    [Range(0, 99)] private int speed;"),
+            "The evidence must compare Old.cs to New.cs and show the changed line.");
     }
 
     private static void BlankLineDeletionBetweenMembersIsNotReportedAsContainerChange()
@@ -996,185 +1043,72 @@ internal static class DiffTests
             $"X4: a whitespace-only (indentation) change must be classified as formatting_only, not body_changed. Actual: {change.Kind}.");
         Assert(change.BaseSymbol?.SymbolId == baseField.SymbolId, "Must be attributed to the field on that line.");
         Assert(change.Contract.Evidence.Single().TextMode == DiffEvidenceTextMode.FingerprintOnly,
-            "Formatting-only safety-net evidence must be fingerprint-only, not a rendered hunk.");
+            "Formatting-only evidence must be fingerprint-only, not a rendered hunk.");
     }
 
-    // --- Mandatory invariant property test (X1-X4 confirmation) -------------------------------------------
+    // --- Owned-text redesign: real-analyzer regressions (TASK-028 review 4: N1-N6) -------------------------
 
-    private sealed record PropertyTemplateState(
-        int AttrValue, string Comment, int AValue, int BValue, int MethodValue,
-        IReadOnlyList<string> EnumMembers, bool EnumOneLine, bool BlankLineAfterFieldB,
-        int Line3IndentSpaces, int Line4IndentSpaces, string FileName);
-
-    private sealed record PropertyEdit(string Name, bool WhitespaceOnly, Func<PropertyTemplateState, Random, PropertyTemplateState> Apply);
-
-    private static void ChangedLineCoverageSafetyNetPropertyTest()
+    private sealed class RealWorkspace : IDisposable
     {
-        const int seed = 20260924;
-        const int iterations = 520;
-        var rng = new Random(seed);
-        var edits = BuildPropertyEditCatalog();
-        var failures = new List<string>();
-
-        var temporaryRoot = Path.Combine(Path.GetTempPath(), $"cv-safety-net-property-{Guid.NewGuid():N}");
-        var workspace = Path.Combine(temporaryRoot, "workspace");
-        var store = Path.Combine(temporaryRoot, "store");
-        Directory.CreateDirectory(workspace);
-        File.WriteAllText(Path.Combine(workspace, "Property.csproj"),
-            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup></Project>");
-
-        try
+        public RealWorkspace(string name)
         {
-            for (var iteration = 0; iteration < iterations; iteration++)
-            {
-                var initial = new PropertyTemplateState(
-                    AttrValue: rng.Next(0, 100),
-                    Comment: $"units-{rng.Next(0, 100)}",
-                    AValue: rng.Next(0, 100),
-                    BValue: rng.Next(0, 100),
-                    MethodValue: rng.Next(0, 100),
-                    EnumMembers: rng.Next(2) == 0 ? ["Red", "Green"] : ["Red", "Green", "Blue"],
-                    EnumOneLine: rng.Next(2) == 0,
-                    BlankLineAfterFieldB: true,
-                    Line3IndentSpaces: 4,
-                    Line4IndentSpaces: 4,
-                    FileName: "Property.cs");
-
-                var editCount = rng.Next(1, 4);
-                var chosenEdits = new List<PropertyEdit>();
-                for (var e = 0; e < editCount; e++)
-                {
-                    chosenEdits.Add(edits[rng.Next(edits.Count)]);
-                }
-
-                var target = initial;
-                foreach (var edit in chosenEdits)
-                {
-                    target = edit.Apply(target, rng);
-                }
-
-                var allWhitespaceOnly = chosenEdits.All(edit => edit.WhitespaceOnly);
-                var editNames = string.Join(",", chosenEdits.Select(edit => edit.Name));
-
-                try
-                {
-                    RunPropertyIteration(workspace, store, initial, target, allWhitespaceOnly);
-                }
-                catch (Exception exception)
-                {
-                    failures.Add($"iteration={iteration} seed={seed} edits=[{editNames}]: {exception.Message}");
-                    if (failures.Count >= 5)
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        finally
-        {
-            if (Directory.Exists(temporaryRoot))
-            {
-                Directory.Delete(temporaryRoot, recursive: true);
-            }
+            Root = Path.Combine(Path.GetTempPath(), $"cv-{name}-{Guid.NewGuid():N}");
+            Workspace = Path.Combine(Root, "workspace");
+            Store = Path.Combine(Root, "store");
+            Directory.CreateDirectory(Workspace);
+            File.WriteAllText(Path.Combine(Workspace, "Property.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup></Project>");
         }
 
-        Assert(failures.Count == 0,
-            $"Changed-line coverage safety net property test found {failures.Count} counterexample(s) out of {iterations} deterministic (seed={seed}) iterations:\n{string.Join("\n", failures)}");
+        public string Root { get; }
+        public string Workspace { get; }
+        public string Store { get; }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+        }
     }
 
-    private static List<PropertyEdit> BuildPropertyEditCatalog() =>
-    [
-        new PropertyEdit("change-attr-value", false, (s, rng) => s with { AttrValue = rng.Next(0, 1000) }),
-        new PropertyEdit("change-comment", false, (s, rng) => s with { Comment = $"units-{rng.Next(0, 1000)}" }),
-        new PropertyEdit("change-field-a-value", false, (s, rng) => s with { AValue = rng.Next(0, 1000) }),
-        new PropertyEdit("change-method-body", false, (s, rng) => s with { MethodValue = rng.Next(0, 1000) }),
-        new PropertyEdit("add-enum-member", false, (s, rng) => s with { EnumMembers = [.. s.EnumMembers, $"Member{rng.Next(1000, 9999)}"] }),
-        new PropertyEdit("remove-enum-member", false, (s, _) => s.EnumMembers.Count > 1 ? s with { EnumMembers = s.EnumMembers.Take(s.EnumMembers.Count - 1).ToArray() } : s),
-        new PropertyEdit("delete-blank-line", true, (s, _) => s with { BlankLineAfterFieldB = false }),
-        new PropertyEdit("add-blank-line", true, (s, _) => s with { BlankLineAfterFieldB = true }),
-        new PropertyEdit("reindent-line3", true, (s, _) => s with { Line3IndentSpaces = s.Line3IndentSpaces == 4 ? 8 : 4 }),
-        new PropertyEdit("reindent-line4", true, (s, _) => s with { Line4IndentSpaces = s.Line4IndentSpaces == 4 ? 8 : 4 }),
-        new PropertyEdit("rename-file", true, (s, rng) => s with { FileName = $"Renamed{rng.Next(0, 100000)}.cs" }),
-    ];
+    private sealed record RealDiffOutcome(
+        SymbolDiffResult Result,
+        SymbolDiffSnapshot Base,
+        SymbolDiffSnapshot Target,
+        IReadOnlyDictionary<string, string> BaseFiles,
+        IReadOnlyDictionary<string, string> TargetFiles);
 
-    private static string RenderPropertyTemplate(PropertyTemplateState state)
+    /// <summary>Indexes <paramref name="baseFiles"/> and then <paramref name="targetFiles"/> with the real C#
+    /// analyzer in one workspace and diffs the two snapshots.</summary>
+    private static RealDiffOutcome RealDiff(RealWorkspace workspace, IReadOnlyDictionary<string, string> baseFiles, IReadOnlyDictionary<string, string> targetFiles)
     {
-        var indent3 = new string(' ', state.Line3IndentSpaces);
-        var indent4 = new string(' ', state.Line4IndentSpaces);
-        var lines = new List<string>
+        SymbolDiffSnapshot Capture(IReadOnlyDictionary<string, string> files, string prefix)
         {
-            "namespace Fixture.Property;",
-            "public class PropertyTarget",
-            "{",
-            $"{indent3}[Range(0, {state.AttrValue})] private int speed; // {state.Comment}",
-            $"{indent4}private int a = {state.AValue}, b = {state.BValue};",
-        };
-        if (state.BlankLineAfterFieldB)
-        {
-            lines.Add(string.Empty);
-        }
-        lines.Add("    public static int Compute()");
-        lines.Add("    {");
-        lines.Add($"        return {state.MethodValue};");
-        lines.Add("    }");
-        lines.Add("}");
-        lines.Add(string.Empty);
-        if (state.EnumOneLine)
-        {
-            lines.Add($"public enum ColorProperty {{ {string.Join(", ", state.EnumMembers)} }}");
-        }
-        else
-        {
-            lines.Add("public enum ColorProperty");
-            lines.Add("{");
-            for (var i = 0; i < state.EnumMembers.Count; i++)
+            foreach (var existing in Directory.GetFiles(workspace.Workspace, "*.cs"))
             {
-                lines.Add($"    {state.EnumMembers[i]}{(i < state.EnumMembers.Count - 1 ? "," : string.Empty)}");
+                File.Delete(existing);
             }
-            lines.Add("}");
-        }
-        lines.Add(string.Empty);
-        return string.Join("\n", lines);
-    }
 
-    private static void RunPropertyIteration(string workspace, string store, PropertyTemplateState initial, PropertyTemplateState target, bool allWhitespaceOnly)
-    {
-        foreach (var existing in Directory.GetFiles(workspace, "*.cs"))
-        {
-            File.Delete(existing);
-        }
+            foreach (var (path, text) in files)
+            {
+                File.WriteAllText(Path.Combine(workspace.Workspace, path), text, new UTF8Encoding(false));
+            }
 
-        var baseSourceText = RenderPropertyTemplate(initial);
-        File.WriteAllText(Path.Combine(workspace, initial.FileName), baseSourceText, new UTF8Encoding(false));
-        var baseBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(workspace, store));
-        var baseSnapshot = new SymbolDiffSnapshot(
-            $"prop-base-{Guid.NewGuid():N}", baseBuild.Manifest.InputFingerprint, DateTimeOffset.UtcNow, baseBuild.Manifest.Coverage,
-            baseBuild.Symbols, ReadSourceDocuments(workspace, baseBuild.Manifest), []);
-
-        if (!string.Equals(initial.FileName, target.FileName, StringComparison.Ordinal))
-        {
-            File.Delete(Path.Combine(workspace, initial.FileName));
+            var build = new CSharpIndexBuilder().Build(new CSharpBuildRequest(workspace.Workspace, workspace.Store));
+            return new SymbolDiffSnapshot(
+                $"{prefix}-{Guid.NewGuid():N}", build.Manifest.InputFingerprint, DateTimeOffset.UtcNow, build.Manifest.Coverage,
+                build.Symbols, ReadSourceDocuments(workspace.Workspace, build.Manifest), []);
         }
 
-        var targetSourceText = RenderPropertyTemplate(target);
-        File.WriteAllText(Path.Combine(workspace, target.FileName), targetSourceText, new UTF8Encoding(false));
-        var targetBuild = new CSharpIndexBuilder().Build(new CSharpBuildRequest(workspace, store));
-        var targetSnapshot = new SymbolDiffSnapshot(
-            $"prop-target-{Guid.NewGuid():N}", targetBuild.Manifest.InputFingerprint, DateTimeOffset.UtcNow, targetBuild.Manifest.Coverage,
-            targetBuild.Symbols, ReadSourceDocuments(workspace, targetBuild.Manifest), []);
-
+        var baseSnapshot = Capture(baseFiles, "real-base");
+        var targetSnapshot = Capture(targetFiles, "real-target");
         var baseline = new BaselineContract(
             BaselineKind.Vcs, "git", baseSnapshot.SnapshotId, targetSnapshot.SnapshotId, null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
         var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
         result.Contract.Validate();
-
-        VerifyChangedLineCoverage(result, initial.FileName, baseSourceText, target.FileName, targetSourceText);
-
-        if (allWhitespaceOnly)
-        {
-            Assert(!result.Changes.Any(change => change.Kind == DiffKind.BodyChanged),
-                "Whitespace-only edits alone must never produce a body_changed entry.");
-        }
+        return new RealDiffOutcome(result, baseSnapshot, targetSnapshot, baseFiles, targetFiles);
     }
 
     private static IReadOnlyList<DiffSourceDocument> ReadSourceDocuments(string workspace, ManifestContract manifest) =>
@@ -1184,170 +1118,531 @@ internal static class DiffTests
             return new DiffSourceDocument(file.Path, bytes, file.Encoding, file.ContentHash);
         }).ToArray();
 
-    /// <summary>
-    /// Invariant 1 (X1-X4 confirmation): every SUBSTANTIVE line-level change between the base and target file
-    /// text is covered by some reported entry's declaration range on at least one side, or the file carries
-    /// the diff-unattributed-change-budget-exceeded limitation. Uses an independent (non-Myers, DP-based LCS)
-    /// line diff so this check does not share an implementation with the code under test, but deliberately
-    /// mirrors the production ATTRIBUTION semantics it is verifying (X1's per-pair positional delete/insert
-    /// pairing within each changed run; "covered on either side is sufficient", not both):
-    ///
-    /// - A whitespace-only pair (or a lone blank line, added or removed) is exempt from the coverage
-    ///   requirement entirely - production may legitimately suppress it outright (a container's own
-    ///   self-text ignores whitespace-only differences, X4/U2 rule 3) or report it as formatting_only; either
-    ///   is acceptable and neither is required by this invariant.
-    /// - A substantive pair (or lone line) only needs coverage on ONE side, not both: e.g. appending a new
-    ///   enum member on a line shared with unrelated existing members is already fully explained by that
-    ///   member's own Added entry (target side only) - the untouched siblings on the same line correctly get
-    ///   no entry of their own (M2), so the base side of that same line is never independently covered, and
-    ///   must not be required to be.
-    /// </summary>
-    private static void VerifyChangedLineCoverage(SymbolDiffResult result, string basePath, string baseSourceText, string targetPath, string targetSourceText)
+    private static bool HunkHas(SymbolDiffChange change, string line) =>
+        change.Contract.Evidence.Any(evidence => evidence.TextualHunk?.Contains($"\n{line}\n", StringComparison.Ordinal) == true);
+
+    private static string Describe(SymbolDiffResult result) => string.Join("\n", result.Changes.Select(change =>
+        $"{change.Kind} {change.BaseSymbol?.Name ?? "-"}->{change.TargetSymbol?.Name ?? "-"}: " +
+        string.Join(" | ", change.Contract.Evidence.Select(evidence => $"{evidence.Kind}/{evidence.TextMode}: {evidence.TextualHunk}"))));
+
+    private static string Lines(params string[] lines) => string.Join("\n", lines) + "\n";
+
+    private static void OwnedTextRegressionsWithRealAnalyzer()
     {
-        var baseLines = baseSourceText.Split('\n');
-        var targetLines = targetSourceText.Split('\n');
-        var edits = IndependentLineDiff(baseLines, targetLines);
+        using var workspace = new RealWorkspace("owned-text-regressions");
 
-        var hasBudgetLimitation = result.Contract.Limitations.Contains("diff-unattributed-change-budget-exceeded", StringComparer.Ordinal);
+        // N1 swap: the two fields trade lines while speed's attribute changes. A positional line pairing
+        // matched speed's old line with hp's new line and dropped "Range(0, 99)".
+        var n1 = RealDiff(workspace,
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "public class Target", "{", "    [Range(0, 10)] private int speed;", "    private int hp = 5;", "}") },
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "public class Target", "{", "    private int hp = 6;", "    [Range(0, 99)] private int speed;", "}") });
+        Assert(n1.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.Name == "Target" &&
+                HunkHas(change, "+    [Range(0, 99)] private int speed;")),
+            $"N1 swap: the class must report speed's changed attribute line.\n{Describe(n1.Result)}");
+        Assert(n1.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.Name == "hp"),
+            $"N1 swap: hp's own value change must still be reported.\n{Describe(n1.Result)}");
 
-        var coveredBase = new HashSet<int>();
-        var coveredTarget = new HashSet<int>();
-        foreach (var entry in result.Contract.Entries)
-        {
-            foreach (var location in entry.BaseLocations.Where(item => string.Equals(item.Path, basePath, StringComparison.Ordinal)))
+        // N2 insert above: a field is replaced above speed while speed's attribute changes.
+        var n2 = RealDiff(workspace,
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "public class Target", "{", "    [Range(0, 10)] private int speed;", "    private int gone;", "}") },
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "public class Target", "{", "    private int added;", "    [Range(0, 99)] private int speed;", "}") });
+        Assert(n2.Result.Changes.Any(change => change.BaseSymbol?.Name == "Target" && HunkHas(change, "+    [Range(0, 99)] private int speed;")),
+            $"N2 insert-above: speed's attribute change must be in the class's hunk, not only a gone->added rename candidate.\n{Describe(n2.Result)}");
+
+        // N3 enum attribute on the enum's own line, plus a member appended on that same line.
+        var n3 = RealDiff(workspace,
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "[Description(\"a\")] public enum Color { Red, Green }") },
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "[Description(\"b\")] public enum Color { Red, Green, Blue }") });
+        Assert(n3.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.Name == "Color" &&
+                HunkHas(change, "+[Description(\"b\")] public enum Color { Red, Green, Blue }")),
+            $"N3: the enum's same-line attribute change must be reported on the enum with the original line.\n{Describe(n3.Result)}");
+        Assert(n3.Result.Changes.Any(change => change.Kind == DiffKind.Added && change.TargetSymbol?.Name == "Blue"),
+            "N3: the appended member must still be reported as added.");
+        Assert(!n3.Result.Changes.Any(change => change.BaseSymbol?.Name is "Red" or "Green"),
+            "N3: members whose own text did not change must not be reported (M2).");
+
+        // N4 absorb: a blank line deleted at the top of the class, speed's attribute and hp's value changed.
+        var n4 = RealDiff(workspace,
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "public class Target", "{", "", "    [Range(0, 10)] private int speed;", "    private int hp = 5;", "}") },
+            new Dictionary<string, string> { ["N.cs"] = Lines("namespace Fixture.N;", "public class Target", "{", "    [Range(0, 99)] private int speed;", "    private int hp = 6;", "}") });
+        Assert(n4.Result.Changes.Any(change => change.BaseSymbol?.Name == "Target" && HunkHas(change, "+    [Range(0, 99)] private int speed;")),
+            $"N4: speed's attribute change must not be absorbed by the blank-line deletion.\n{Describe(n4.Result)}");
+        Assert(n4.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged && change.BaseSymbol?.Name == "hp"),
+            "N4: hp's own change must be reported.");
+
+        // N5 extract: Q moves unchanged from A.cs into its own new file. Nothing changed in any symbol.
+        var n5 = RealDiff(workspace,
+            new Dictionary<string, string>
             {
-                for (var line = location.Span.StartLine; line <= location.Span.EndLine; line++)
-                {
-                    coveredBase.Add(line);
-                }
+                ["A.cs"] = Lines("namespace Fixture.N;", "", "public class P", "{", "    public int X() => 1;", "}", "", "public class Q", "{", "    public int Y;", "}")
+            },
+            new Dictionary<string, string>
+            {
+                ["A.cs"] = Lines("namespace Fixture.N;", "", "public class P", "{", "    public int X() => 1;", "}"),
+                ["Q.cs"] = Lines("namespace Fixture.N;", "", "public class Q", "{", "    public int Y;", "}")
+            });
+        Assert(n5.Result.Changes.Count == 0,
+            $"N5: extracting an unchanged type into a new file must not report body_changed for the type or its members.\n{Describe(n5.Result)}");
+
+        // N6 split: Old.cs becomes P.cs and Q.cs while Q.Y's attribute argument changes.
+        var n6 = RealDiff(workspace,
+            new Dictionary<string, string>
+            {
+                ["Old.cs"] = Lines("namespace Fixture.N;", "", "public class P", "{", "    public int X() => 1;", "}", "", "public class Q", "{", "    [R(1)] public int Y;", "}")
+            },
+            new Dictionary<string, string>
+            {
+                ["P.cs"] = Lines("namespace Fixture.N;", "", "public class P", "{", "    public int X() => 1;", "}"),
+                ["Q.cs"] = Lines("namespace Fixture.N;", "", "public class Q", "{", "    [R(2)] public int Y;", "}")
+            });
+        var n6Change = n6.Result.Changes.SingleOrDefault(change => change.BaseSymbol?.Name == "Q");
+        Assert(n6Change is not null && n6Change.Kind == DiffKind.BodyChanged &&
+               n6Change.Contract.Evidence.Any(evidence => evidence.TextualHunk?.Contains("--- a/Old.cs\n+++ b/Q.cs\n", StringComparison.Ordinal) == true) &&
+               HunkHas(n6Change, "+    [R(2)] public int Y;"),
+            $"N6: Q's declaration moved Old.cs -> Q.cs is paired and its attribute change is reported with the new line.\n{Describe(n6.Result)}");
+        Assert(n6.Result.Changes.Count == 1, $"N6: only Q changed.\n{Describe(n6.Result)}");
+    }
+
+    // --- Owned-text coverage property test (independent oracle) ---------------------------------------------
+
+    private sealed record PField(string Name, int Value, int? Attr, bool AttrOwnLine, string? Trailing, int Indent);
+
+    private sealed record PClass(
+        string Name, string Comment, IReadOnlyList<PField> Fields, IReadOnlyList<(string Name, int Value)> Shared, int MethodValue, bool BlankAfterFields);
+
+    private sealed record PEnum(string Name, IReadOnlyList<string> Members, bool OneLine, string Description);
+
+    private sealed record PState(IReadOnlyList<PClass> Classes, IReadOnlyList<PEnum> Enums, IReadOnlyDictionary<string, string> FileOf);
+
+    /// <summary>An edit; <paramref name="NonSubstantive"/> edits change only whitespace or file placement.</summary>
+    private sealed record PEdit(string Name, bool NonSubstantive, Func<PState, Random, PState> Apply);
+
+    private static void OwnedTextCoveragePropertyTest()
+    {
+        const int seed = 20260925;
+        const int iterations = 520;
+        var rng = new Random(seed);
+        var edits = BuildOwnedTextEditCatalog();
+        var failures = new List<string>();
+        var covered = new HashSet<string>(StringComparer.Ordinal);
+        using var workspace = new RealWorkspace("owned-text-property");
+
+        for (var iteration = 0; iteration < iterations && failures.Count < 5; iteration++)
+        {
+            var initial = InitialPropertyState(rng);
+            var chosen = new List<PEdit>();
+            var target = initial;
+            var editCount = rng.Next(1, 4);
+            for (var e = 0; e < editCount; e++)
+            {
+                var edit = edits[rng.Next(edits.Count)];
+                chosen.Add(edit);
+                target = edit.Apply(target, rng);
+                covered.Add(edit.Name);
             }
 
-            foreach (var location in entry.TargetLocations.Where(item => string.Equals(item.Path, targetPath, StringComparison.Ordinal)))
+            var editNames = string.Join(",", chosen.Select(edit => edit.Name));
+            try
             {
-                for (var line = location.Span.StartLine; line <= location.Span.EndLine; line++)
+                var outcome = RealDiff(workspace, RenderPropertyState(initial), RenderPropertyState(target));
+                VerifyOwnedTextOracle(outcome);
+                if (chosen.All(edit => edit.NonSubstantive))
                 {
-                    coveredTarget.Add(line);
+                    Assert(!outcome.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged),
+                        $"Whitespace/placement-only edits must not produce body_changed.\n{Describe(outcome.Result)}");
                 }
+            }
+            catch (Exception exception)
+            {
+                failures.Add($"iteration={iteration} seed={seed} edits=[{editNames}]: {exception.Message}");
             }
         }
 
-        var i = 0;
-        while (i < edits.Count)
+        Assert(failures.Count == 0,
+            $"Owned-text property test found {failures.Count} counterexample(s) (seed={seed}, {iterations} iterations):\n{string.Join("\n\n", failures)}");
+        Assert(covered.Count == edits.Count, "Sanity: every edit kind must have been exercised at least once.");
+    }
+
+    private static PState InitialPropertyState(Random rng)
+    {
+        var alpha = new PClass("Alpha", $"note-{rng.Next(100)}",
+            [
+                new PField("speed", rng.Next(100), rng.Next(100), rng.Next(2) == 0, rng.Next(2) == 0 ? $"units-{rng.Next(100)}" : null, 4),
+                new PField("hp", rng.Next(100), rng.Next(2) == 0 ? rng.Next(100) : null, false, null, 4),
+                new PField("mana", rng.Next(100), null, false, null, 4),
+            ],
+            [("a", rng.Next(100)), ("b", rng.Next(100))], rng.Next(100), true);
+        var beta = new PClass("Beta", $"note-{rng.Next(100)}",
+            [new PField("rate", rng.Next(100), rng.Next(100), false, null, 4)], [], rng.Next(100), rng.Next(2) == 0);
+        var color = new PEnum("Color", rng.Next(2) == 0 ? ["Red", "Green"] : ["Red", "Green", "Blue"], rng.Next(2) == 0, $"d{rng.Next(100)}");
+        var layout = rng.Next(3);
+        var fileOf = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            if (edits[i].Kind == IndependentLineEditKind.Equal)
+            ["Alpha"] = "Main.cs",
+            ["Beta"] = layout == 0 ? "Main.cs" : "Beta.cs",
+            ["Color"] = layout == 2 ? "Beta.cs" : "Main.cs",
+        };
+        return new PState([alpha, beta], [color], fileOf);
+    }
+
+    private static PState WithClass(PState state, Random rng, Func<PClass, Random, PClass> change)
+    {
+        var index = rng.Next(state.Classes.Count);
+        var classes = state.Classes.ToArray();
+        classes[index] = change(classes[index], rng);
+        return state with { Classes = classes };
+    }
+
+    private static PClass WithField(PClass type, Random rng, Func<PField, Random, PField> change)
+    {
+        if (type.Fields.Count == 0)
+        {
+            return type;
+        }
+
+        var index = rng.Next(type.Fields.Count);
+        var fields = type.Fields.ToArray();
+        fields[index] = change(fields[index], rng);
+        return type with { Fields = fields };
+    }
+
+    private static PState WithEnum(PState state, Func<PEnum, PEnum> change) => state with { Enums = state.Enums.Select(change).ToArray() };
+
+    private static PState MoveType(PState state, string type, string file) =>
+        state with { FileOf = new Dictionary<string, string>(state.FileOf, StringComparer.Ordinal) { [type] = file } };
+
+    private static List<PEdit> BuildOwnedTextEditCatalog() =>
+    [
+        new PEdit("change-attr-value", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Attr = 100 + r2.Next(900) }))),
+        new PEdit("remove-attr", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, _) => f with { Attr = null }))),
+        new PEdit("change-trailing-comment", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Trailing = $"units-{100 + r2.Next(900)}" }))),
+        new PEdit("change-class-comment", false, (s, rng) => WithClass(s, rng, (c, r) => c with { Comment = $"note-{100 + r.Next(900)}" })),
+        new PEdit("change-field-value", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Value = 100 + r2.Next(900) }))),
+        new PEdit("change-method-body", false, (s, rng) => WithClass(s, rng, (c, r) => c with { MethodValue = 100 + r.Next(900) })),
+        new PEdit("swap-fields", false, (s, rng) => WithClass(s, rng, (c, r) =>
+        {
+            if (c.Fields.Count < 2) return c;
+            var fields = c.Fields.ToArray();
+            var i = r.Next(fields.Length - 1);
+            (fields[i], fields[i + 1]) = (fields[i + 1], fields[i]);
+            return c with { Fields = fields };
+        })),
+        new PEdit("add-field", false, (s, rng) => WithClass(s, rng, (c, r) =>
+        {
+            var fields = c.Fields.ToList();
+            fields.Insert(r.Next(fields.Count + 1), new PField($"extra{r.Next(100000)}", r.Next(100), r.Next(2) == 0 ? r.Next(100) : null, false, null, 4));
+            return c with { Fields = fields };
+        })),
+        new PEdit("remove-field", false, (s, rng) => WithClass(s, rng, (c, r) =>
+            c.Fields.Count == 0 ? c : c with { Fields = c.Fields.Where((_, i) => i != r.Next(c.Fields.Count)).ToArray() })),
+        new PEdit("add-declarator", false, (s, rng) => WithClass(s, rng, (c, r) => c with { Shared = [.. c.Shared, ($"d{r.Next(100000)}", r.Next(100))] })),
+        new PEdit("remove-declarator", false, (s, rng) => WithClass(s, rng, (c, _) => c.Shared.Count == 0 ? c : c with { Shared = c.Shared.Take(c.Shared.Count - 1).ToArray() })),
+        new PEdit("change-declarator-value", false, (s, rng) => WithClass(s, rng, (c, r) =>
+            c.Shared.Count == 0 ? c : c with { Shared = c.Shared.Select((d, i) => i == 0 ? (d.Name, 100 + r.Next(900)) : d).ToArray() })),
+        new PEdit("add-enum-member", false, (s, rng) => WithEnum(s, e => e with { Members = [.. e.Members, $"Member{rng.Next(100000)}"] })),
+        new PEdit("remove-enum-member", false, (s, _) => WithEnum(s, e => e.Members.Count > 1 ? e with { Members = e.Members.Take(e.Members.Count - 1).ToArray() } : e)),
+        new PEdit("change-enum-attr", false, (s, rng) => WithEnum(s, e => e with { Description = $"d{100 + rng.Next(900)}" })),
+        new PEdit("toggle-blank-line", true, (s, rng) => WithClass(s, rng, (c, _) => c with { BlankAfterFields = !c.BlankAfterFields })),
+        new PEdit("reindent-field", true, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, _) => f with { Indent = f.Indent == 4 ? 8 : 4 }))),
+        new PEdit("toggle-attr-line", true, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, _) => f with { AttrOwnLine = !f.AttrOwnLine }))),
+        new PEdit("toggle-enum-layout", true, (s, _) => WithEnum(s, e => e with { OneLine = !e.OneLine })),
+        new PEdit("move-type-to-new-file", true, (s, rng) =>
+        {
+            var types = s.FileOf.Keys.Order(StringComparer.Ordinal).ToArray();
+            return MoveType(s, types[rng.Next(types.Length)], $"Moved{rng.Next(100000)}.cs");
+        }),
+        new PEdit("extract-type", true, (s, rng) =>
+        {
+            var shared = s.FileOf.GroupBy(pair => pair.Value).Where(group => group.Count() > 1).SelectMany(group => group.Select(pair => pair.Key))
+                .Order(StringComparer.Ordinal).ToArray();
+            return shared.Length == 0 ? s : MoveType(s, shared[rng.Next(shared.Length)], $"Extracted{rng.Next(100000)}.cs");
+        }),
+        new PEdit("split-file", true, (s, rng) =>
+        {
+            var file = s.FileOf.Values.GroupBy(value => value).Where(group => group.Count() > 1).Select(group => group.Key).Order(StringComparer.Ordinal).FirstOrDefault();
+            if (file is null) return s;
+            var fileOf = new Dictionary<string, string>(s.FileOf, StringComparer.Ordinal);
+            foreach (var type in s.FileOf.Where(pair => pair.Value == file).Select(pair => pair.Key))
             {
-                i++;
+                fileOf[type] = $"Split{type}{rng.Next(100000)}.cs";
+            }
+            return s with { FileOf = fileOf };
+        }),
+        new PEdit("move-and-modify", false, (s, rng) =>
+        {
+            var moved = WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Attr = 100 + r2.Next(900) }));
+            var types = moved.Classes.Select(c => c.Name).ToArray();
+            return MoveType(moved, types[rng.Next(types.Length)], $"MovedEdited{rng.Next(100000)}.cs");
+        }),
+    ];
+
+    private static Dictionary<string, string> RenderPropertyState(PState state)
+    {
+        var blocks = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        void Add(string type, IEnumerable<string> lines)
+        {
+            var file = state.FileOf[type];
+            if (!blocks.TryGetValue(file, out var list))
+            {
+                list = ["namespace Fixture.Property;"];
+                blocks[file] = list;
+            }
+
+            list.Add(string.Empty);
+            list.AddRange(lines);
+        }
+
+        foreach (var type in state.Classes)
+        {
+            var lines = new List<string> { $"public class {type.Name}", "{", $"    // {type.Comment}" };
+            foreach (var field in type.Fields)
+            {
+                var indent = new string(' ', field.Indent);
+                var attribute = field.Attr is int value ? $"[Range(0, {value})]" : null;
+                if (attribute is not null && field.AttrOwnLine)
+                {
+                    lines.Add(indent + attribute);
+                }
+
+                var prefix = attribute is not null && !field.AttrOwnLine ? attribute + " " : string.Empty;
+                var trailing = field.Trailing is null ? string.Empty : $" // {field.Trailing}";
+                lines.Add($"{indent}{prefix}private int {field.Name} = {field.Value};{trailing}");
+            }
+
+            if (type.Shared.Count > 0)
+            {
+                lines.Add($"    private int {string.Join(", ", type.Shared.Select(item => $"{item.Name} = {item.Value}"))};");
+            }
+
+            if (type.BlankAfterFields)
+            {
+                lines.Add(string.Empty);
+            }
+
+            lines.AddRange(["    public int Compute()", "    {", $"        return {type.MethodValue};", "    }", "}"]);
+            Add(type.Name, lines);
+        }
+
+        foreach (var type in state.Enums)
+        {
+            var header = $"[Description(\"{type.Description}\")] public enum {type.Name}";
+            Add(type.Name, type.OneLine
+                ? [$"{header} {{ {string.Join(", ", type.Members)} }}"]
+                : [header, "{", .. type.Members.Select((member, i) => $"    {member}{(i < type.Members.Count - 1 ? "," : string.Empty)}"), "}"]);
+        }
+
+        return blocks.ToDictionary(pair => pair.Key, pair => string.Join("\n", pair.Value) + "\n", StringComparer.Ordinal);
+    }
+
+    private sealed record OwnedToken(string Value, bool IsPlaceholder, string Path, int Line, string LineText);
+
+    /// <summary>
+    /// Independent oracle for "no change disappears silently" (owned-text redesign). It uses no line diff
+    /// and no positional pairing, and none of the production code:
+    ///
+    /// For every symbol S present in both snapshots, S's owned text is its declaration lines with every other
+    /// symbol's span — other than S's own enclosing types — replaced by one placeholder token (whitespace
+    /// dropped). The two owned token sequences are aligned with a character LCS. Unmatched tokens that are
+    /// placeholders or separators (',' ';') are exempt. Any other unmatched token means S's owned text
+    /// changed, and then an entry for S or one of its enclosing types must exist, and the original text of
+    /// each changed owned line (below) must appear as a '-' (base) or '+' (target) line of those entries'
+    /// hunks — unless the evidence was truncated and the budget limitation is present.
+    ///
+    /// The line requirement applies to owned lines that hold a token the alignment could not match and whose
+    /// exempt-stripped text occurs more often on that side (a line diff must then drop or add one of them);
+    /// lines that only changed shape because matched text moved across lines are not required.
+    ///
+    /// One whitespace allowance: when S has an enclosing type whose whole owned text is exempt-equal and S's
+    /// own span text is whitespace-equal, S's owned lines can only differ because enclosing-type text moved
+    /// between lines (an attribute moved onto its own line), which is a whitespace change.
+    /// </summary>
+    private static void VerifyOwnedTextOracle(RealDiffOutcome outcome)
+    {
+        var baseById = outcome.Base.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
+        var targetById = outcome.Target.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
+        var budgetLimited = outcome.Result.Contract.Limitations.Contains(DiffContract.EvidenceBudgetExhaustedLimitation, StringComparer.Ordinal);
+
+        foreach (var symbolId in baseById.Keys.Where(targetById.ContainsKey).Order(StringComparer.Ordinal))
+        {
+            var before = baseById[symbolId];
+            var after = targetById[symbolId];
+            var baseTokens = OracleOwnedTokens(before, baseById, outcome.BaseFiles);
+            var targetTokens = OracleOwnedTokens(after, targetById, outcome.TargetFiles);
+            var (baseChanged, targetChanged) = OracleUnmatched(baseTokens, targetTokens);
+            if (baseChanged.Count == 0 && targetChanged.Count == 0)
+            {
                 continue;
             }
 
-            var start = i;
-            while (i < edits.Count && edits[i].Kind != IndependentLineEditKind.Equal)
+            var ancestors = OracleAncestors(before, baseById).Concat(OracleAncestors(after, targetById)).ToHashSet(StringComparer.Ordinal);
+            var spanEqual = OracleSpanTokens(before, outcome.BaseFiles) == OracleSpanTokens(after, outcome.TargetFiles);
+            if (spanEqual && ancestors.Any(ancestor =>
+                    baseById.TryGetValue(ancestor, out var baseAncestor) && targetById.TryGetValue(ancestor, out var targetAncestor) &&
+                    OracleUnmatched(
+                        OracleOwnedTokens(baseAncestor, baseById, outcome.BaseFiles),
+                        OracleOwnedTokens(targetAncestor, targetById, outcome.TargetFiles)) is { Base.Count: 0, Target.Count: 0 }))
             {
-                i++;
+                continue;
             }
 
-            var deletes = new List<IndependentLineEdit>();
-            var inserts = new List<IndependentLineEdit>();
-            for (var j = start; j < i; j++)
-            {
-                (edits[j].Kind == IndependentLineEditKind.Delete ? deletes : inserts).Add(edits[j]);
-            }
+            var owners = ancestors.Append(symbolId).ToHashSet(StringComparer.Ordinal);
+            var entries = outcome.Result.Contract.Entries
+                .Where(entry => (entry.BaseSymbolId is not null && owners.Contains(entry.BaseSymbolId)) ||
+                                (entry.TargetSymbolId is not null && owners.Contains(entry.TargetSymbolId)))
+                .ToArray();
+            Assert(entries.Length > 0,
+                $"Owned text of {before.QualifiedName} changed but no entry exists for it or an enclosing type.\n{Describe(outcome.Result)}");
 
-            var pairCount = Math.Min(deletes.Count, inserts.Count);
-            for (var k = 0; k < pairCount; k++)
+            var hunks = string.Concat(entries.SelectMany(entry => entry.Evidence).Select(evidence => "\n" + evidence.TextualHunk));
+            var truncated = entries.SelectMany(entry => entry.Evidence).Any(evidence => evidence.Truncated);
+            foreach (var (tokens, changed, otherTokens, prefix) in new[]
+                     { (baseTokens, baseChanged, targetTokens, '-'), (targetTokens, targetChanged, baseTokens, '+') })
             {
-                VerifyPair(deletes[k], inserts[k]);
-            }
-            for (var k = pairCount; k < deletes.Count; k++)
-            {
-                VerifyPair(deletes[k], null);
-            }
-            for (var k = pairCount; k < inserts.Count; k++)
-            {
-                VerifyPair(null, inserts[k]);
-            }
-        }
+                var lineKeys = OracleLineKeys(tokens, changed);
+                var otherCounts = OracleLineKeys(otherTokens, new HashSet<int>()).GroupBy(item => item.Key).ToDictionary(group => group.Key, group => group.Count());
+                foreach (var group in lineKeys.GroupBy(item => item.Key))
+                {
+                    // A line must be shown when it holds a token the alignment could not match and lines with
+                    // its text occur more often on this side (so any line diff has to drop one of them).
+                    if (!group.Any(item => item.HasChange) || group.Count() <= otherCounts.GetValueOrDefault(group.Key))
+                    {
+                        continue;
+                    }
 
-        void VerifyPair(IndependentLineEdit? delete, IndependentLineEdit? insert)
-        {
-            var baseLine = delete is { } d ? d.BaseIndex + 1 : (int?)null;
-            var targetLine = insert is { } ins ? ins.TargetIndex + 1 : (int?)null;
-            var baseText = delete is { } dt ? baseLines[dt.BaseIndex] : null;
-            var targetText = insert is { } it ? targetLines[it.TargetIndex] : null;
-
-            var whitespaceOnly = baseText is not null && targetText is not null
-                ? PropertyNormalizeWhitespace(baseText) == PropertyNormalizeWhitespace(targetText)
-                : PropertyNormalizeWhitespace(baseText ?? targetText ?? string.Empty).Length == 0;
-            if (whitespaceOnly)
-            {
-                return;
+                    var shown = group.Any(item => hunks.Contains($"\n{prefix}{item.LineText}\n", StringComparison.Ordinal));
+                    Assert(shown || (truncated && budgetLimited),
+                        $"Changed owned line of {before.QualifiedName} is not shown as '{prefix}' in any entry for it or an enclosing type: " +
+                        $"'{group.First().LineText}'.\n{Describe(outcome.Result)}");
+                }
             }
-
-            var covered = (baseLine is int bl && coveredBase.Contains(bl)) || (targetLine is int tl && coveredTarget.Contains(tl));
-            Assert(covered || hasBudgetLimitation,
-                $"Changed line not covered by any entry and no budget limitation is present. " +
-                $"BaseLine={baseLine?.ToString() ?? "-"} ('{baseText}'), TargetLine={targetLine?.ToString() ?? "-"} ('{targetText}').");
         }
     }
 
-    private static string PropertyNormalizeWhitespace(string value) => string.Concat(value.Where(character => !char.IsWhiteSpace(character)));
-
-    private enum IndependentLineEditKind { Equal, Delete, Insert }
-
-    private sealed record IndependentLineEdit(IndependentLineEditKind Kind, int BaseIndex, int TargetIndex);
-
-    /// <summary>Simple O(N*M) LCS-based line diff, deliberately independent of the production Myers
-    /// implementation under test. Returns an ordered edit script (equal/delete/insert) covering every line
-    /// of both files, so callers can group changes into runs and pair deletes/inserts positionally exactly
-    /// as the production safety net does (X1), without sharing any code with it.</summary>
-    private static List<IndependentLineEdit> IndependentLineDiff(IReadOnlyList<string> baseLines, IReadOnlyList<string> targetLines)
+    private static HashSet<string> OracleAncestors(SymbolContract symbol, IReadOnlyDictionary<string, SymbolContract> byId)
     {
-        var n = baseLines.Count;
-        var m = targetLines.Count;
-        var dp = new int[n + 1, m + 1];
-        for (var i = n - 1; i >= 0; i--)
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        var current = symbol;
+        while (current.ContainerId is not null && byId.TryGetValue(current.ContainerId, out var container) && result.Add(container.SymbolId))
         {
-            for (var j = m - 1; j >= 0; j--)
-            {
-                dp[i, j] = baseLines[i] == targetLines[j] ? dp[i + 1, j + 1] + 1 : Math.Max(dp[i + 1, j], dp[i, j + 1]);
-            }
-        }
-
-        var result = new List<IndependentLineEdit>();
-        var a = 0;
-        var b = 0;
-        while (a < n && b < m)
-        {
-            if (baseLines[a] == targetLines[b])
-            {
-                result.Add(new IndependentLineEdit(IndependentLineEditKind.Equal, a, b));
-                a++;
-                b++;
-            }
-            else if (dp[a + 1, b] >= dp[a, b + 1])
-            {
-                result.Add(new IndependentLineEdit(IndependentLineEditKind.Delete, a, -1));
-                a++;
-            }
-            else
-            {
-                result.Add(new IndependentLineEdit(IndependentLineEditKind.Insert, -1, b));
-                b++;
-            }
-        }
-        while (a < n)
-        {
-            result.Add(new IndependentLineEdit(IndependentLineEditKind.Delete, a, -1));
-            a++;
-        }
-        while (b < m)
-        {
-            result.Add(new IndependentLineEdit(IndependentLineEditKind.Insert, -1, b));
-            b++;
+            current = container;
         }
 
         return result;
     }
+
+    private static string OracleSpanTokens(SymbolContract symbol, IReadOnlyDictionary<string, string> files) =>
+        string.Concat(symbol.Declarations.OrderBy(declaration => declaration.Location.Path, StringComparer.Ordinal)
+            .Select(declaration => files[declaration.Location.Path!.Replace('\\', '/')]
+                .Substring(declaration.Location.Span.Start, declaration.Location.Span.Length))
+            .SelectMany(text => text.Where(character => !char.IsWhiteSpace(character))));
+
+    private static List<OwnedToken> OracleOwnedTokens(
+        SymbolContract symbol, IReadOnlyDictionary<string, SymbolContract> byId, IReadOnlyDictionary<string, string> files)
+    {
+        var ancestors = OracleAncestors(symbol, byId);
+        var tokens = new List<OwnedToken>();
+        foreach (var declaration in symbol.Declarations.OrderBy(item => item.Location.Path, StringComparer.Ordinal).ThenBy(item => item.Location.Span.Start))
+        {
+            var path = declaration.Location.Path!.Replace('\\', '/');
+            var text = files[path];
+            var others = byId.Values
+                .Where(other => other.SymbolId != symbol.SymbolId && !ancestors.Contains(other.SymbolId))
+                .SelectMany(other => other.Declarations)
+                .Where(other => other.Location.Path!.Replace('\\', '/') == path)
+                .Select(other => (Start: other.Location.Span.Start, End: other.Location.Span.Start + other.Location.Span.Length))
+                .ToArray();
+            bool Masked(int position) => others.Any(other => position >= other.Start && position < other.End);
+
+            var lines = text.Split('\n');
+            var lineStart = 0;
+            for (var line = 1; line < declaration.Location.Span.StartLine; line++)
+            {
+                lineStart += lines[line - 1].Length + 1;
+            }
+
+            var first = true;
+            for (var line = declaration.Location.Span.StartLine; line <= declaration.Location.Span.EndLine; line++)
+            {
+                var lineText = lines[line - 1];
+                for (var column = 0; column < lineText.Length; column++)
+                {
+                    var position = lineStart + column;
+                    if (Masked(position))
+                    {
+                        if (first || !Masked(position - 1))
+                        {
+                            tokens.Add(new OwnedToken("<member>", true, path, line, lineText));
+                        }
+                    }
+                    else if (!char.IsWhiteSpace(lineText[column]))
+                    {
+                        tokens.Add(new OwnedToken(lineText[column].ToString(), false, path, line, lineText));
+                    }
+
+                    first = false;
+                }
+
+                lineStart += lineText.Length + 1;
+            }
+        }
+
+        return tokens;
+    }
+
+    private static bool OracleIsExempt(OwnedToken token) => token.IsPlaceholder || token.Value is "," or ";";
+
+    /// <summary>Aligns two owned token sequences with an LCS and returns the indices of unmatched tokens that
+    /// are not exempt (placeholders and separators are exempt), per side.</summary>
+    private static (HashSet<int> Base, HashSet<int> Target) OracleUnmatched(IReadOnlyList<OwnedToken> before, IReadOnlyList<OwnedToken> after)
+    {
+        var n = before.Count;
+        var m = after.Count;
+        var lcs = new int[n + 1, m + 1];
+        for (var i = n - 1; i >= 0; i--)
+        {
+            for (var j = m - 1; j >= 0; j--)
+            {
+                lcs[i, j] = before[i].Value == after[j].Value ? lcs[i + 1, j + 1] + 1 : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+            }
+        }
+
+        var baseUnmatched = new HashSet<int>();
+        var targetUnmatched = new HashSet<int>();
+        var a = 0;
+        var b = 0;
+        while (a < n || b < m)
+        {
+            if (a < n && b < m && before[a].Value == after[b].Value)
+            {
+                a++;
+                b++;
+            }
+            else if (b >= m || (a < n && lcs[a + 1, b] >= lcs[a, b + 1]))
+            {
+                if (!OracleIsExempt(before[a])) baseUnmatched.Add(a);
+                a++;
+            }
+            else
+            {
+                if (!OracleIsExempt(after[b])) targetUnmatched.Add(b);
+                b++;
+            }
+        }
+
+        return (baseUnmatched, targetUnmatched);
+    }
+
+    /// <summary>Per owned line (in file order): its text without exempt tokens, its original text, and whether
+    /// it holds one of the <paramref name="changed"/> token indices.</summary>
+    private static List<(string Key, string LineText, bool HasChange)> OracleLineKeys(IReadOnlyList<OwnedToken> tokens, IReadOnlySet<int> changed) =>
+        tokens.Select((token, index) => (Token: token, Index: index))
+            .GroupBy(item => (item.Token.Path, item.Token.Line))
+            .Where(group => !group.All(item => OracleIsExempt(item.Token)))
+            .Select(group => (
+                Key: string.Concat(group.Where(item => !OracleIsExempt(item.Token)).Select(item => item.Token.Value)),
+                LineText: group.First().Token.LineText,
+                HasChange: group.Any(item => changed.Contains(item.Index))))
+            .ToList();
 
     // -------------------------------------------------------------------------------------------------------
 
