@@ -39,6 +39,11 @@
 - **필드**: private 구현용 필드도 선언 심볼이므로 별도 항목으로 기록한다.
 - **path ordinal**: corpus 기준 상대 경로를 `/` 구분자로 쓰고, byte 값 기준 C ordinal 비교로 정렬한다.
 
+## 줄 번호
+
+- 모든 줄 번호는 해당 commit의 소스 blob(`git show <commit>:<path>`)에서 직접 읽는다. 여러 파일을 합친 `git diff` 출력이나 저장해 둔 diff 덤프에 표시된 위치를 줄 번호로 쓰지 않는다. diff 헤더 줄 수만큼 번호가 밀린다. 2026-09-25 교차 확인에서 새 파일의 줄 번호가 +39(medium-quartznet), +6(large-aspnetcore)씩 밀린 오류가 이 원인으로 나왔다.
+- base와 target의 줄 번호는 각각 그 commit에서 따로 구한다. 한쪽 값을 다른 쪽에 재사용하지 않는다.
+
 ## 기록 형식
 
 - 판정이 애매했던 항목은 `expected.json`의 `judgmentCalls`에 이유와 함께 남긴다. 이 규약과 다르게 판정해야 하는 경우가 나오면, 임의로 정하지 말고 그 사례를 보고한다.

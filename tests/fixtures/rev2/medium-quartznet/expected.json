@@ -2179,6 +2179,45 @@
       ],
       "errorSummary": "All 4 sample errors are in DIFF-05 and share one root cause: every D1 entry that targets build/Build.Release.cs (D05-D1-02 through D05-D1-17, 16 entries total, not just the 4 sampled) has a target.line value exactly 39 lines higher than the symbol's real line at commit cPrime (confirmed identical at c and at the pinned HEAD too, since the file is unchanged after this pair). This was found by an automated full re-check (not just the sample): every D1 base/target line in all 6 pairs (122 base/target checks) and every NAV N1/N3 line in all 6 targets (28 checks) was fetched from the exact commit via `git show <commit>:<path>` and checked for the symbol's simple name; the only failures anywhere in the corpus were these 16 build/Build.Release.cs entries. D05-D1-01 (the other file in this pair) and every other pair/target are unaffected.",
       "protocolConsequence": "protocol.md R2-2's cross-check rule requires that if even one sampled item errors, the whole corpus answer set must be re-checked. This session therefore extended verification beyond the 32-item sample to a full automated position check of every DIFF D1 base/target line (122 checks) and every NAV N1/N3 line (28 checks) in medium-quartznet, plus a full manual re-derivation of the D3 selection logic and an independent SHA-256 recomputation of the D3 base-declaration hash for all 6 pairs and the N2 declaration hash for all 6 NAV targets. Outcome: the ONLY errors found anywhere are the 16 build/Build.Release.cs line-number errors in DIFF-05 (D05-D1-02 through D05-D1-17); every other line, hash, D2 set-membership decision, and D3 selection/hash in the file is correct. This session did not fix the errors (out of scope - data fixes are the author's/leader's job); see the report handed back to the coordinator for the full list with corrected line numbers."
+    },
+    "mechanicalAnchorRecheck": {
+      "date": "2026-09-26",
+      "performedBy": "qa-verifier (TASK-027 final mechanical re-check pass, 2026-09-26)",
+      "nature": "Independent re-verification (this session is not medium-quartznet's author). Confirms the author's fix in commit d50a8d3 (DIFF-05: 16 target.line corrections in build/Build.Release.cs, plus the GitHubApiUrl d2_exclusionCheckLines line 61->22).",
+      "method": "Automated: every DIFF D1 entry's base/target anchor line, every NAV N1 declaration line and N3 static-reference line, every d2_exclusionCheckLines line, and the N2/D3 startLine-endLine span were fetched with `git show <commit>:<path>` from the exact recorded commit (p/cPrime for D1 base/target, p for D3 base, pinnedCommit HEAD for NAV) and checked: (1) the anchor line contains the symbol's simple name as a whole word; (2) if that name recurs elsewhere in the same file at that commit, the specific anchor line is additionally checked against a declaration-shape heuristic (class/struct/record/interface/enum/delegate keyword, method/ctor paren, property accessor brace or `=>`, field/const initializer possibly continuing on the next line, or a modifier keyword with the name at end-of-line for a multi-line signature) so a same-name comment/call-site/different-overload cannot silently pass; (3) N2/D3 endLine closes with `}` or a `;`-terminated statement (covers multi-line expression-bodied members). D2 exclusion lines are checked for existence only; content-relevance against the free-text `reason` is advisory-only (an exclusion line only needs to fall inside the described region, not repeat an identifier from the reason string), never counted as a mismatch. Script: scratchpad task027-anchorcheck/anchor_check2.py, not committed, not part of expected.json.",
+      "checksRun": {
+        "d1_anchor": 122,
+        "n1": 6,
+        "n3": 22,
+        "exclusion": 11,
+        "n2_range": 6,
+        "d3_range": 5,
+        "total": 172
+      },
+      "result": "0 mismatches, 1 advisory (DIFF-02's d2_exclusionCheckLines line 129 in AnalyzerRunner.cs is a doc-comment `/// <param name=\"languageVersion\">` line inside RunGenerator's changed region, not literally repeating the reason text's identifier - correct, not an error). 87 anchors share their simple name with another line in the same file; all individually confirmed as the real declaration line.",
+      "fixedItemsIndependentlyReread": {
+        "note": "All 16 previously-wrong D1 target.line values plus the 1 exclusion-check line were re-read directly from `git show e5b0c8499...:build/Build.Release.cs` (independent of the automated script above) and confirmed correct with full surrounding context, including that lines like D05-D1-12 (`Target DraftRelease => _ => _`, line 74) and D05-D1-14 (`static async Task<JsonObject> GetReleaseForTag(...)`, line 134) are genuine declaration lines, not just name-bearing lines.",
+        "items": [
+          "D05-D1-02:22",
+          "D05-D1-03:25",
+          "D05-D1-04:27",
+          "D05-D1-05:31",
+          "D05-D1-06:34",
+          "D05-D1-07:37",
+          "D05-D1-08:39",
+          "D05-D1-09:41",
+          "D05-D1-10:46",
+          "D05-D1-11:51",
+          "D05-D1-12:74",
+          "D05-D1-13:110",
+          "D05-D1-14:134",
+          "D05-D1-15:178",
+          "D05-D1-16:215",
+          "D05-D1-17:254",
+          "d2_exclusionCheckLines(GitHubApiUrl):22"
+        ],
+        "result": "all 17 confirmed correct"
+      }
     }
   }
 }

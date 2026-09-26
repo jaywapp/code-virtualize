@@ -974,7 +974,7 @@ TASK-024, G2
 없음 — G2 승인 (2026-09-23)
 
 ### Status
-Ready — G2 승인
+Complete — 2026-09-26 (세 corpus 정답, 교차 확인 오류 수정, 전체 자동 anchor 재확인 오류 0)
 
 ## TASK-028 — 반환 계약 구현 코드 리뷰
 
@@ -1409,7 +1409,7 @@ Integration 러너를 20회 이상 반복해 실패 0, 동시 reader가 pointer 
 없음
 
 ### Status
-진행 중 — 1차 수정(오류 한정 재시도) 완료, 원자적 rename 전환 중
+Complete — 2026-09-24 (PR #9)
 
 ## TASK-043 — TASK-028 Low 지적 후속
 
