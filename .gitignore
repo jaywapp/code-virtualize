@@ -7,3 +7,4 @@
 raw-benchmarks/
 benchmarks/raw/
 *.raw-benchmark.json
+benchmarks/corpora/_work/

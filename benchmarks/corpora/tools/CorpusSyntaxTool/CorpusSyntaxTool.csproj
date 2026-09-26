@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Independent corpus measurement tool for benchmarks/protocol.md Revision 2 (R2-1, R2-2).
+    Deliberately does NOT reference any CodeVirtualize.* assembly and is NOT part of
+    CodeVirtualize.sln. It only depends on the public Roslyn syntax API to keep corpus
+    grading and NAV-target enumeration independent of the system under test.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
+</Project>

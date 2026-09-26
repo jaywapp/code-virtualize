@@ -183,6 +183,14 @@ latency·memory 예산은 ADR 001의 "모든 품질·효율·latency·memory 기
 11. **실행 한도**: small 30 min, medium corpus당 120 min, large 360 min, 전체 11시간 이하, 외부 유료비용 0.
 12. **C/D**: 이번 revision에서 adapter를 만들지 않고 unavailable로 분모에 남긴다. Go는 "B 대비"로 한정한다.
 
+## 보완 (2026-09-25)
+
+TASK-027 정답 작성 중 protocol이 정하지 않은 경우가 나와, 새 corpus 결과를 보기 전에 다음을 정했다(R2-10). 세부 판정 규약은 [tests/fixtures/rev2/CONVENTIONS.md](../../tests/fixtures/rev2/CONVENTIONS.md)에 있다.
+
+- **D3 대상이 없는 쌍**: 삭제된 member도, 선언 범위 안 텍스트가 바뀐 member도 없는 DIFF 쌍은 D3를 판정하지 않는다. 모든 조건에 똑같이 적용한다. 사용자가 2026-09-25에 결정했다. medium-quartznet DIFF-05가 이 경우다.
+- **D3 대상 조건**: D3 판정(R2-5)은 base 선언이 받은 텍스트에 있고 현재 파일 텍스트만으로는 통과하지 못해야 의미가 있다. 그래서 attribute·remark·범위 밖 주석만 바뀐 member와 type 선언은 D3 대상에서 뺀다.
+- **변경 분류**: attribute 변경은 signature 변경, XML doc comment 변경은 remark 변경으로 D1·D2에 기록한다. R2-5의 D1·D2 판정은 body·signature·remark 변경을 모두 대상으로 한다.
+
 ## 참고
 
 - [protocol.md Revision 2](../../benchmarks/protocol.md#revision-2--mediumlarge-재측정-프로토콜-task-024) — 운영 규칙 정본
