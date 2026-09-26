@@ -16,6 +16,10 @@
     {
       "date": "2026-09-25",
       "change": "Reclassified D03-D1-18, D03-D1-20 (class-level XML-doc-only changes) and D04-D1-02 (FiringRecorder duplicate-summary addition) from bodyChanged to remarkChanged. Reclassified D05-D1-01 (Build partial-decl attribute change) and D06-D1-01 (OneOffThroughputPostgresBenchmark.Profile attribute change) from bodyChanged to signatureChanged and removed their isD3Target flag. Set DIFF-05's d3_resolve to null with d3NotApplicable:true (no D3-eligible member in that pair, per CONVENTIONS.md 2026-09-25 and the 2026-09-25 user decision). Reassigned DIFF-06's D3 target to D06-D1-02 (CreateEmptyDatabase) and computed its base declaration hash. No entries were added or removed, and no NAV entries changed (NAV-01's nameof-as-static-reference judgment and all N3 classifications were re-checked against the revised CONVENTIONS.md and found already compliant). Total item counts and sample size are unchanged."
+    },
+    {
+      "date": "2026-09-26",
+      "change": "Fixed a cross-check error (found 2026-09-25 by a different session, reported via the coordinator): all 16 D1 entries targeting build/Build.Release.cs at cPrime (D05-D1-02 through D05-D1-17) had target.line values exactly 39 lines too high, and d2_exclusionCheckLines' GitHubApiUrl reference (61) had the same +39 error. Root cause: when this file was originally authored, build/Build.Release.cs (a wholly new file in DIFF-05/pair4) was a saved `git diff -M --unified=1` dump for the whole pair, and its line numbers were read directly from the Read tool's own 1-indexed line count over that SAVED DIFF FILE (which includes ~39 lines of diff preamble/headers preceding the new file's `+`-prefixed content - the first file's own diff header+hunk, plus this second file's `diff --git`/`new file mode`/`index`/`---`/`+++`/`@@ -0,0 +1,292 @@` header lines) instead of the actual source file's own line numbers. Every other symbol in this corpus's answer was derived either by a direct `git show <commit>:<path>` / `Read` of the real file, or by `rg -n`/`grep -n` against the real file, which is why the error is confined to exactly these 16 entries (the only other wholly-new file in the corpus, src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs in DIFF-01, was read directly via the Read tool on its own real path, not from a diff dump, and its line numbers were independently re-verified now to be correct). Corrected values (each re-confirmed 2026-09-26 by `git -C D:\\worktrees\\corpus\\medium-quartznet show e5b0c8499ee1d5c7e333d269d06e1071b4326f3f:build/Build.Release.cs`, which is unchanged at the pinned HEAD commit too): D05-D1-02 GitHubApiUrl 61->22, D05-D1-03 GitHubApiVersion 64->25, D05-D1-04 ReleasePageSize 66->27, D05-D1-05 ReleasePageLimit 70->31, D05-D1-06 GitHubToken 73->34, D05-D1-07 GitHubRepository 76->37, D05-D1-08 ReleaseToken 78->39, D05-D1-09 ReleaseRepository 80->41, D05-D1-10 ReleaseTagName 85->46, D05-D1-11 ReleaseAssetFiles 90->51, D05-D1-12 DraftRelease 113->74, D05-D1-13 CreateGitHubClient 149->110, D05-D1-14 GetReleaseForTag 173->134, D05-D1-15 CreateDraftRelease 217->178, D05-D1-16 FillEmptyDraftNotes 254->215, D05-D1-17 AttachAsset 293->254; plus d2_exclusionCheckLines' GitHubApiUrl line 61->22. No symbol names, kinds, hashes, D2-membership decisions, or D3 selection were affected (all were independently re-verified as still correct in the process, and were already confirmed correct by the cross-check session's exhaustive automated pass over every DIFF base/target line and NAV N1/N3 line in the file). The `crossCheck` fields the cross-check session recorded were left untouched, including the ones marking these entries `result: \"error\"` - a re-check by a different session is expected before this pair's cross-check can be marked resolved."
     }
   ],
   "sourceOfTruth": "All positions and hashes were read by hand from quartznet/quartznet at the exact commits below (working tree confirmed byte-identical to pinned blobs per benchmarks/corpora/rev2-manifest.json, after the core.eol=lf fix that manifest records). No CV output, runner command output, or rg/git-diff output was copied into this file; those tools were used only to enumerate candidate lines and hunks, which were then read and judged individually against `git show <commit>:<path>` / working-tree text.",
@@ -1669,7 +1673,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 61
+              "line": 22
             }
           },
           {
@@ -1678,7 +1682,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 64
+              "line": 25
             },
             "crossCheck": {
               "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
@@ -1693,7 +1697,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 66
+              "line": 27
             }
           },
           {
@@ -1702,7 +1706,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 70
+              "line": 31
             },
             "crossCheck": {
               "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
@@ -1717,7 +1721,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 73
+              "line": 34
             }
           },
           {
@@ -1726,7 +1730,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 76
+              "line": 37
             }
           },
           {
@@ -1735,7 +1739,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 78
+              "line": 39
             }
           },
           {
@@ -1744,7 +1748,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 80
+              "line": 41
             }
           },
           {
@@ -1753,7 +1757,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 85
+              "line": 46
             }
           },
           {
@@ -1762,7 +1766,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 90
+              "line": 51
             }
           },
           {
@@ -1772,7 +1776,7 @@
             "kindDetail": "a NUKE-DSL Target property (expression-bodied, type Target)",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 113
+              "line": 74
             },
             "crossCheck": {
               "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
@@ -1787,7 +1791,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 149
+              "line": 110
             }
           },
           {
@@ -1796,7 +1800,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 173
+              "line": 134
             }
           },
           {
@@ -1805,7 +1809,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 217
+              "line": 178
             },
             "crossCheck": {
               "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
@@ -1820,7 +1824,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 254
+              "line": 215
             }
           },
           {
@@ -1829,7 +1833,7 @@
             "kind": "added",
             "target": {
               "path": "build/Build.Release.cs",
-              "line": 293
+              "line": 254
             }
           }
         ],
@@ -1840,7 +1844,7 @@
         "d2_exclusionCheckLines": [
           {
             "path": "build/Build.Release.cs",
-            "line": 61,
+            "line": 22,
             "reason": "GitHubApiUrl const, added p->c only, untouched between c and c'"
           },
           {
