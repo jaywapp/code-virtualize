@@ -1201,6 +1201,66 @@ internal static class DiffTests
                HunkHas(n6Change, "+    [R(2)] public int Y;"),
             $"N6: Q's declaration moved Old.cs -> Q.cs is paired and its attribute change is reported with the new line.\n{Describe(n6.Result)}");
         Assert(n6.Result.Changes.Count == 1, $"N6: only Q changed.\n{Describe(n6.Result)}");
+
+        MemberTraceLinesAreNotContainerEvidence(workspace);
+    }
+
+    /// <summary>
+    /// Rule (b'): a whole field declaration line added or removed (shell "private int ...;", attribute and
+    /// trailing comment included) is the field's own trace. The class reports nothing; the field's
+    /// added/removed header_only evidence shows the whole original line.
+    /// </summary>
+    private static void MemberTraceLinesAreNotContainerEvidence(RealWorkspace workspace)
+    {
+        var baseFile = Lines("namespace Fixture.B;", "public class Target", "{", "    private int speed = 1;", "    private int hp = 5;", "}");
+        bool ClassReported(SymbolDiffResult result) => result.Changes.Any(change => change.BaseSymbol?.Name == "Target" || change.TargetSymbol?.Name == "Target");
+
+        var added = RealDiff(workspace,
+            new Dictionary<string, string> { ["B.cs"] = baseFile },
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Target", "{", "    private int speed = 1;", "    private int added = 3;", "    private int hp = 5;", "}") });
+        Assert(!ClassReported(added.Result), $"b': adding a field declaration must not report the class.\n{Describe(added.Result)}");
+        Assert(added.Result.Changes.Any(change => change.Kind == DiffKind.Added && change.TargetSymbol?.Name == "added" &&
+                HunkHas(change, "+    private int added = 3;")),
+            $"b': the added field's header_only evidence must show the whole line.\n{Describe(added.Result)}");
+
+        var removed = RealDiff(workspace,
+            new Dictionary<string, string> { ["B.cs"] = baseFile },
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Target", "{", "    private int speed = 1;", "}") });
+        Assert(!ClassReported(removed.Result), $"b': removing a field declaration must not report the class.\n{Describe(removed.Result)}");
+        Assert(removed.Result.Changes.Any(change => change.Kind == DiffKind.Deleted && change.BaseSymbol?.Name == "hp" &&
+                HunkHas(change, "-    private int hp = 5;")),
+            $"b': the removed field's header_only evidence must show the whole line.\n{Describe(removed.Result)}");
+
+        var attributed = RealDiff(workspace,
+            new Dictionary<string, string> { ["B.cs"] = baseFile },
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Target", "{", "    private int speed = 1;", "    [Range(0, 7)] private int guarded = 2; // why", "    private int hp = 5;", "}") });
+        Assert(!ClassReported(attributed.Result), $"b': adding an attributed field must not report the class.\n{Describe(attributed.Result)}");
+        Assert(attributed.Result.Changes.Any(change => change.Kind == DiffKind.Added && change.TargetSymbol?.Name == "guarded" &&
+                HunkHas(change, "+    [Range(0, 7)] private int guarded = 2; // why")),
+            $"b': the added field's evidence must include its attribute and trailing comment.\n{Describe(attributed.Result)}");
+
+        // An existing field's attribute on a line that exists on both sides is still class text.
+        var existing = RealDiff(workspace,
+            new Dictionary<string, string> { ["B.cs"] = baseFile },
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Target", "{", "    [Range(0, 9)] private int speed = 1;", "    private int extra = 4;", "    private int hp = 5;", "}") });
+        Assert(existing.Result.Changes.Any(change => change.BaseSymbol?.Name == "Target" && HunkHas(change, "+    [Range(0, 9)] private int speed = 1;")),
+            $"b': an attribute added to an existing field is still the class's change, even next to an added field.\n{Describe(existing.Result)}");
+
+        // An attribute removed from an existing field while a new field declaration line is added right after
+        // it must still be reported on the class (only the added line is a member trace).
+        var removedAttribute = RealDiff(workspace,
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Target", "{", "    // note", "    [Range(0, 71)] private int rate = 5;", "", "    public int Compute()", "    {", "        return 1;", "    }", "}") },
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Target", "{", "    // note", "    private int rate = 5;", "    private int d66790 = 85;", "", "    public int Compute()", "    {", "        return 1;", "    }", "}") });
+        Assert(removedAttribute.Result.Changes.Any(change => change.BaseSymbol?.Name == "Target" && HunkHas(change, "-    [Range(0, 71)] private int rate = 5;")),
+            $"b': removing an existing field's attribute next to an added field must still be reported on the class.\n{Describe(removedAttribute.Result)}");
+
+        // A type's first/last line is never a member trace, even when only an added member touches it.
+        var boundary = RealDiff(workspace,
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "public class Tiny { }") },
+            new Dictionary<string, string> { ["B.cs"] = Lines("namespace Fixture.B;", "[X] public class Tiny { private int y; }") });
+        Assert(boundary.Result.Changes.Any(change => change.BaseSymbol?.Name == "Tiny" && change.Kind == DiffKind.BodyChanged &&
+                HunkHas(change, "+[X] public class Tiny { private int y; }")),
+            $"b': a type's own header line must stay container text even when only an added member touches it.\n{Describe(boundary.Result)}");
     }
 
     // --- Owned-text coverage property test (independent oracle) ---------------------------------------------
@@ -1254,7 +1314,10 @@ internal static class DiffTests
             }
             catch (Exception exception)
             {
-                failures.Add($"iteration={iteration} seed={seed} edits=[{editNames}]: {exception.Message}");
+                static string Files(IReadOnlyDictionary<string, string> files) =>
+                    string.Join("\n", files.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"=== {pair.Key}\n{pair.Value}"));
+                failures.Add($"iteration={iteration} seed={seed} edits=[{editNames}]: {exception.Message}\n" +
+                    $"--- base files\n{Files(RenderPropertyState(initial))}--- target files\n{Files(RenderPropertyState(target))}");
             }
         }
 
@@ -1434,7 +1497,7 @@ internal static class DiffTests
         return blocks.ToDictionary(pair => pair.Key, pair => string.Join("\n", pair.Value) + "\n", StringComparer.Ordinal);
     }
 
-    private sealed record OwnedToken(string Value, bool IsPlaceholder, string Path, int Line, string LineText);
+    private sealed record OwnedToken(string Value, bool IsPlaceholder, string Path, int Line, string LineText, IReadOnlySet<string> LineMembers);
 
     /// <summary>
     /// Independent oracle for "no change disappears silently" (owned-text redesign). It uses no line diff
@@ -1452,6 +1515,8 @@ internal static class DiffTests
     /// exempt-stripped text occurs more often on that side (a line diff must then drop or add one of them);
     /// lines that only changed shape because matched text moved across lines are not required.
     ///
+    /// Member traces (rule b'): see <see cref="OracleWithoutMemberTraceLines"/>.
+    ///
     /// One whitespace allowance: when S has an enclosing type whose whole owned text is exempt-equal and S's
     /// own span text is whitespace-equal, S's owned lines can only differ because enclosing-type text moved
     /// between lines (an attribute moved onto its own line), which is a whitespace change.
@@ -1466,8 +1531,10 @@ internal static class DiffTests
         {
             var before = baseById[symbolId];
             var after = targetById[symbolId];
-            var baseTokens = OracleOwnedTokens(before, baseById, outcome.BaseFiles);
-            var targetTokens = OracleOwnedTokens(after, targetById, outcome.TargetFiles);
+            var baseTokens = OracleWithoutMemberTraceLines(
+                OracleOwnedTokens(before, baseById, outcome.BaseFiles), symbolId, baseById, targetById, outcome.Result, '-');
+            var targetTokens = OracleWithoutMemberTraceLines(
+                OracleOwnedTokens(after, targetById, outcome.TargetFiles), symbolId, targetById, baseById, outcome.Result, '+');
             var (baseChanged, targetChanged) = OracleUnmatched(baseTokens, targetTokens);
             if (baseChanged.Count == 0 && targetChanged.Count == 0)
             {
@@ -1479,8 +1546,11 @@ internal static class DiffTests
             if (spanEqual && ancestors.Any(ancestor =>
                     baseById.TryGetValue(ancestor, out var baseAncestor) && targetById.TryGetValue(ancestor, out var targetAncestor) &&
                     OracleUnmatched(
-                        OracleOwnedTokens(baseAncestor, baseById, outcome.BaseFiles),
-                        OracleOwnedTokens(targetAncestor, targetById, outcome.TargetFiles)) is { Base.Count: 0, Target.Count: 0 }))
+                        OracleWithoutMemberTraceLines(
+                            OracleOwnedTokens(baseAncestor, baseById, outcome.BaseFiles), ancestor, baseById, targetById, outcome.Result, '-'),
+                        OracleWithoutMemberTraceLines(
+                            OracleOwnedTokens(targetAncestor, targetById, outcome.TargetFiles), ancestor, targetById, baseById, outcome.Result, '+'))
+                    is { Base.Count: 0, Target.Count: 0 }))
             {
                 continue;
             }
@@ -1518,6 +1588,41 @@ internal static class DiffTests
         }
     }
 
+    /// <summary>
+    /// The one oracle condition added for rule (b'): an owned line of S that only members existing on this
+    /// side alone touch (members nested in S, e.g. a whole field declaration added or removed with its
+    /// attribute and trailing comment) is that member's trace, not S's owned text — provided one of those
+    /// members' own entries shows the line's original text as a '+' (added) or '-' (removed) hunk line. If no
+    /// such entry shows it, the line stays in S's owned text and S (or an ancestor) must report it. The first
+    /// and last lines of S's declarations (S's own header and closing text) never qualify.
+    /// </summary>
+    private static List<OwnedToken> OracleWithoutMemberTraceLines(
+        List<OwnedToken> tokens,
+        string symbolId,
+        IReadOnlyDictionary<string, SymbolContract> sideById,
+        IReadOnlyDictionary<string, SymbolContract> otherById,
+        SymbolDiffResult result,
+        char prefix)
+    {
+        var boundaries = sideById[symbolId].Declarations
+            .SelectMany(declaration => new[]
+            {
+                (Path: declaration.Location.Path!.Replace('\\', '/'), Line: declaration.Location.Span.StartLine),
+                (Path: declaration.Location.Path!.Replace('\\', '/'), Line: declaration.Location.Span.EndLine),
+            })
+            .ToHashSet();
+        bool IsTrace(OwnedToken token) =>
+            token.LineMembers.Count > 0 && !boundaries.Contains((token.Path, token.Line)) &&
+            token.LineMembers.All(member => !otherById.ContainsKey(member) &&
+                sideById.TryGetValue(member, out var memberSymbol) && OracleAncestors(memberSymbol, sideById).Contains(symbolId)) &&
+            result.Contract.Entries.Any(entry =>
+                (prefix == '-' ? entry.BaseSymbolId : entry.TargetSymbolId) is { } id && token.LineMembers.Contains(id) &&
+                entry.Evidence.Any(evidence => ("\n" + evidence.TextualHunk).Contains($"\n{prefix}{token.LineText}\n", StringComparison.Ordinal)));
+
+        var traceLines = tokens.Where(IsTrace).Select(token => (token.Path, token.Line)).ToHashSet();
+        return tokens.Where(token => !traceLines.Contains((token.Path, token.Line))).ToList();
+    }
+
     private static HashSet<string> OracleAncestors(SymbolContract symbol, IReadOnlyDictionary<string, SymbolContract> byId)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
@@ -1549,7 +1654,7 @@ internal static class DiffTests
                 .Where(other => other.SymbolId != symbol.SymbolId && !ancestors.Contains(other.SymbolId))
                 .SelectMany(other => other.Declarations)
                 .Where(other => other.Location.Path!.Replace('\\', '/') == path)
-                .Select(other => (Start: other.Location.Span.Start, End: other.Location.Span.Start + other.Location.Span.Length))
+                .Select(other => (Id: other.SymbolId, Start: other.Location.Span.Start, End: other.Location.Span.Start + other.Location.Span.Length))
                 .ToArray();
             bool Masked(int position) => others.Any(other => position >= other.Start && position < other.End);
 
@@ -1564,6 +1669,9 @@ internal static class DiffTests
             for (var line = declaration.Location.Span.StartLine; line <= declaration.Location.Span.EndLine; line++)
             {
                 var lineText = lines[line - 1];
+                var lineEnd = lineStart + lineText.Length;
+                var lineMembers = others.Where(other => other.Start < lineEnd && other.End > lineStart)
+                    .Select(other => other.Id).ToHashSet(StringComparer.Ordinal);
                 for (var column = 0; column < lineText.Length; column++)
                 {
                     var position = lineStart + column;
@@ -1571,12 +1679,12 @@ internal static class DiffTests
                     {
                         if (first || !Masked(position - 1))
                         {
-                            tokens.Add(new OwnedToken("<member>", true, path, line, lineText));
+                            tokens.Add(new OwnedToken("<member>", true, path, line, lineText, lineMembers));
                         }
                     }
                     else if (!char.IsWhiteSpace(lineText[column]))
                     {
-                        tokens.Add(new OwnedToken(lineText[column].ToString(), false, path, line, lineText));
+                        tokens.Add(new OwnedToken(lineText[column].ToString(), false, path, line, lineText, lineMembers));
                     }
 
                     first = false;

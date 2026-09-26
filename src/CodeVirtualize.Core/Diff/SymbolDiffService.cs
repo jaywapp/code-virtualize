@@ -113,7 +113,7 @@ public sealed class SymbolDiffService
             var evidences = new List<DiffEvidenceContract>();
             var pairs = PairDeclarations(before, after);
             if (pairs.Any(pair => pair.Base is null || pair.Target is null ||
-                    ClassifySelfText(pair.Base, pair.Target) == SelfTextDifference.Substantive))
+                    ClassifySelfText(pair.Base, pair.Target, before, after) == SelfTextDifference.Substantive))
             {
                 evidences.AddRange(BuildPairEvidence("body-changed", pairs, useSelfText: true, before, after, budget));
             }
@@ -251,7 +251,7 @@ public sealed class SymbolDiffService
         var differences = pairs
             .Select(pair => pair.Base is null || pair.Target is null
                 ? SelfTextDifference.Substantive
-                : ClassifySelfText(pair.Base, pair.Target))
+                : ClassifySelfText(pair.Base, pair.Target, before, after))
             .ToArray();
         if (differences.Contains(SelfTextDifference.Substantive))
         {
@@ -269,7 +269,7 @@ public sealed class SymbolDiffService
             // formatting change of this symbol's own lines; report it as a fingerprint with no hunk.
             var evidences = pairs
                 .Where(pair => pair.Base is not null && pair.Target is not null &&
-                    ClassifySelfText(pair.Base, pair.Target) == SelfTextDifference.WhitespaceOnly)
+                    ClassifySelfText(pair.Base, pair.Target, before, after) == SelfTextDifference.WhitespaceOnly)
                 .Select(pair => new DiffEvidenceContract(
                     "formatting-only", DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false,
                     DiffDigests.Utf8(pair.Base!.RawText), DiffDigests.Utf8(pair.Target!.RawText)))
@@ -343,7 +343,7 @@ public sealed class SymbolDiffService
             if (baseDeclaration is not null && targetDeclaration is not null)
             {
                 var unchanged = useSelfText
-                    ? ClassifySelfText(baseDeclaration, targetDeclaration) != SelfTextDifference.Substantive
+                    ? ClassifySelfText(baseDeclaration, targetDeclaration, before, after) != SelfTextDifference.Substantive
                     : string.Equals(baseDeclaration.RawText, targetDeclaration.RawText, StringComparison.Ordinal);
                 if (unchanged)
                 {
@@ -500,10 +500,16 @@ public sealed class SymbolDiffService
     /// sides only): if that differs and the visible lines differ beyond whitespace, it is substantive. A
     /// pure reordering of members whose lines hold no other text is not; the member-order rule reports it.
     /// </summary>
-    private static SelfTextDifference ClassifySelfText(DeclarationView before, DeclarationView after)
+    private static SelfTextDifference ClassifySelfText(DeclarationView before, DeclarationView after, SymbolView beforeView, SymbolView afterView)
     {
-        var beforeTokens = NormalizeWhitespace(before.SelfText);
-        var afterTokens = NormalizeWhitespace(after.SelfText);
+        // Rule (b'): a line that touches only members existing on this side alone (a field declaration
+        // added or removed as a whole, attribute and trailing comment included) is that member's own trace;
+        // the member's added/removed entry shows the full line, so it is not container evidence.
+        var beforeLines = before.SelfTextLines.Where(line => !OnlyOneSidedMembers(line, afterView.SnapshotSymbolIds)).ToArray();
+        var afterLines = after.SelfTextLines.Where(line => !OnlyOneSidedMembers(line, beforeView.SnapshotSymbolIds)).ToArray();
+
+        var beforeTokens = NormalizeWhitespace(string.Concat(beforeLines.Select(line => line.Anonymous)));
+        var afterTokens = NormalizeWhitespace(string.Concat(afterLines.Select(line => line.Anonymous)));
         if (!string.Equals(StripMemberPlaceholders(beforeTokens), StripMemberPlaceholders(afterTokens), StringComparison.Ordinal))
         {
             return SelfTextDifference.Substantive;
@@ -511,10 +517,10 @@ public sealed class SymbolDiffService
 
         var common = new HashSet<string>(before.MemberIds.Intersect(after.MemberIds, StringComparer.Ordinal), StringComparer.Ordinal);
         if (!string.Equals(
-                StripMemberPlaceholders(NormalizeWhitespace(before.NamedText), common),
-                StripMemberPlaceholders(NormalizeWhitespace(after.NamedText), common),
+                NamedMemberText(beforeLines, common),
+                NamedMemberText(afterLines, common),
                 StringComparison.Ordinal) &&
-            !VisibleLines(before).SequenceEqual(VisibleLines(after), StringComparer.Ordinal))
+            !VisibleLines(beforeLines).SequenceEqual(VisibleLines(afterLines), StringComparer.Ordinal))
         {
             return SelfTextDifference.Substantive;
         }
@@ -524,13 +530,40 @@ public sealed class SymbolDiffService
             return SelfTextDifference.None;
         }
 
-        return string.Equals(beforeTokens, afterTokens, StringComparison.Ordinal)
+        return string.Equals(NormalizeWhitespace(before.SelfText), NormalizeWhitespace(after.SelfText), StringComparison.Ordinal)
             ? SelfTextDifference.WhitespaceOnly
             : SelfTextDifference.MemberPlaceholdersOnly;
     }
 
-    private static IEnumerable<string> VisibleLines(DeclarationView declaration) =>
-        declaration.SelfLines.Select(line => NormalizeWhitespace(line.CompareKey)).Where(line => line.Length > 0);
+    /// <summary>The text with named placeholders of <paramref name="common"/> members kept and the separator
+    /// that follows each of them dropped (separators belong to their member: an existing member gains or
+    /// loses its ',' when a member is appended after it or removed).</summary>
+    private static string NamedMemberText(IEnumerable<SelfTextLine> lines, IReadOnlySet<string> common)
+    {
+        var named = StripMemberPlaceholders(NormalizeWhitespace(string.Concat(lines.Select(line => line.Named))), common);
+        var builder = new StringBuilder(named.Length);
+        for (var i = 0; i < named.Length; i++)
+        {
+            if (named[i] is ',' or ';' && i > 0 && named[i - 1] == PlaceholderEnd)
+            {
+                continue;
+            }
+
+            builder.Append(named[i]);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Rule (b'): the line lies strictly inside the declaration (not its first or last line, which carry the
+    /// type's own header and closing text) and every member touching it exists only on this side.
+    /// </summary>
+    private static bool OnlyOneSidedMembers(SelfTextLine line, IReadOnlySet<string> otherSideSymbols) =>
+        !line.Boundary && line.Members.Count > 0 && line.Members.All(member => !otherSideSymbols.Contains(member));
+
+    private static IEnumerable<string> VisibleLines(IEnumerable<SelfTextLine> lines) =>
+        lines.Where(line => line.Visible).Select(line => NormalizeWhitespace(line.Named)).Where(line => line.Length > 0);
 
     /// <summary>
     /// Removes each placeholder and the separator attached to it: the separator right after it, or, when
@@ -578,8 +611,13 @@ public sealed class SymbolDiffService
         return builder.ToString();
     }
 
+    /// <summary>One line of a self text: its text with anonymous and with named placeholders, the members
+    /// whose spans touch it, whether it is rendered in evidence (it holds more than member text), and
+    /// whether it is the declaration's first or last line.</summary>
+    private sealed record SelfTextLine(string Anonymous, string Named, IReadOnlySet<string> Members, bool Visible, bool Boundary);
+
     private sealed record SelfTextView(
-        IReadOnlyList<LineHunkBuilder.SourceLine> Lines, string Text, string NamedText, IReadOnlySet<string> MemberIds);
+        IReadOnlyList<LineHunkBuilder.SourceLine> Lines, string Text, IReadOnlyList<SelfTextLine> TextLines, IReadOnlySet<string> MemberIds);
 
     /// <summary>
     /// Builds the self text of one declaration: its full source lines where every character inside another
@@ -595,7 +633,7 @@ public sealed class SymbolDiffService
         var lines = new List<LineHunkBuilder.SourceLine>();
         var memberIds = new HashSet<string>(StringComparer.Ordinal);
         var all = new StringBuilder();
-        var named = new StringBuilder();
+        var textLines = new List<SelfTextLine>();
         var spanEnd = span.Start + span.Length;
         var maskIndex = 0;
         var emittedMask = -1;
@@ -605,6 +643,7 @@ public sealed class SymbolDiffService
             var end = DiffSnapshotReader.LineContentEnd(text, lineStarts, line);
             var key = new StringBuilder(end - start);
             var anonymous = new StringBuilder(end - start);
+            var lineMembers = new HashSet<string>(StringComparer.Ordinal);
             var hasOwnText = false;
             var hidesText = false;
             for (var position = start; position < end; position++)
@@ -623,6 +662,7 @@ public sealed class SymbolDiffService
                 if (maskIndex < masked.Count && masked[maskIndex].Start <= position)
                 {
                     hidesText = true;
+                    lineMembers.Add(masked[maskIndex].Id);
                     if (emittedMask != maskIndex)
                     {
                         key.Append(Placeholder).Append(masked[maskIndex].Id).Append(PlaceholderEnd);
@@ -651,15 +691,17 @@ public sealed class SymbolDiffService
             }
 
             var keyText = key.ToString();
-            all.Append(anonymous).Append('\n');
-            named.Append(keyText).Append('\n');
-            if (hasOwnText || !hidesText)
+            var anonymousText = anonymous.ToString();
+            var visible = hasOwnText || !hidesText;
+            all.Append(anonymousText).Append('\n');
+            textLines.Add(new SelfTextLine(anonymousText, keyText, lineMembers, visible, line == span.StartLine || line == span.EndLine));
+            if (visible)
             {
                 lines.Add(new LineHunkBuilder.SourceLine(line, text[start..end], keyText));
             }
         }
 
-        return new SelfTextView(lines, all.ToString(), named.ToString(), memberIds);
+        return new SelfTextView(lines, all.ToString(), textLines, memberIds);
     }
 
     /// <summary>
@@ -790,6 +832,7 @@ public sealed class SymbolDiffService
     {
         var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var bySymbolId = snapshot.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
+        var snapshotSymbolIds = new HashSet<string>(bySymbolId.Keys, StringComparer.Ordinal);
         var spansByPath = snapshot.Symbols
             .SelectMany(symbol => symbol.Declarations.Select(declaration => (
                 Path: DiffSnapshotReader.NormalizePath(declaration.Location.Path!),
@@ -845,7 +888,7 @@ public sealed class SymbolDiffService
 
                 var lines = DiffSnapshotReader.FullLines(sourceText, location.Span);
                 var headerLines = DiffSnapshotReader.HeaderLines(sourceText, location.Span);
-                declarationViews.Add(new DeclarationView(location, rawText, lines, headerLines, self.Lines, self.Text, self.NamedText, self.MemberIds));
+                declarationViews.Add(new DeclarationView(location, rawText, lines, headerLines, self.Lines, self.Text, self.TextLines, self.MemberIds));
             }
 
             var remark = remarksBySymbol.TryGetValue(symbol.SymbolId, out var remarkLocations)
@@ -874,7 +917,7 @@ public sealed class SymbolDiffService
 
             views[symbol.SymbolId] = new SymbolView(
                 symbol, declarationViews, selfText, fullText, remark, remarkLines, remarkPath, remarkMultiFile, isContainer,
-                OwnsSelfText: isContainer || !nested, primaryPath);
+                OwnsSelfText: isContainer || !nested, primaryPath, snapshotSymbolIds);
         }
 
         return views;
@@ -978,7 +1021,7 @@ public sealed class SymbolDiffService
         IReadOnlyList<LineHunkBuilder.SourceLine> HeaderLines,
         IReadOnlyList<LineHunkBuilder.SourceLine> SelfLines,
         string SelfText,
-        string NamedText,
+        IReadOnlyList<SelfTextLine> SelfTextLines,
         IReadOnlySet<string> MemberIds);
 
     private sealed record SymbolView(
@@ -992,7 +1035,8 @@ public sealed class SymbolDiffService
         bool RemarkMultiFile,
         bool IsContainer,
         bool OwnsSelfText,
-        string PrimaryPath);
+        string PrimaryPath,
+        IReadOnlySet<string> SnapshotSymbolIds);
 
     private sealed class EvidenceBudget(DiffEvidenceOptions options)
     {

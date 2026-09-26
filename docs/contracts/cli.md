@@ -118,7 +118,7 @@ Diff entry의 `evidence[]` 항목마다 `textMode`(`line_hunks | header_only | f
 | entry kind | 기본 `textMode` | 내용 |
 |---|---|---|
 | `body_changed`, `signature_changed`, `remark_changed`, `formatting_only`, `rename_candidate` | `line_hunks` | before/after의 Myers line diff. 변경 줄 ± `contextLines`(기본 1)만 담고, `@@ -a,b +c,d @@`의 `a`·`c`는 **파일 줄 번호**다(symbol 상대 번호가 아니다) |
-| `added`, `deleted` | `header_only` | 선언 시작부터 첫 `{`/`=>` 직전까지(=`part=header`와 같은 규칙)만 싣는다. `contextLines=0`이며 나머지 줄 수는 `omittedBaseLines`/`omittedTargetLines`에 남는다 |
+| `added`, `deleted` | `header_only` | 선언 시작부터 첫 `{`/`=>` 직전까지(=`part=header`와 같은 범위)가 걸친 **원문 줄 전체**를 싣는다. 그래서 field 선언의 modifier·타입·같은 줄 attribute·trailing 주석도 함께 보인다. `contextLines=0`이며 나머지 줄 수는 `omittedBaseLines`/`omittedTargetLines`에 남는다 |
 | container 멤버 순서만 바뀜(`kind=member-order-changed`) | `fingerprint_only` | 텍스트 없이 `baseContentHash`/`targetContentHash`만 남긴다 |
 
 `baseContentHash`/`targetContentHash`는 evidence가 가리키는 declaration **원문 span 텍스트**(잘리지 않은 전체 원문)의 SHA-256이다. 이 값은 아래 lazy resolve를 **`part=declaration`으로, 예산 안에서 잘림 없이** 요청했을 때의 source slice `contentHash`와 정확히 같다 — 다른 part(`header`/`body`/`context`)나 budget에 걸려 잘린 응답의 `contentHash`는 이 값과 다르다. entry가 예산 때문에 hunk를 잘랐거나 `textMode`를 낮췄으면 evidence의 `truncated=true`이고, 이때 Diff 최상위 `evidenceTruncated=true`와 `limitations`의 `diff-evidence-budget-exhausted`가 함께 있다. 기본 예산은 `contextLines=1`, entry당 8 KiB, 전체 64 KiB, line diff 상한 20,000줄이다. evidence 생략은 entry 목록의 완전성과 별개 축이라 coverage level을 낮추지 않는다.
@@ -127,7 +127,8 @@ type symbol(다른 symbol의 `containerId`가 가리키는 symbol)의 비교 텍
 
 - 공백만 다르면 entry를 만들지 않는다.
 - 차이가 placeholder의 추가·삭제와 각 placeholder에 딸린 구분자(`,`, `;`) 하나뿐이면 member 추가·삭제의 흔적으로 보고 entry를 만들지 않는다(enum member 추가, `int a, b`의 declarator 추가). 추가된 member는 자기 `added` entry로 보고된다.
-- 그 밖의 차이(attribute, 주석, modifier, 필드 선언문 껍데기 `private int ... ;`의 추가·삭제, member와의 상대 위치가 바뀐 텍스트)는 type의 `body_changed`다. 양쪽에 있는 member를 ID로 구분했을 때 텍스트가 다르고 보이는 줄도 공백 외로 달라졌으면(attribute가 다른 field로 옮겨 간 경우) 역시 `body_changed`다.
+- (b') 선언의 첫 줄·마지막 줄이 아닌 줄 중, 그 줄에 걸친 member가 **모두 한쪽에만 있는 member**(추가 또는 삭제된 member)인 줄은 비교에서 뺀다. 그 줄의 modifier·타입·attribute·`;`·trailing 주석은 member 추가·삭제의 흔적이며, 해당 member의 `added`/`deleted` header_only 증거가 그 줄 전체를 보여 준다(필드 선언문 추가·삭제). 양쪽에 있는 member가 하나라도 걸친 줄, 선언의 첫 줄·마지막 줄, member가 걸치지 않은 줄(예: 별도 줄의 attribute)은 계속 비교한다. 같은 이유로 ID 비교에서는 양쪽 member 뒤에 붙은 구분자를 무시한다(member 추가로 기존 member에 `,`가 붙는 경우).
+- 그 밖의 차이(attribute, 주석, modifier, 기존 필드 줄의 껍데기 변경, member와의 상대 위치가 바뀐 텍스트)는 type의 `body_changed`다. 양쪽에 있는 member를 ID로 구분했을 때 텍스트가 다르고 보이는 줄도 공백 외로 달라졌으면(attribute가 다른 field로 옮겨 간 경우) 역시 `body_changed`다.
 - 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다.
 
 type entry의 `body-changed` hunk는 가린 텍스트로 비교하되 **원문 줄**을 렌더링한다(member span과 줄을 공유하는 줄은 원문 전체 줄). member 텍스트만 있는 줄은 hunk 대상에서 빠지므로 불연속 줄은 별도 `@@` hunk가 된다. leaf symbol은 자기 선언 span 원문을 비교한다. 감싸는 type이 index되지 않은 최상위 leaf(namespace 수준 delegate 등)는 자기 줄 전체를 자기 텍스트로 가지며, span이 같아도 그 줄의 나머지가 바뀌면 `body_changed`, 공백만 바뀌면 `formatting_only`(fingerprint)다.

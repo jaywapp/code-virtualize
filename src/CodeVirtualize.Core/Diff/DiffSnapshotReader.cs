@@ -101,20 +101,17 @@ internal static class DiffSnapshotReader
         return result;
     }
 
-    /// <summary>Header-only lines: the declaration span text up to (excluding) its first '{' or '=&gt;', as raw span text (no full-line leading indentation).</summary>
+    /// <summary>
+    /// Header-only lines: the whole source lines that the declaration's header (its span up to, excluding,
+    /// the first '{' or '=&gt;') touches. Whole lines, so an added or removed member's evidence also shows the
+    /// text on its line outside its span (a field declarator's modifiers, type, attribute and trailing
+    /// comment), which rule (b') leaves out of the container's comparison.
+    /// </summary>
     internal static IReadOnlyList<LineHunkBuilder.SourceLine> HeaderLines(string text, TextSpanContract span)
     {
         var (start, length) = SourceResolver.Range(text, span, SourcePart.Header, 0);
-        var header = text.Substring(start, length);
-        var result = new List<LineHunkBuilder.SourceLine>();
-        var line = SourceResolver.Line(text, start);
-        foreach (var segment in header.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n'))
-        {
-            result.Add(new LineHunkBuilder.SourceLine(line, segment));
-            line++;
-        }
-
-        return result;
+        var lastLine = Math.Max(span.StartLine, SourceResolver.Line(text, start + Math.Max(0, length - 1)));
+        return FullLines(text, new TextSpanContract(start, length, span.StartLine, lastLine));
     }
 
     internal static int LineAt(string text, int offset) => SourceResolver.Line(text, offset);
