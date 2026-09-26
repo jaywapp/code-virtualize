@@ -118,7 +118,7 @@ Diff entry의 `evidence[]` 항목마다 `textMode`(`line_hunks | header_only | f
 | entry kind | 기본 `textMode` | 내용 |
 |---|---|---|
 | `body_changed`, `signature_changed`, `remark_changed`, `formatting_only`, `rename_candidate` | `line_hunks` | before/after의 Myers line diff. 변경 줄 ± `contextLines`(기본 1)만 담고, `@@ -a,b +c,d @@`의 `a`·`c`는 **파일 줄 번호**다(symbol 상대 번호가 아니다) |
-| `added`, `deleted` | `header_only` | 선언 시작부터 첫 `{`/`=>` 직전까지(=`part=header`와 같은 범위)가 걸친 **원문 줄 전체**를 싣는다. 그래서 field 선언의 modifier·타입·같은 줄 attribute·trailing 주석도 함께 보인다. `contextLines=0`이며 나머지 줄 수는 `omittedBaseLines`/`omittedTargetLines`에 남는다 |
+| `added`, `deleted` | `header_only` | 선언 시작부터 첫 `{`/`=>` 직전까지(=`part=header`와 같은 범위)가 걸친 **원문 줄 전체**(header 줄)를 싣는다. 그래서 field 선언의 modifier·타입·같은 줄 attribute·trailing 주석도 함께 보인다. 여러 줄 member의 header 뒤 줄(본문, 닫는 줄)은 싣지 않으며 그 줄 수는 `omittedBaseLines`/`omittedTargetLines`에 남는다. `contextLines=0`이다 |
 | container 멤버 순서만 바뀜(`kind=member-order-changed`) | `fingerprint_only` | 텍스트 없이 `baseContentHash`/`targetContentHash`만 남긴다 |
 
 `baseContentHash`/`targetContentHash`는 evidence가 가리키는 declaration **원문 span 텍스트**(잘리지 않은 전체 원문)의 SHA-256이다. 이 값은 아래 lazy resolve를 **`part=declaration`으로, 예산 안에서 잘림 없이** 요청했을 때의 source slice `contentHash`와 정확히 같다 — 다른 part(`header`/`body`/`context`)나 budget에 걸려 잘린 응답의 `contentHash`는 이 값과 다르다. entry가 예산 때문에 hunk를 잘랐거나 `textMode`를 낮췄으면 evidence의 `truncated=true`이고, 이때 Diff 최상위 `evidenceTruncated=true`와 `limitations`의 `diff-evidence-budget-exhausted`가 함께 있다. 기본 예산은 `contextLines=1`, entry당 8 KiB, 전체 64 KiB, line diff 상한 20,000줄이다. evidence 생략은 entry 목록의 완전성과 별개 축이라 coverage level을 낮추지 않는다.
@@ -127,15 +127,15 @@ type symbol(다른 symbol의 `containerId`가 가리키는 symbol)의 비교 텍
 
 - 공백만 다르면 entry를 만들지 않는다.
 - 차이가 placeholder의 추가·삭제와 각 placeholder에 딸린 구분자(`,`, `;`) 하나뿐이면 member 추가·삭제의 흔적으로 보고 entry를 만들지 않는다(enum member 추가, `int a, b`의 declarator 추가). 추가된 member는 자기 `added` entry로 보고된다.
-- (b') 선언의 첫 줄·마지막 줄이 아닌 줄 중, 그 줄에 걸친 member가 **모두 한쪽에만 있는 member**(추가 또는 삭제된 member)인 줄은 비교에서 뺀다. 그 줄의 modifier·타입·attribute·`;`·trailing 주석은 member 추가·삭제의 흔적이며, 해당 member의 `added`/`deleted` header_only 증거가 그 줄 전체를 보여 준다(필드 선언문 추가·삭제). 양쪽에 있는 member가 하나라도 걸친 줄, 선언의 첫 줄·마지막 줄, member가 걸치지 않은 줄(예: 별도 줄의 attribute)은 계속 비교한다. 같은 이유로 ID 비교에서는 양쪽 member 뒤에 붙은 구분자를 무시한다(member 추가로 기존 member에 `,`가 붙는 경우).
+- (b') 선언의 첫 줄·마지막 줄이 아닌 줄 중, 그 줄에 걸친 member가 **모두 한쪽에만 있는 member**(추가 또는 삭제된 member)이고 그 줄이 그 member들의 **header 줄**(header_only 증거가 싣는 줄)인 줄은 비교에서 뺀다. 그 줄의 modifier·타입·attribute·`;`·trailing 주석은 member 추가·삭제의 흔적이며, 해당 member의 `added`/`deleted` header_only 증거가 그 줄 전체를 보여 준다(필드 선언문 추가·삭제). 여러 줄 member의 header 뒤 줄(예: `} // 주석`으로 끝나는 닫는 줄)은 header_only가 싣지 않으므로 계속 type 자기 텍스트로 비교하고, 그 줄에 member 밖 텍스트가 있으면 type의 `body_changed`가 그 줄을 보여 준다. 양쪽에 있는 member가 하나라도 걸친 줄, 선언의 첫 줄·마지막 줄(한 줄 type 안의 member 추가·삭제는 type 변경으로도 보고된다), member가 걸치지 않은 줄(예: 별도 줄의 attribute)은 계속 비교한다. 같은 이유로 ID 비교에서는 양쪽 member 뒤에 붙은 구분자를 무시한다(member 추가로 기존 member에 `,`가 붙는 경우).
 - 그 밖의 차이(attribute, 주석, modifier, 기존 필드 줄의 껍데기 변경, member와의 상대 위치가 바뀐 텍스트)는 type의 `body_changed`다. 양쪽에 있는 member를 ID로 구분했을 때 텍스트가 다르고 보이는 줄도 공백 외로 달라졌으면(attribute가 다른 field로 옮겨 간 경우) 역시 `body_changed`다.
-- 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다.
+- 직계 member의 상대 순서만 바뀌면 `member-order-changed` fingerprint 증거로 남긴다. 순서는 member가 속한 선언 짝(아래 짝짓기) 순서와 선언 안 위치로 정하므로, partial 선언 하나를 이름이 다른 파일로 옮기는 것만으로는 순서 변경이 아니다.
 
 type entry의 `body-changed` hunk는 가린 텍스트로 비교하되 **원문 줄**을 렌더링한다(member span과 줄을 공유하는 줄은 원문 전체 줄). member 텍스트만 있는 줄은 hunk 대상에서 빠지므로 불연속 줄은 별도 `@@` hunk가 된다. leaf symbol은 자기 선언 span 원문을 비교한다. 감싸는 type이 index되지 않은 최상위 leaf(namespace 수준 delegate 등)는 자기 줄 전체를 자기 텍스트로 가지며, span이 같아도 그 줄의 나머지가 바뀌면 `body_changed`, 공백만 바뀌면 `formatting_only`(fingerprint)다.
 
-한 symbol의 base·target 선언은 정규화 path로 먼저 짝짓는다. path로 짝지어지지 않은 선언이 양쪽에 정확히 하나씩 남으면 파일 이동(type 추출, 파일 이름 변경·분할)으로 보고 둘을 짝지어 비교하며 hunk 헤더는 `--- a/<base path>`/`+++ b/<target path>`다. 여러 개가 남으면 `declaration-removed`/`declaration-added` header-only 증거로 보고한다.
+한 symbol의 base·target 선언은 정규화 path로 먼저 짝짓는다. path로 짝지어지지 않은 선언이 양쪽에 정확히 하나씩 남으면 파일 이동(type 추출, 파일 이름 변경·분할)으로 보고 둘을 짝지어 비교하며 hunk 헤더는 `--- a/<base path>`/`+++ b/<target path>`다. 여러 개가 남으면 `declaration-removed`/`declaration-added` header-only 증거로 보고한다(여러 partial 선언을 한 번에 새 파일들로 옮기면 내용이 같아도 이렇게 과보고된다).
 
-어떤 선언의 줄에도 속하지 않는 파일 수준 텍스트(using, namespace 줄, 최상위 type 사이 주석)는 symbol에 귀속하지 않는다. 대신 양쪽에 있는 파일에서 이 텍스트가 공백 외로 바뀌었거나(remark span 제외), 한쪽에만 있는 파일이 symbol 선언 없이 공백 외 텍스트를 가지면 `limitations`(와 coverage `limitations`)에 `diff-file-level-text-changed`를 넣는다. coverage level은 바꾸지 않는다.
+어떤 선언의 줄에도 속하지 않는 파일 수준 텍스트(using, namespace 줄, 최상위 type 위·사이 주석)는 symbol에 귀속하지 않는다. 대신 이 텍스트(공백 무시, remark span 제외)를 비교해 다르면 `limitations`(와 coverage `limitations`)에 `diff-file-level-text-changed`를 넣는다. 비교 대상은 (1) 양쪽에 있고 bytes가 바뀐 같은 path의 파일, (2) 한쪽에만 있는 파일과, 반대쪽에만 있는 파일 중 symbol을 가장 많이 공유하는 파일(이동·이름 변경·분할·병합, 양방향으로 찾음)이다. 공유하는 symbol이 없는 한쪽에만 있는 파일은 symbol 선언 없이 공백 외 텍스트가 있을 때 표시한다. 최상위 type 위의 일반 주석 변경도 이 limitation을 켠다. coverage level은 바꾸지 않는다.
 
 added/deleted symbol이나 truncated evidence의 전체 원문은 Core `DiffSourceResolver`로 요청 시점에만 읽는다. `SelectionKey`·`Baseline`과 요청한 `side`(base/target)의 snapshot ID가 일치해야 하며, 다르면 `DIFF_SNAPSHOT_INVALID`, 더 최근 diff나 baseline 전환으로 선택이 무효화됐으면 `STALE_DIFF_RESPONSE`다. 원문은 diff 계산에 쓰인 **snapshot이 보존한 bytes**에서만 읽으며 현재 workspace 파일은 절대 열지 않는다 — 그래서 삭제된 symbol의 base source(DIFF-03류 요청)는 현재 파일이 달라져도 항상 선택한 baseline의 snapshot 값을 반환한다. 응답은 `cv-resolve`와 같은 source slice 계약(`contentHash`/`notModified`/`ifNoneMatch` 포함)을 쓰고 `freshness.returnedFiles=verified`(snapshot digest 검증), `freshness.workspace=not_applicable`이다. 이 lazy resolve API는 Core 전용이며 이번 버전에서 `cv-diff` CLI나 `cv_diff` MCP tool로는 노출하지 않는다.
 

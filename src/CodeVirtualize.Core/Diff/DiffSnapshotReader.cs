@@ -55,7 +55,16 @@ internal static class DiffSnapshotReader
         }
     }
 
-    internal static string Extract(LocationContract location, IReadOnlyDictionary<string, DecodedSource> sources)
+    internal static string Extract(LocationContract location, IReadOnlyDictionary<string, DecodedSource> sources) =>
+        Extract(location, sources, null);
+
+    /// <summary>
+    /// Validates <paramref name="location"/> against the decoded snapshot sources and returns its span text.
+    /// <paramref name="lineStarts"/>, when given, are the precomputed line starts of that location's file
+    /// (so line numbers are found by binary search instead of rescanning the file from the start).
+    /// </summary>
+    internal static string Extract(
+        LocationContract location, IReadOnlyDictionary<string, DecodedSource> sources, IReadOnlyList<int>? lineStarts)
     {
         if (location.Path is null || !sources.TryGetValue(NormalizePath(location.Path), out var source))
         {
@@ -73,8 +82,8 @@ internal static class DiffSnapshotReader
             throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"UTF-16 span for '{location.Path}' is outside the validated source.");
         }
 
-        var actualStartLine = LineAt(source.Text, span.Start);
-        var actualEndLine = LineAt(source.Text, span.Start + span.Length);
+        var actualStartLine = lineStarts is null ? LineAt(source.Text, span.Start) : LineOf(source.Text, lineStarts, span.Start);
+        var actualEndLine = lineStarts is null ? LineAt(source.Text, span.Start + span.Length) : LineOf(source.Text, lineStarts, span.Start + span.Length);
         if (actualStartLine != span.StartLine || actualEndLine != span.EndLine)
         {
             throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"Line range for '{location.Path}' does not match its UTF-16 span.");
@@ -87,10 +96,12 @@ internal static class DiffSnapshotReader
     /// Returns the full source lines (with real file line numbers, including leading indentation) for
     /// <paramref name="span"/>. Used for a leaf symbol's own body/signature/remark text.
     /// </summary>
-    internal static IReadOnlyList<LineHunkBuilder.SourceLine> FullLines(string text, TextSpanContract span)
+    internal static IReadOnlyList<LineHunkBuilder.SourceLine> FullLines(string text, TextSpanContract span) =>
+        FullLines(text, span, SourceResolver.LineStarts(text));
+
+    internal static IReadOnlyList<LineHunkBuilder.SourceLine> FullLines(string text, TextSpanContract span, IReadOnlyList<int> starts)
     {
-        var starts = SourceResolver.LineStarts(text);
-        var result = new List<LineHunkBuilder.SourceLine>();
+        var result = new List<LineHunkBuilder.SourceLine>(Math.Max(0, span.EndLine - span.StartLine + 1));
         for (var line = span.StartLine; line <= span.EndLine; line++)
         {
             var start = starts[line - 1];
@@ -107,11 +118,45 @@ internal static class DiffSnapshotReader
     /// text on its line outside its span (a field declarator's modifiers, type, attribute and trailing
     /// comment), which rule (b') leaves out of the container's comparison.
     /// </summary>
-    internal static IReadOnlyList<LineHunkBuilder.SourceLine> HeaderLines(string text, TextSpanContract span)
+    internal static IReadOnlyList<LineHunkBuilder.SourceLine> HeaderLines(string text, TextSpanContract span, IReadOnlyList<int> starts)
+    {
+        var (first, last) = HeaderLineRange(text, span, starts);
+        return FullLines(text, span with { StartLine = first, EndLine = last }, starts);
+    }
+
+    /// <summary>The first and last line numbers the declaration's header touches.</summary>
+    internal static (int First, int Last) HeaderLineRange(string text, TextSpanContract span, IReadOnlyList<int> starts)
     {
         var (start, length) = SourceResolver.Range(text, span, SourcePart.Header, 0);
-        var lastLine = Math.Max(span.StartLine, SourceResolver.Line(text, start + Math.Max(0, length - 1)));
-        return FullLines(text, new TextSpanContract(start, length, span.StartLine, lastLine));
+        return (span.StartLine, Math.Max(span.StartLine, LineOf(text, starts, start + Math.Max(0, length - 1))));
+    }
+
+    /// <summary>
+    /// The 1-based line of <paramref name="offset"/>, identical to <see cref="SourceResolver.Line"/> (which
+    /// counts line breaks before the offset, treating CRLF as one break) but found by binary search over
+    /// precomputed <paramref name="starts"/>.
+    /// </summary>
+    internal static int LineOf(string text, IReadOnlyList<int> starts, int offset)
+    {
+        var position = Math.Min(offset, text.Length);
+        var low = 0;
+        var high = starts.Count - 1;
+        while (low < high)
+        {
+            var middle = (low + high + 1) / 2;
+            if (starts[middle] <= position)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        // An offset between the '\r' and '\n' of a CRLF has already passed that line break.
+        var betweenCrLf = position > 0 && position < text.Length && text[position - 1] == '\r' && text[position] == '\n';
+        return low + 1 + (betweenCrLf ? 1 : 0);
     }
 
     internal static int LineAt(string text, int offset) => SourceResolver.Line(text, offset);

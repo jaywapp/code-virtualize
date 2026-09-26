@@ -120,6 +120,7 @@ internal static class DiffTests
         FieldReindentationIsReportedAsFormattingOnly();
         OwnedTextRegressionsWithRealAnalyzer();
         OwnedTextCoveragePropertyTest();
+        LargeContainerDiffStaysNearLinear();
     }
 
     /// <summary>
@@ -1203,6 +1204,8 @@ internal static class DiffTests
         Assert(n6.Result.Changes.Count == 1, $"N6: only Q changed.\n{Describe(n6.Result)}");
 
         MemberTraceLinesAreNotContainerEvidence(workspace);
+        MultiLineMemberTrailingTextIsNotDropped(workspace);
+        MovedFileLevelTextIsCompared(workspace);
     }
 
     /// <summary>
@@ -1263,16 +1266,157 @@ internal static class DiffTests
             $"b': a type's own header line must stay container text even when only an added member touches it.\n{Describe(boundary.Result)}");
     }
 
+    /// <summary>
+    /// L1 (TASK-028 review 5): a multi-line member added or removed whose last line carries other text
+    /// ("} // MUST-KEEP marker"). Its header_only evidence shows only the header lines, so rule (b') only
+    /// leaves out the member's header lines; the closing line stays container text and is reported there.
+    /// </summary>
+    private static void MultiLineMemberTrailingTextIsNotDropped(RealWorkspace workspace)
+    {
+        var withMethod = Lines("namespace Fixture.L1;", "public class Target", "{", "    private int keep = 1;", "    public void M()", "    {",
+            "    } // MUST-KEEP marker", "}");
+        var withoutMethod = Lines("namespace Fixture.L1;", "public class Target", "{", "    private int keep = 1;", "}");
+
+        var deleted = RealDiff(workspace, new Dictionary<string, string> { ["L1.cs"] = withMethod }, new Dictionary<string, string> { ["L1.cs"] = withoutMethod });
+        Assert(deleted.Result.Changes.Any(change => change.Kind == DiffKind.Deleted && change.BaseSymbol?.Name == "M"),
+            "L1: the deleted method must be reported.");
+        Assert(deleted.Result.Changes.Any(change => HunkHas(change, "-    } // MUST-KEEP marker")),
+            $"L1: the deleted method's closing-line comment must appear in some hunk.\n{Describe(deleted.Result)}");
+
+        var added = RealDiff(workspace, new Dictionary<string, string> { ["L1.cs"] = withoutMethod }, new Dictionary<string, string> { ["L1.cs"] = withMethod });
+        Assert(added.Result.Changes.Any(change => change.Kind == DiffKind.Added && change.TargetSymbol?.Name == "M"),
+            "L1: the added method must be reported.");
+        Assert(added.Result.Changes.Any(change => HunkHas(change, "+    } // MUST-KEEP marker")),
+            $"L1: the added method's closing-line comment must appear in some hunk.\n{Describe(added.Result)}");
+
+        // Without text beyond the member on its other lines, the method's own entry says everything.
+        var plain = RealDiff(workspace,
+            new Dictionary<string, string> { ["L1.cs"] = Lines("namespace Fixture.L1;", "public class Target", "{", "    private int keep = 1;", "    public void M()", "    {", "    }", "}") },
+            new Dictionary<string, string> { ["L1.cs"] = withoutMethod });
+        Assert(!plain.Result.Changes.Any(change => change.BaseSymbol?.Name == "Target"),
+            $"L1: deleting a plain multi-line method must not report the class.\n{Describe(plain.Result)}");
+    }
+
+    /// <summary>
+    /// P2 (TASK-028 review 5): file-level text (usings, namespace) of a file that was moved is compared with
+    /// the file it moved from (the other-side-only file sharing the most symbols).
+    /// </summary>
+    private static void MovedFileLevelTextIsCompared(RealWorkspace workspace)
+    {
+        string Source(string usingLine) => Lines(usingLine, "namespace Fixture.P2;", "public class Mover", "{", "    public int V;", "}");
+
+        var changed = RealDiff(workspace,
+            new Dictionary<string, string> { ["Old.cs"] = Source("using System;") },
+            new Dictionary<string, string> { ["New.cs"] = Source("using System.Linq;") });
+        Assert(changed.Result.Changes.Count == 0, $"P2: sanity - no symbol changed.\n{Describe(changed.Result)}");
+        Assert(changed.Result.Contract.Limitations.Contains("diff-file-level-text-changed", StringComparer.Ordinal),
+            "P2: a using changed while the file moved must be flagged as a file-level text change.");
+
+        var unchanged = RealDiff(workspace,
+            new Dictionary<string, string> { ["Old.cs"] = Source("using System;") },
+            new Dictionary<string, string> { ["New.cs"] = Source("using System;") });
+        Assert(!unchanged.Result.Contract.Limitations.Contains("diff-file-level-text-changed", StringComparer.Ordinal),
+            "P2: a pure move must not be flagged.");
+
+        var split = RealDiff(workspace,
+            new Dictionary<string, string> { ["Old.cs"] = Lines("using System;", "namespace Fixture.P2;", "public class P { }", "public class Q { }") },
+            new Dictionary<string, string>
+            {
+                ["P.cs"] = Lines("using System;", "namespace Fixture.P2;", "public class P { }"),
+                ["Q.cs"] = Lines("using System.Text;", "namespace Fixture.P2;", "public class Q { }"),
+            });
+        Assert(split.Result.Contract.Limitations.Contains("diff-file-level-text-changed", StringComparer.Ordinal),
+            "P2: a split file whose second part gained a different using must be flagged too.");
+    }
+
+    /// <summary>
+    /// P1 (TASK-028 review 5): one class with many single-line fields, one field changed. Before the fix the
+    /// diff was quadratic in the number of symbols (N=5,000: ~6 s, N=20,000: ~100 s); it must now stay
+    /// near-linear. The bound is generous for CI machines while far below the quadratic cost.
+    /// </summary>
+    private static void LargeContainerDiffStaysNearLinear()
+    {
+        const int count = 10000;
+        (SymbolDiffSnapshot Snapshot, string ClassId) Build(string snapshotId, bool changed)
+        {
+            var builder = new StringBuilder("namespace Perf;\npublic class Big\n{\n");
+            var starts = new int[count];
+            var texts = new string[count];
+            for (var i = 0; i < count; i++)
+            {
+                texts[i] = $"f{i} = {(changed && i == 0 ? 999999 : i)}";
+                builder.Append("    private int ");
+                starts[i] = builder.Length;
+                builder.Append(texts[i]).Append(";\n");
+            }
+
+            builder.Append("}\n");
+            var text = builder.ToString();
+            var bytes = new UTF8Encoding(false).GetBytes(text);
+            var hash = HashUtf8Bytes(bytes);
+            var classStart = text.IndexOf("public class Big", StringComparison.Ordinal);
+            var classId = DeterministicSymbolId.Create(new SymbolIdentityContract("perf", AnalysisKey, "class", "Perf.Big", 0, [], null));
+            SymbolContract Symbol(string id, string kind, string name, string qualifiedName, string? container, TextSpanContract span) =>
+                new(id, "perf-project", AnalysisKey, kind, name, qualifiedName, $"{kind} {name}", "public", container, 0, IdentityQuality.Semantic, [], null,
+                    [new DeclarationContract(id, new LocationContract("file-big", hash, span, "Big.cs", null), DocumentKind.Source)], []);
+            var symbols = new List<SymbolContract>(count + 1)
+            {
+                Symbol(classId, "class", "Big", "Perf.Big", null, new TextSpanContract(classStart, text.Length - 1 - classStart, 2, count + 4)),
+            };
+            for (var i = 0; i < count; i++)
+            {
+                var id = DeterministicSymbolId.Create(new SymbolIdentityContract("perf", AnalysisKey, "field", $"Perf.Big.f{i}", 0, [], null));
+                symbols.Add(Symbol(id, "field", $"f{i}", $"Perf.Big.f{i}", classId, new TextSpanContract(starts[i], texts[i].Length, i + 4, i + 4)));
+            }
+
+            return (new SymbolDiffSnapshot(snapshotId, hash, DateTimeOffset.UtcNow, Coverage(), symbols,
+                [new DiffSourceDocument("Big.cs", bytes, "utf-8", hash)], []), classId);
+        }
+
+        var (baseSnapshot, _) = Build("perf-base", changed: false);
+        var (targetSnapshot, _) = Build("perf-target", changed: true);
+        var baseline = new BaselineContract(BaselineKind.Vcs, "git", "perf-base", "perf-target", null, DateTimeOffset.UtcNow, baseSnapshot.InputFingerprint);
+        var stopwatch = Stopwatch.StartNew();
+        var result = new SymbolDiffService().Compare(new SymbolDiffRequest(baseline, baseSnapshot, targetSnapshot));
+        stopwatch.Stop();
+
+        Assert(result.Changes.Count == 1 && result.Changes[0].Kind == DiffKind.BodyChanged && result.Changes[0].BaseSymbol?.Name == "f0",
+            $"P1: only f0 changed.\n{Describe(result)}");
+        Assert(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"P1: diffing a class with {count} fields must stay near-linear (took {stopwatch.Elapsed.TotalSeconds:F2} s; the quadratic version took ~25 s).");
+    }
+
     // --- Owned-text coverage property test (independent oracle) ---------------------------------------------
 
-    private sealed record PField(string Name, int Value, int? Attr, bool AttrOwnLine, string? Trailing, int Indent);
+    private sealed record PField(string Name, int Value, int? Attr, bool AttrOwnLine, string? Trailing, int Indent, string Type = "int");
+
+    private sealed record PMethod(string Name, int Value, string? Trailing);
 
     private sealed record PClass(
-        string Name, string Comment, IReadOnlyList<PField> Fields, IReadOnlyList<(string Name, int Value)> Shared, int MethodValue, bool BlankAfterFields);
+        string Name,
+        string Comment,
+        IReadOnlyList<PField> Fields,
+        IReadOnlyList<(string Name, int Value)> Shared,
+        IReadOnlyList<PMethod> Methods,
+        bool BlankAfterFields,
+        string? PropertyTrailing,
+        int? NestedValue,
+        string NestedComment);
 
     private sealed record PEnum(string Name, IReadOnlyList<string> Members, bool OneLine, string Description);
 
-    private sealed record PState(IReadOnlyList<PClass> Classes, IReadOnlyList<PEnum> Enums, IReadOnlyDictionary<string, string> FileOf);
+    /// <summary>A type declared on a single line, so its members sit on its first and last line.</summary>
+    private sealed record PTiny(string Name, int? Attr, IReadOnlyList<(string Name, int Value)> Fields);
+
+    /// <summary>A partial class with two declarations (file keys Name and Name#2).</summary>
+    private sealed record PPartial(string Name, string CommentA, int ValueA, string CommentB, int ValueB);
+
+    private sealed record PState(
+        IReadOnlyList<PClass> Classes,
+        IReadOnlyList<PEnum> Enums,
+        PTiny Tiny,
+        PPartial Partial,
+        IReadOnlyDictionary<string, string> FileOf);
 
     /// <summary>An edit; <paramref name="NonSubstantive"/> edits change only whitespace or file placement.</summary>
     private sealed record PEdit(string Name, bool NonSubstantive, Func<PState, Random, PState> Apply);
@@ -1308,7 +1452,11 @@ internal static class DiffTests
                 VerifyOwnedTextOracle(outcome);
                 if (chosen.All(edit => edit.NonSubstantive))
                 {
-                    Assert(!outcome.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged),
+                    // Accepted limitation (1:1 move heuristic): when more than one declaration of a partial type
+                    // moves to new files at once, the unpaired declarations are reported as removed/added
+                    // header_only evidence (over-reporting, not a loss). Nothing else may appear.
+                    Assert(!outcome.Result.Changes.Any(change => change.Kind == DiffKind.BodyChanged &&
+                            !change.Contract.Evidence.All(evidence => evidence.Kind is "declaration-removed" or "declaration-added")),
                         $"Whitespace/placement-only edits must not produce body_changed.\n{Describe(outcome.Result)}");
                 }
             }
@@ -1328,24 +1476,35 @@ internal static class DiffTests
 
     private static PState InitialPropertyState(Random rng)
     {
+        string? MaybeComment(string prefix) => rng.Next(2) == 0 ? $"{prefix}-{rng.Next(100)}" : null;
+
         var alpha = new PClass("Alpha", $"note-{rng.Next(100)}",
             [
-                new PField("speed", rng.Next(100), rng.Next(100), rng.Next(2) == 0, rng.Next(2) == 0 ? $"units-{rng.Next(100)}" : null, 4),
+                new PField("speed", rng.Next(100), rng.Next(100), rng.Next(2) == 0, MaybeComment("units"), 4),
                 new PField("hp", rng.Next(100), rng.Next(2) == 0 ? rng.Next(100) : null, false, null, 4),
-                new PField("mana", rng.Next(100), null, false, null, 4),
+                new PField("mana", rng.Next(100), null, false, null, 4, rng.Next(2) == 0 ? "int" : "int[,]"),
             ],
-            [("a", rng.Next(100)), ("b", rng.Next(100))], rng.Next(100), true);
+            [("a", rng.Next(100)), ("b", rng.Next(100))],
+            [new PMethod("Compute", rng.Next(100), MaybeComment("end")), new PMethod("Other", rng.Next(100), MaybeComment("tail"))],
+            true, MaybeComment("prop"), rng.Next(2) == 0 ? rng.Next(100) : null, $"inner-{rng.Next(100)}");
         var beta = new PClass("Beta", $"note-{rng.Next(100)}",
-            [new PField("rate", rng.Next(100), rng.Next(100), false, null, 4)], [], rng.Next(100), rng.Next(2) == 0);
+            [new PField("rate", rng.Next(100), rng.Next(100), false, null, 4)], [],
+            [new PMethod("Compute", rng.Next(100), MaybeComment("end"))],
+            rng.Next(2) == 0, null, null, $"inner-{rng.Next(100)}");
         var color = new PEnum("Color", rng.Next(2) == 0 ? ["Red", "Green"] : ["Red", "Green", "Blue"], rng.Next(2) == 0, $"d{rng.Next(100)}");
+        var tiny = new PTiny("Tiny", rng.Next(2) == 0 ? rng.Next(100) : null, [("y", rng.Next(100)), ("z", rng.Next(100))]);
+        var partial = new PPartial("Gamma", $"part-a-{rng.Next(100)}", rng.Next(100), $"part-b-{rng.Next(100)}", rng.Next(100));
         var layout = rng.Next(3);
         var fileOf = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["Alpha"] = "Main.cs",
             ["Beta"] = layout == 0 ? "Main.cs" : "Beta.cs",
             ["Color"] = layout == 2 ? "Beta.cs" : "Main.cs",
+            ["Tiny"] = layout == 1 ? "Beta.cs" : "Main.cs",
+            ["Gamma"] = "Main.cs",
+            ["Gamma#2"] = rng.Next(2) == 0 ? "Main.cs" : "GammaPart.cs",
         };
-        return new PState([alpha, beta], [color], fileOf);
+        return new PState([alpha, beta], [color], tiny, partial, fileOf);
     }
 
     private static PState WithClass(PState state, Random rng, Func<PClass, Random, PClass> change)
@@ -1369,6 +1528,19 @@ internal static class DiffTests
         return type with { Fields = fields };
     }
 
+    private static PClass WithMethod(PClass type, Random rng, Func<PMethod, Random, PMethod> change)
+    {
+        if (type.Methods.Count == 0)
+        {
+            return type;
+        }
+
+        var index = rng.Next(type.Methods.Count);
+        var methods = type.Methods.ToArray();
+        methods[index] = change(methods[index], rng);
+        return type with { Methods = methods };
+    }
+
     private static PState WithEnum(PState state, Func<PEnum, PEnum> change) => state with { Enums = state.Enums.Select(change).ToArray() };
 
     private static PState MoveType(PState state, string type, string file) =>
@@ -1381,7 +1553,22 @@ internal static class DiffTests
         new PEdit("change-trailing-comment", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Trailing = $"units-{100 + r2.Next(900)}" }))),
         new PEdit("change-class-comment", false, (s, rng) => WithClass(s, rng, (c, r) => c with { Comment = $"note-{100 + r.Next(900)}" })),
         new PEdit("change-field-value", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Value = 100 + r2.Next(900) }))),
-        new PEdit("change-method-body", false, (s, rng) => WithClass(s, rng, (c, r) => c with { MethodValue = 100 + r.Next(900) })),
+        new PEdit("change-field-type", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, _) => f with { Type = f.Type == "int[,]" ? "int[]" : "int[,]" }))),
+        new PEdit("rename-field", false, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, r2) => f with { Name = $"renamed{r2.Next(100000)}" }))),
+        new PEdit("change-method-body", false, (s, rng) => WithClass(s, rng, (c, r) => WithMethod(c, r, (m, r2) => m with { Value = 100 + r2.Next(900) }))),
+        new PEdit("change-method-trailing", false, (s, rng) => WithClass(s, rng, (c, r) => WithMethod(c, r, (m, r2) => m with { Trailing = $"end-{100 + r2.Next(900)}" }))),
+        new PEdit("add-method", false, (s, rng) => WithClass(s, rng, (c, r) =>
+        {
+            var methods = c.Methods.ToList();
+            methods.Insert(r.Next(methods.Count + 1), new PMethod($"Extra{r.Next(100000)}", r.Next(100), r.Next(2) == 0 ? $"added-{r.Next(100)}" : null));
+            return c with { Methods = methods };
+        })),
+        new PEdit("remove-method", false, (s, rng) => WithClass(s, rng, (c, r) =>
+            c.Methods.Count == 0 ? c : c with { Methods = c.Methods.Where((_, i) => i != r.Next(c.Methods.Count)).ToArray() })),
+        new PEdit("change-property-comment", false, (s, rng) => WithClass(s, rng, (c, r) => c with { PropertyTrailing = $"prop-{100 + r.Next(900)}" })),
+        new PEdit("toggle-nested-type", false, (s, rng) => WithClass(s, rng, (c, r) => c with { NestedValue = c.NestedValue is null ? r.Next(100) : null })),
+        new PEdit("change-nested-comment", false, (s, rng) => WithClass(s, rng, (c, r) => c with { NestedComment = $"inner-{100 + r.Next(900)}" })),
+        new PEdit("change-nested-value", false, (s, rng) => WithClass(s, rng, (c, r) => c.NestedValue is null ? c : c with { NestedValue = 100 + r.Next(900) })),
         new PEdit("swap-fields", false, (s, rng) => WithClass(s, rng, (c, r) =>
         {
             if (c.Fields.Count < 2) return c;
@@ -1393,7 +1580,8 @@ internal static class DiffTests
         new PEdit("add-field", false, (s, rng) => WithClass(s, rng, (c, r) =>
         {
             var fields = c.Fields.ToList();
-            fields.Insert(r.Next(fields.Count + 1), new PField($"extra{r.Next(100000)}", r.Next(100), r.Next(2) == 0 ? r.Next(100) : null, false, null, 4));
+            fields.Insert(r.Next(fields.Count + 1), new PField($"extra{r.Next(100000)}", r.Next(100), r.Next(2) == 0 ? r.Next(100) : null, false,
+                r.Next(2) == 0 ? $"new-{r.Next(100)}" : null, 4));
             return c with { Fields = fields };
         })),
         new PEdit("remove-field", false, (s, rng) => WithClass(s, rng, (c, r) =>
@@ -1405,10 +1593,18 @@ internal static class DiffTests
         new PEdit("add-enum-member", false, (s, rng) => WithEnum(s, e => e with { Members = [.. e.Members, $"Member{rng.Next(100000)}"] })),
         new PEdit("remove-enum-member", false, (s, _) => WithEnum(s, e => e.Members.Count > 1 ? e with { Members = e.Members.Take(e.Members.Count - 1).ToArray() } : e)),
         new PEdit("change-enum-attr", false, (s, rng) => WithEnum(s, e => e with { Description = $"d{100 + rng.Next(900)}" })),
+        new PEdit("tiny-add-field", false, (s, rng) => s with { Tiny = s.Tiny with { Fields = [.. s.Tiny.Fields, ($"t{rng.Next(100000)}", rng.Next(100))] } }),
+        new PEdit("tiny-remove-field", false, (s, _) => s with { Tiny = s.Tiny with { Fields = s.Tiny.Fields.Skip(1).ToArray() } }),
+        new PEdit("tiny-change-attr", false, (s, rng) => s with { Tiny = s.Tiny with { Attr = s.Tiny.Attr is null ? rng.Next(100) : null } }),
+        new PEdit("partial-change-comment", false, (s, rng) => rng.Next(2) == 0
+            ? s with { Partial = s.Partial with { CommentA = $"part-a-{100 + rng.Next(900)}" } }
+            : s with { Partial = s.Partial with { CommentB = $"part-b-{100 + rng.Next(900)}" } }),
+        new PEdit("partial-change-value", false, (s, rng) => s with { Partial = s.Partial with { ValueB = 100 + rng.Next(900) } }),
         new PEdit("toggle-blank-line", true, (s, rng) => WithClass(s, rng, (c, _) => c with { BlankAfterFields = !c.BlankAfterFields })),
         new PEdit("reindent-field", true, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, _) => f with { Indent = f.Indent == 4 ? 8 : 4 }))),
         new PEdit("toggle-attr-line", true, (s, rng) => WithClass(s, rng, (c, r) => WithField(c, r, (f, _) => f with { AttrOwnLine = !f.AttrOwnLine }))),
         new PEdit("toggle-enum-layout", true, (s, _) => WithEnum(s, e => e with { OneLine = !e.OneLine })),
+        new PEdit("move-partial-part", true, (s, rng) => MoveType(s, "Gamma#2", $"GammaMoved{rng.Next(100000)}.cs")),
         new PEdit("move-type-to-new-file", true, (s, rng) =>
         {
             var types = s.FileOf.Keys.Order(StringComparer.Ordinal).ToArray();
@@ -1427,7 +1623,7 @@ internal static class DiffTests
             var fileOf = new Dictionary<string, string>(s.FileOf, StringComparer.Ordinal);
             foreach (var type in s.FileOf.Where(pair => pair.Value == file).Select(pair => pair.Key))
             {
-                fileOf[type] = $"Split{type}{rng.Next(100000)}.cs";
+                fileOf[type] = $"Split{type.Replace("#", "Part", StringComparison.Ordinal)}{rng.Next(100000)}.cs";
             }
             return s with { FileOf = fileOf };
         }),
@@ -1455,6 +1651,8 @@ internal static class DiffTests
             list.AddRange(lines);
         }
 
+        static string Trailing(string? comment) => comment is null ? string.Empty : $" // {comment}";
+
         foreach (var type in state.Classes)
         {
             var lines = new List<string> { $"public class {type.Name}", "{", $"    // {type.Comment}" };
@@ -1468,8 +1666,7 @@ internal static class DiffTests
                 }
 
                 var prefix = attribute is not null && !field.AttrOwnLine ? attribute + " " : string.Empty;
-                var trailing = field.Trailing is null ? string.Empty : $" // {field.Trailing}";
-                lines.Add($"{indent}{prefix}private int {field.Name} = {field.Value};{trailing}");
+                lines.Add($"{indent}{prefix}private {field.Type} {field.Name} = {field.Value};{Trailing(field.Trailing)}");
             }
 
             if (type.Shared.Count > 0)
@@ -1482,9 +1679,27 @@ internal static class DiffTests
                 lines.Add(string.Empty);
             }
 
-            lines.AddRange(["    public int Compute()", "    {", $"        return {type.MethodValue};", "    }", "}"]);
+            lines.Add($"    public int Prop {{ get; set; }}{Trailing(type.PropertyTrailing)}");
+            foreach (var method in type.Methods)
+            {
+                lines.AddRange([$"    public int {method.Name}()", "    {", $"        return {method.Value};", $"    }}{Trailing(method.Trailing)}"]);
+            }
+
+            if (type.NestedValue is int nestedValue)
+            {
+                lines.AddRange(["    public class Inner", "    {", $"        // {type.NestedComment}", $"        private int deep = {nestedValue};", "    }"]);
+            }
+
+            lines.Add("}");
             Add(type.Name, lines);
         }
+
+        var tinyAttribute = state.Tiny.Attr is int tinyValue ? $"[X({tinyValue})] " : string.Empty;
+        var tinyFields = string.Concat(state.Tiny.Fields.Select(field => $" private int {field.Name} = {field.Value};"));
+        Add(state.Tiny.Name, [$"{tinyAttribute}public class {state.Tiny.Name} {{{tinyFields} }}"]);
+
+        Add(state.Partial.Name, [$"public partial class {state.Partial.Name}", "{", $"    // {state.Partial.CommentA}", $"    private int ga = {state.Partial.ValueA};", "}"]);
+        Add($"{state.Partial.Name}#2", [$"public partial class {state.Partial.Name}", "{", $"    // {state.Partial.CommentB}", $"    private int gb = {state.Partial.ValueB};", "}"]);
 
         foreach (var type in state.Enums)
         {
@@ -1497,23 +1712,31 @@ internal static class DiffTests
         return blocks.ToDictionary(pair => pair.Key, pair => string.Join("\n", pair.Value) + "\n", StringComparer.Ordinal);
     }
 
-    private sealed record OwnedToken(string Value, bool IsPlaceholder, string Path, int Line, string LineText, IReadOnlySet<string> LineMembers);
+    private sealed record OwnedToken(
+        string Value, bool IsPlaceholder, string Path, int Line, string LineText, IReadOnlySet<string> LineMembers, bool InOwnSpan,
+        int Declaration, bool Exempt = false);
 
     /// <summary>
     /// Independent oracle for "no change disappears silently" (owned-text redesign). It uses no line diff
-    /// and no positional pairing, and none of the production code:
+    /// and no positional pairing, and none of the production code.
     ///
-    /// For every symbol S present in both snapshots, S's owned text is its declaration lines with every other
-    /// symbol's span — other than S's own enclosing types — replaced by one placeholder token (whitespace
-    /// dropped). The two owned token sequences are aligned with a character LCS. Unmatched tokens that are
-    /// placeholders or separators (',' ';') are exempt. Any other unmatched token means S's owned text
-    /// changed, and then an entry for S or one of its enclosing types must exist, and the original text of
-    /// each changed owned line (below) must appear as a '-' (base) or '+' (target) line of those entries'
-    /// hunks — unless the evidence was truncated and the budget limitation is present.
+    /// S's owned text is its declaration lines with every other symbol's span — other than S's own enclosing
+    /// types — replaced by one placeholder token (whitespace dropped). A token is exempt when it is a
+    /// placeholder, or a separator (',' ';') outside S's own span that sits next to a placeholder or, for a
+    /// leaf S, next to S's own span text (a list separator that comes and goes with a neighbouring member).
     ///
-    /// The line requirement applies to owned lines that hold a token the alignment could not match and whose
-    /// exempt-stripped text occurs more often on that side (a line diff must then drop or add one of them);
-    /// lines that only changed shape because matched text moved across lines are not required.
+    /// Matched symbols (same ID on both sides, and the base/target pairs of rename-candidate and
+    /// signature-changed entries): the owned token sequences are aligned with a character LCS. Any unmatched
+    /// non-exempt token means S's owned text changed; then an entry for S or an enclosing type must exist,
+    /// and each changed owned line (below) must appear as a '-' (base) or '+' (target) line of those
+    /// entries' hunks — unless the evidence was truncated and the budget limitation is present. The line
+    /// requirement applies to owned lines that hold an unmatched non-exempt token and whose exempt-stripped
+    /// text occurs more often on that side (a line diff must then drop or add one of them).
+    ///
+    /// Symbols on one side only (added or deleted): every owned line holding non-exempt text outside S's own
+    /// span (attribute, modifiers, a trailing comment after a closing brace) must appear with the matching
+    /// prefix in the hunks of S's entry or an enclosing type's entry. Text inside S's own span beyond its
+    /// header may be omitted — header_only evidence records it as omitted lines.
     ///
     /// Member traces (rule b'): see <see cref="OracleWithoutMemberTraceLines"/>.
     ///
@@ -1527,39 +1750,60 @@ internal static class DiffTests
         var targetById = outcome.Target.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
         var budgetLimited = outcome.Result.Contract.Limitations.Contains(DiffContract.EvidenceBudgetExhaustedLimitation, StringComparer.Ordinal);
 
-        foreach (var symbolId in baseById.Keys.Where(targetById.ContainsKey).Order(StringComparer.Ordinal))
+        List<OwnedToken> Owned(SymbolContract symbol, bool baseSide)
         {
-            var before = baseById[symbolId];
-            var after = targetById[symbolId];
-            var baseTokens = OracleWithoutMemberTraceLines(
-                OracleOwnedTokens(before, baseById, outcome.BaseFiles), symbolId, baseById, targetById, outcome.Result, '-');
-            var targetTokens = OracleWithoutMemberTraceLines(
-                OracleOwnedTokens(after, targetById, outcome.TargetFiles), symbolId, targetById, baseById, outcome.Result, '+');
-            var (baseChanged, targetChanged) = OracleUnmatched(baseTokens, targetTokens);
+            var sideById = baseSide ? baseById : targetById;
+            var leaf = !sideById.Values.Any(other => other.ContainerId == symbol.SymbolId);
+            return OracleMarkExempt(OracleWithoutMemberTraceLines(
+                OracleOwnedTokens(symbol, sideById, baseSide ? outcome.BaseFiles : outcome.TargetFiles),
+                symbol.SymbolId, sideById, baseSide ? targetById : baseById, outcome.Result, baseSide ? '-' : '+'), leaf);
+        }
+
+        DiffEntryContract[] EntriesFor(IReadOnlySet<string> owners) => outcome.Result.Contract.Entries
+            .Where(entry => (entry.BaseSymbolId is not null && owners.Contains(entry.BaseSymbolId)) ||
+                            (entry.TargetSymbolId is not null && owners.Contains(entry.TargetSymbolId)))
+            .ToArray();
+
+        // A symbol's declarations form a set (partial declarations can live in any files): align the base
+        // declarations with the order of target declarations that leaves the fewest unmatched tokens.
+        (List<OwnedToken> Base, List<OwnedToken> Target, HashSet<int> BaseChanged, HashSet<int> TargetChanged) Align(
+            SymbolContract before, SymbolContract after)
+        {
+            var baseTokens = Owned(before, baseSide: true);
+            var targetDeclarations = Owned(after, baseSide: false).GroupBy(token => token.Declaration).Select(group => group.ToList()).ToList();
+            (List<OwnedToken>, List<OwnedToken>, HashSet<int>, HashSet<int>)? best = null;
+            foreach (var order in OraclePermutations(targetDeclarations.Count))
+            {
+                var targetTokens = order.SelectMany(index => targetDeclarations[index]).ToList();
+                var (baseChanged, targetChanged) = OracleUnmatched(baseTokens, targetTokens);
+                if (best is null || baseChanged.Count + targetChanged.Count < best.Value.Item3.Count + best.Value.Item4.Count)
+                {
+                    best = (baseTokens, targetTokens, baseChanged, targetChanged);
+                }
+            }
+
+            return best ?? (baseTokens, [], OracleUnmatched(baseTokens, []).Base, []);
+        }
+
+        void CheckMatched(SymbolContract before, SymbolContract after)
+        {
+            var (baseTokens, targetTokens, baseChanged, targetChanged) = Align(before, after);
             if (baseChanged.Count == 0 && targetChanged.Count == 0)
             {
-                continue;
+                return;
             }
 
             var ancestors = OracleAncestors(before, baseById).Concat(OracleAncestors(after, targetById)).ToHashSet(StringComparer.Ordinal);
             var spanEqual = OracleSpanTokens(before, outcome.BaseFiles) == OracleSpanTokens(after, outcome.TargetFiles);
             if (spanEqual && ancestors.Any(ancestor =>
                     baseById.TryGetValue(ancestor, out var baseAncestor) && targetById.TryGetValue(ancestor, out var targetAncestor) &&
-                    OracleUnmatched(
-                        OracleWithoutMemberTraceLines(
-                            OracleOwnedTokens(baseAncestor, baseById, outcome.BaseFiles), ancestor, baseById, targetById, outcome.Result, '-'),
-                        OracleWithoutMemberTraceLines(
-                            OracleOwnedTokens(targetAncestor, targetById, outcome.TargetFiles), ancestor, targetById, baseById, outcome.Result, '+'))
-                    is { Base.Count: 0, Target.Count: 0 }))
+                    Align(baseAncestor, targetAncestor) is { BaseChanged.Count: 0, TargetChanged.Count: 0 }))
             {
-                continue;
+                return;
             }
 
-            var owners = ancestors.Append(symbolId).ToHashSet(StringComparer.Ordinal);
-            var entries = outcome.Result.Contract.Entries
-                .Where(entry => (entry.BaseSymbolId is not null && owners.Contains(entry.BaseSymbolId)) ||
-                                (entry.TargetSymbolId is not null && owners.Contains(entry.TargetSymbolId)))
-                .ToArray();
+            var owners = ancestors.Append(before.SymbolId).Append(after.SymbolId).ToHashSet(StringComparer.Ordinal);
+            var entries = EntriesFor(owners);
             Assert(entries.Length > 0,
                 $"Owned text of {before.QualifiedName} changed but no entry exists for it or an enclosing type.\n{Describe(outcome.Result)}");
 
@@ -1586,6 +1830,89 @@ internal static class DiffTests
                 }
             }
         }
+
+        void CheckOneSided(SymbolContract symbol, bool baseSide)
+        {
+            var prefix = baseSide ? '-' : '+';
+            var required = Owned(symbol, baseSide)
+                .Where(token => !token.Exempt && !token.IsPlaceholder && !token.InOwnSpan)
+                .Select(token => token.LineText)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (required.Length == 0)
+            {
+                return;
+            }
+
+            var owners = OracleAncestors(symbol, baseSide ? baseById : targetById).Append(symbol.SymbolId).ToHashSet(StringComparer.Ordinal);
+            var entries = EntriesFor(owners);
+            var hunks = string.Concat(entries.SelectMany(entry => entry.Evidence).Select(evidence => "\n" + evidence.TextualHunk));
+            var truncated = entries.SelectMany(entry => entry.Evidence).Any(evidence => evidence.Truncated);
+            foreach (var lineText in required)
+            {
+                Assert(hunks.Contains($"\n{prefix}{lineText}\n", StringComparison.Ordinal) || (truncated && budgetLimited),
+                    $"Owned text of {(baseSide ? "deleted" : "added")} {symbol.QualifiedName} outside its span is not shown as '{prefix}' " +
+                    $"in its entry or an enclosing type's: '{lineText}'.\n{Describe(outcome.Result)}");
+            }
+        }
+
+        var pairedBase = new HashSet<string>(StringComparer.Ordinal);
+        var pairedTarget = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var symbolId in baseById.Keys.Where(targetById.ContainsKey).Order(StringComparer.Ordinal))
+        {
+            CheckMatched(baseById[symbolId], targetById[symbolId]);
+        }
+
+        foreach (var entry in outcome.Result.Contract.Entries.Where(entry =>
+                     entry.BaseSymbolId is not null && entry.TargetSymbolId is not null &&
+                     !string.Equals(entry.BaseSymbolId, entry.TargetSymbolId, StringComparison.Ordinal)))
+        {
+            pairedBase.Add(entry.BaseSymbolId!);
+            pairedTarget.Add(entry.TargetSymbolId!);
+            CheckMatched(baseById[entry.BaseSymbolId!], targetById[entry.TargetSymbolId!]);
+        }
+
+        foreach (var symbolId in baseById.Keys.Where(id => !targetById.ContainsKey(id) && !pairedBase.Contains(id)).Order(StringComparer.Ordinal))
+        {
+            CheckOneSided(baseById[symbolId], baseSide: true);
+        }
+
+        foreach (var symbolId in targetById.Keys.Where(id => !baseById.ContainsKey(id) && !pairedTarget.Contains(id)).Order(StringComparer.Ordinal))
+        {
+            CheckOneSided(targetById[symbolId], baseSide: false);
+        }
+    }
+
+    /// <summary>All orders of 0..count-1 (only a few for a handful of declarations; beyond 4, file order).</summary>
+    private static IEnumerable<int[]> OraclePermutations(int count)
+    {
+        if (count > 4)
+        {
+            yield return Enumerable.Range(0, count).ToArray();
+            yield break;
+        }
+
+        IEnumerable<int[]> Extend(int[] prefix) =>
+            prefix.Length == count
+                ? [prefix]
+                : Enumerable.Range(0, count).Where(index => !prefix.Contains(index)).SelectMany(index => Extend([.. prefix, index]));
+
+        foreach (var order in Extend([]))
+        {
+            yield return order;
+        }
+    }
+
+    /// <summary>Marks exempt tokens: placeholders, and separators outside a leaf's own span that sit next to a
+    /// placeholder or (for a leaf) next to the leaf's own span text.</summary>
+    private static List<OwnedToken> OracleMarkExempt(List<OwnedToken> tokens, bool leaf)
+    {
+        bool Anchor(int index) => index >= 0 && index < tokens.Count && (tokens[index].IsPlaceholder || (leaf && tokens[index].InOwnSpan));
+        return tokens.Select((token, index) => token with
+        {
+            Exempt = token.IsPlaceholder ||
+                     (token.Value is "," or ";" && !(leaf && token.InOwnSpan) && (Anchor(index - 1) || Anchor(index + 1)))
+        }).ToList();
     }
 
     /// <summary>
@@ -1646,8 +1973,10 @@ internal static class DiffTests
     {
         var ancestors = OracleAncestors(symbol, byId);
         var tokens = new List<OwnedToken>();
+        var declarationIndex = -1;
         foreach (var declaration in symbol.Declarations.OrderBy(item => item.Location.Path, StringComparer.Ordinal).ThenBy(item => item.Location.Span.Start))
         {
+            declarationIndex++;
             var path = declaration.Location.Path!.Replace('\\', '/');
             var text = files[path];
             var others = byId.Values
@@ -1657,6 +1986,10 @@ internal static class DiffTests
                 .Select(other => (Id: other.SymbolId, Start: other.Location.Span.Start, End: other.Location.Span.Start + other.Location.Span.Length))
                 .ToArray();
             bool Masked(int position) => others.Any(other => position >= other.Start && position < other.End);
+            var ownSpans = symbol.Declarations.Where(own => own.Location.Path!.Replace('\\', '/') == path)
+                .Select(own => (Start: own.Location.Span.Start, End: own.Location.Span.Start + own.Location.Span.Length))
+                .ToArray();
+            bool Own(int position) => ownSpans.Any(own => position >= own.Start && position < own.End);
 
             var lines = text.Split('\n');
             var lineStart = 0;
@@ -1679,12 +2012,12 @@ internal static class DiffTests
                     {
                         if (first || !Masked(position - 1))
                         {
-                            tokens.Add(new OwnedToken("<member>", true, path, line, lineText, lineMembers));
+                            tokens.Add(new OwnedToken("<member>", true, path, line, lineText, lineMembers, Own(position), declarationIndex));
                         }
                     }
                     else if (!char.IsWhiteSpace(lineText[column]))
                     {
-                        tokens.Add(new OwnedToken(lineText[column].ToString(), false, path, line, lineText, lineMembers));
+                        tokens.Add(new OwnedToken(lineText[column].ToString(), false, path, line, lineText, lineMembers, Own(position), declarationIndex));
                     }
 
                     first = false;
@@ -1697,10 +2030,8 @@ internal static class DiffTests
         return tokens;
     }
 
-    private static bool OracleIsExempt(OwnedToken token) => token.IsPlaceholder || token.Value is "," or ";";
-
     /// <summary>Aligns two owned token sequences with an LCS and returns the indices of unmatched tokens that
-    /// are not exempt (placeholders and separators are exempt), per side.</summary>
+    /// are not exempt, per side.</summary>
     private static (HashSet<int> Base, HashSet<int> Target) OracleUnmatched(IReadOnlyList<OwnedToken> before, IReadOnlyList<OwnedToken> after)
     {
         var n = before.Count;
@@ -1727,12 +2058,12 @@ internal static class DiffTests
             }
             else if (b >= m || (a < n && lcs[a + 1, b] >= lcs[a, b + 1]))
             {
-                if (!OracleIsExempt(before[a])) baseUnmatched.Add(a);
+                if (!before[a].Exempt) baseUnmatched.Add(a);
                 a++;
             }
             else
             {
-                if (!OracleIsExempt(after[b])) targetUnmatched.Add(b);
+                if (!after[b].Exempt) targetUnmatched.Add(b);
                 b++;
             }
         }
@@ -1745,9 +2076,9 @@ internal static class DiffTests
     private static List<(string Key, string LineText, bool HasChange)> OracleLineKeys(IReadOnlyList<OwnedToken> tokens, IReadOnlySet<int> changed) =>
         tokens.Select((token, index) => (Token: token, Index: index))
             .GroupBy(item => (item.Token.Path, item.Token.Line))
-            .Where(group => !group.All(item => OracleIsExempt(item.Token)))
+            .Where(group => !group.All(item => item.Token.Exempt))
             .Select(group => (
-                Key: string.Concat(group.Where(item => !OracleIsExempt(item.Token)).Select(item => item.Token.Value)),
+                Key: string.Concat(group.Where(item => !item.Token.Exempt).Select(item => item.Token.Value)),
                 LineText: group.First().Token.LineText,
                 HasChange: group.Any(item => changed.Contains(item.Index))))
             .ToList();

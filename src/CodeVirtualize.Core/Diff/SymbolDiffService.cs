@@ -11,20 +11,16 @@ public sealed class SymbolDiffService
         request.Baseline.Validate();
         var options = request.Evidence ?? DiffEvidenceOptions.Default;
         options.Validate();
-        ValidateSnapshot(request.Base, nameof(request.Base));
-        ValidateSnapshot(request.Target, nameof(request.Target));
+        var basePrepared = PrepareSnapshot(request.Base, nameof(request.Base));
+        var targetPrepared = PrepareSnapshot(request.Target, nameof(request.Target));
         if (!string.Equals(request.Baseline.BaseId, request.Base.SnapshotId, StringComparison.Ordinal) ||
             !string.Equals(request.Baseline.TargetId, request.Target.SnapshotId, StringComparison.Ordinal))
         {
             throw new DiffException(DiffErrorCodes.InvalidSnapshot, "Baseline IDs do not match the supplied immutable snapshots.");
         }
 
-        var baseContainers = IndexContainers(request.Base);
-        var targetContainers = IndexContainers(request.Target);
-        var baseSources = DiffSnapshotReader.DecodeSources(request.Base);
-        var targetSources = DiffSnapshotReader.DecodeSources(request.Target);
-        var baseView = CreateView(request.Base, baseSources, baseContainers.MembersByContainer);
-        var targetView = CreateView(request.Target, targetSources, targetContainers.MembersByContainer);
+        var baseView = basePrepared.View;
+        var targetView = targetPrepared.View;
         var budget = new EvidenceBudget(options);
         var changes = new List<SymbolDiffChange>();
         var unmatchedBase = new Dictionary<string, SymbolView>(baseView, StringComparer.Ordinal);
@@ -34,7 +30,7 @@ public sealed class SymbolDiffService
         {
             var before = baseView[symbolId];
             var after = targetView[symbolId];
-            AddMatchedChanges(changes, before, after, baseContainers.Order, targetContainers.Order, budget);
+            AddMatchedChanges(changes, before, after, basePrepared.MembersByContainer, targetPrepared.MembersByContainer, budget);
             unmatchedBase.Remove(symbolId);
             unmatchedTarget.Remove(symbolId);
         }
@@ -60,7 +56,7 @@ public sealed class SymbolDiffService
             .ToArray();
         var limitations = request.Base.Coverage.Limitations.Concat(request.Target.Coverage.Limitations)
             .Distinct(StringComparer.Ordinal).ToList();
-        if (FileLevelTextChanged(request.Base, baseSources, request.Target, targetSources))
+        if (FileLevelTextChanged(request.Base, basePrepared, request.Target, targetPrepared))
         {
             limitations.Add(FileLevelTextChangedLimitation);
         }
@@ -93,8 +89,8 @@ public sealed class SymbolDiffService
         List<SymbolDiffChange> changes,
         SymbolView before,
         SymbolView after,
-        IReadOnlyDictionary<string, string[]> baseContainerOrder,
-        IReadOnlyDictionary<string, string[]> targetContainerOrder,
+        IReadOnlyDictionary<string, SymbolContract[]> baseMembers,
+        IReadOnlyDictionary<string, SymbolContract[]> targetMembers,
         EvidenceBudget budget)
     {
         if (!string.Equals(before.Symbol.Signature, after.Symbol.Signature, StringComparison.Ordinal))
@@ -118,8 +114,8 @@ public sealed class SymbolDiffService
                 evidences.AddRange(BuildPairEvidence("body-changed", pairs, useSelfText: true, before, after, budget));
             }
 
-            var baseOrder = baseContainerOrder.GetValueOrDefault(before.Symbol.SymbolId, []);
-            var targetOrder = targetContainerOrder.GetValueOrDefault(after.Symbol.SymbolId, []);
+            var baseOrder = MemberOrder(baseMembers.GetValueOrDefault(before.Symbol.SymbolId, []), pairs, useBase: true);
+            var targetOrder = MemberOrder(targetMembers.GetValueOrDefault(after.Symbol.SymbolId, []), pairs, useBase: false);
             if (OrderChanged(baseOrder, targetOrder))
             {
                 evidences.Add(new DiffEvidenceContract(
@@ -200,32 +196,32 @@ public sealed class SymbolDiffService
         IDictionary<string, SymbolView> unmatchedTarget,
         EvidenceBudget budget)
     {
+        // A before/after pair is a rename candidate when it is the only unmatched symbol with its
+        // (project, kind, rename shape) on each side. Shapes are computed once per symbol and grouped, so
+        // the pass stays linear in the number of unmatched symbols.
+        static string RenameKey(SymbolView view) => $"{view.Symbol.ProjectId}\n{view.Symbol.Kind}\n{RenameShape(view)}";
+
+        var baseKeys = unmatchedBase.Values.ToDictionary(view => view.Symbol.SymbolId, RenameKey, StringComparer.Ordinal);
+        var targetByKey = unmatchedTarget.Values.GroupBy(RenameKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+        var baseCountByKey = baseKeys.Values.GroupBy(key => key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
         foreach (var before in unmatchedBase.Values.OrderBy(item => SortKey(item.Symbol), StringComparer.Ordinal).ToArray())
         {
-            var candidates = unmatchedTarget.Values.Where(after =>
-                    string.Equals(before.Symbol.ProjectId, after.Symbol.ProjectId, StringComparison.Ordinal) &&
-                    string.Equals(before.Symbol.Kind, after.Symbol.Kind, StringComparison.Ordinal) &&
-                    string.Equals(RenameShape(before), RenameShape(after), StringComparison.Ordinal))
-                .OrderBy(after => SortKey(after.Symbol), StringComparer.Ordinal).ToArray();
-            if (candidates.Length != 1)
+            var key = baseKeys[before.Symbol.SymbolId];
+            if (!targetByKey.TryGetValue(key, out var candidates) || candidates.Count != 1 || baseCountByKey[key] != 1)
             {
                 continue;
             }
 
             var after = candidates[0];
-            var reverseCount = unmatchedBase.Values.Count(candidate =>
-                string.Equals(candidate.Symbol.ProjectId, after.Symbol.ProjectId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Symbol.Kind, after.Symbol.Kind, StringComparison.Ordinal) &&
-                string.Equals(RenameShape(candidate), RenameShape(after), StringComparison.Ordinal));
-            if (reverseCount != 1)
-            {
-                continue;
-            }
-
             changes.Add(BuildChange(DiffKind.RenameCandidate, before, after, 0.5m,
                 BuildSymbolLineHunkEvidence("rename-candidate", before, after, budget)));
             unmatchedBase.Remove(before.Symbol.SymbolId);
             unmatchedTarget.Remove(after.Symbol.SymbolId);
+            candidates.Clear();
+            baseCountByKey[key] = 0;
         }
     }
 
@@ -557,10 +553,12 @@ public sealed class SymbolDiffService
 
     /// <summary>
     /// Rule (b'): the line lies strictly inside the declaration (not its first or last line, which carry the
-    /// type's own header and closing text) and every member touching it exists only on this side.
+    /// type's own header and closing text), every member touching it exists only on this side, and the line
+    /// is one of those members' header lines — the lines their added/removed header_only evidence shows. A
+    /// member's later lines (e.g. a method's closing "} // note" line) stay container text.
     /// </summary>
     private static bool OnlyOneSidedMembers(SelfTextLine line, IReadOnlySet<string> otherSideSymbols) =>
-        !line.Boundary && line.Members.Count > 0 && line.Members.All(member => !otherSideSymbols.Contains(member));
+        !line.Boundary && line.MemberHeaderLine && line.Members.Count > 0 && line.Members.All(member => !otherSideSymbols.Contains(member));
 
     private static IEnumerable<string> VisibleLines(IEnumerable<SelfTextLine> lines) =>
         lines.Where(line => line.Visible).Select(line => NormalizeWhitespace(line.Named)).Where(line => line.Length > 0);
@@ -613,8 +611,10 @@ public sealed class SymbolDiffService
 
     /// <summary>One line of a self text: its text with anonymous and with named placeholders, the members
     /// whose spans touch it, whether it is rendered in evidence (it holds more than member text), and
-    /// whether it is the declaration's first or last line.</summary>
-    private sealed record SelfTextLine(string Anonymous, string Named, IReadOnlySet<string> Members, bool Visible, bool Boundary);
+    /// whether it is the declaration's first or last line, and whether it lies within the header lines of
+    /// every member touching it.</summary>
+    private sealed record SelfTextLine(
+        string Anonymous, string Named, IReadOnlySet<string> Members, bool Visible, bool Boundary, bool MemberHeaderLine);
 
     private sealed record SelfTextView(
         IReadOnlyList<LineHunkBuilder.SourceLine> Lines, string Text, IReadOnlyList<SelfTextLine> TextLines, IReadOnlySet<string> MemberIds);
@@ -628,7 +628,7 @@ public sealed class SymbolDiffService
     /// text with anonymous and with named placeholders, used for classification; and the masked member IDs.
     /// </summary>
     private static SelfTextView BuildSelfText(
-        string text, IReadOnlyList<int> lineStarts, TextSpanContract span, bool nested, IReadOnlyList<(int Start, int End, string Id)> masked)
+        string text, IReadOnlyList<int> lineStarts, TextSpanContract span, bool nested, IReadOnlyList<MaskedSpan> masked)
     {
         var lines = new List<LineHunkBuilder.SourceLine>();
         var memberIds = new HashSet<string>(StringComparer.Ordinal);
@@ -644,6 +644,7 @@ public sealed class SymbolDiffService
             var key = new StringBuilder(end - start);
             var anonymous = new StringBuilder(end - start);
             var lineMembers = new HashSet<string>(StringComparer.Ordinal);
+            var memberHeaderLine = true;
             var hasOwnText = false;
             var hidesText = false;
             for (var position = start; position < end; position++)
@@ -663,6 +664,7 @@ public sealed class SymbolDiffService
                 {
                     hidesText = true;
                     lineMembers.Add(masked[maskIndex].Id);
+                    memberHeaderLine &= line >= masked[maskIndex].HeaderFirstLine && line <= masked[maskIndex].HeaderLastLine;
                     if (emittedMask != maskIndex)
                     {
                         key.Append(Placeholder).Append(masked[maskIndex].Id).Append(PlaceholderEnd);
@@ -694,7 +696,8 @@ public sealed class SymbolDiffService
             var anonymousText = anonymous.ToString();
             var visible = hasOwnText || !hidesText;
             all.Append(anonymousText).Append('\n');
-            textLines.Add(new SelfTextLine(anonymousText, keyText, lineMembers, visible, line == span.StartLine || line == span.EndLine));
+            textLines.Add(new SelfTextLine(
+                anonymousText, keyText, lineMembers, visible, line == span.StartLine || line == span.EndLine, memberHeaderLine));
             if (visible)
             {
                 lines.Add(new LineHunkBuilder.SourceLine(line, text[start..end], keyText));
@@ -707,87 +710,258 @@ public sealed class SymbolDiffService
     /// <summary>
     /// Text outside every indexed declaration's lines (usings, namespace lines, comments between top-level
     /// types) is not owned by any symbol and is not compared per symbol. Rather than let a change there
-    /// disappear silently, flag it: for a file present on both sides whose bytes changed, compare that
-    /// residual text (whitespace-insensitive, remark spans excluded); a file present on only one side is
-    /// flagged when it declares no symbol at all but has non-whitespace text.
+    /// disappear silently, flag it by comparing that residual text (whitespace-insensitive, remark spans
+    /// excluded): for a file present on both sides whose bytes changed; and for a file present on one side
+    /// only, against the other-side-only file it shares the most symbols with (a moved, renamed, split or
+    /// merged file), looked up in both directions. A one-side-only file sharing no symbol is flagged when it
+    /// declares no symbol at all but has non-whitespace text.
     /// </summary>
     private static bool FileLevelTextChanged(
-        SymbolDiffSnapshot baseSnapshot,
-        IReadOnlyDictionary<string, DiffSnapshotReader.DecodedSource> baseSources,
-        SymbolDiffSnapshot targetSnapshot,
-        IReadOnlyDictionary<string, DiffSnapshotReader.DecodedSource> targetSources)
+        SymbolDiffSnapshot baseSnapshot, PreparedSnapshot basePrepared, SymbolDiffSnapshot targetSnapshot, PreparedSnapshot targetPrepared)
     {
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        foreach (var path in baseSources.Keys.Concat(targetSources.Keys).Distinct(pathComparer).Order(StringComparer.Ordinal))
+        var pathComparer = PathComparer;
+        var baseIndex = new FileLevelIndex(baseSnapshot, basePrepared, pathComparer);
+        var targetIndex = new FileLevelIndex(targetSnapshot, targetPrepared, pathComparer);
+        var baseSources = basePrepared.Sources;
+        var targetSources = targetPrepared.Sources;
+
+        foreach (var path in baseSources.Keys.Where(targetSources.ContainsKey).Order(StringComparer.Ordinal))
         {
-            var inBase = baseSources.TryGetValue(path, out var baseSource);
-            var inTarget = targetSources.TryGetValue(path, out var targetSource);
-            if (inBase && inTarget)
+            if (!string.Equals(baseSources[path].Document.ContentHash, targetSources[path].Document.ContentHash, StringComparison.Ordinal) &&
+                !string.Equals(baseIndex.Residual(path), targetIndex.Residual(path), StringComparison.Ordinal))
             {
-                if (string.Equals(baseSource!.Document.ContentHash, targetSource!.Document.ContentHash, StringComparison.Ordinal))
+                return true;
+            }
+        }
+
+        var baseOnly = baseSources.Keys.Where(path => !targetSources.ContainsKey(path)).Order(StringComparer.Ordinal).ToArray();
+        var targetOnly = targetSources.Keys.Where(path => !baseSources.ContainsKey(path)).Order(StringComparer.Ordinal).ToArray();
+        var pairs = new HashSet<(string Base, string Target)>();
+        var targetOnlyById = InvertSymbolIds(targetIndex, targetOnly);
+        var baseOnlyById = InvertSymbolIds(baseIndex, baseOnly);
+        foreach (var path in baseOnly)
+        {
+            if (BestSharedFile(baseIndex.SymbolIds(path), targetOnlyById) is { } partner)
+            {
+                pairs.Add((path, partner));
+            }
+        }
+
+        foreach (var path in targetOnly)
+        {
+            if (BestSharedFile(targetIndex.SymbolIds(path), baseOnlyById) is { } partner)
+            {
+                pairs.Add((partner, path));
+            }
+        }
+
+        foreach (var (basePath, targetPath) in pairs.OrderBy(pair => pair.Base, StringComparer.Ordinal).ThenBy(pair => pair.Target, StringComparer.Ordinal))
+        {
+            if (!string.Equals(baseIndex.Residual(basePath), targetIndex.Residual(targetPath), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        var paired = pairs.Select(pair => pair.Base).Concat(pairs.Select(pair => pair.Target)).ToHashSet(pathComparer);
+        return baseOnly.Where(path => !paired.Contains(path)).Any(path => !baseIndex.HasDeclarations(path) && baseIndex.Residual(path).Length > 0) ||
+               targetOnly.Where(path => !paired.Contains(path)).Any(path => !targetIndex.HasDeclarations(path) && targetIndex.Residual(path).Length > 0);
+    }
+
+    private static Dictionary<string, List<string>> InvertSymbolIds(FileLevelIndex index, IReadOnlyList<string> paths)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var path in paths)
+        {
+            foreach (var id in index.SymbolIds(path))
+            {
+                if (!result.TryGetValue(id, out var list))
+                {
+                    list = [];
+                    result[id] = list;
+                }
+
+                list.Add(path);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>The candidate file sharing the most symbol IDs with <paramref name="symbolIds"/> (ties:
+    /// ordinal smallest path), or null when none shares any.</summary>
+    private static string? BestSharedFile(IReadOnlySet<string> symbolIds, IReadOnlyDictionary<string, List<string>> candidatesById)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var id in symbolIds)
+        {
+            foreach (var candidate in candidatesById.GetValueOrDefault(id, []))
+            {
+                counts[candidate] = counts.GetValueOrDefault(candidate) + 1;
+            }
+        }
+
+        return counts.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => pair.Key).FirstOrDefault();
+    }
+
+    /// <summary>Per-file declaration lines, remark spans and symbol IDs of one snapshot, indexed once.</summary>
+    private sealed class FileLevelIndex
+    {
+        private readonly PreparedSnapshot prepared;
+        private readonly Dictionary<string, List<(int StartLine, int EndLine)>> declarationLines;
+        private readonly Dictionary<string, List<(int Start, int End)>> remarks;
+        private readonly Dictionary<string, HashSet<string>> symbolIds;
+        private readonly Dictionary<string, string> residuals;
+
+        public FileLevelIndex(SymbolDiffSnapshot snapshot, PreparedSnapshot prepared, StringComparer pathComparer)
+        {
+            this.prepared = prepared;
+            declarationLines = new Dictionary<string, List<(int, int)>>(pathComparer);
+            remarks = new Dictionary<string, List<(int, int)>>(pathComparer);
+            symbolIds = new Dictionary<string, HashSet<string>>(pathComparer);
+            residuals = new Dictionary<string, string>(pathComparer);
+            foreach (var symbol in snapshot.Symbols)
+            {
+                foreach (var declaration in symbol.Declarations.Where(item => item.Location.Path is not null))
+                {
+                    var path = DiffSnapshotReader.NormalizePath(declaration.Location.Path!);
+                    GetOrAdd(declarationLines, path).Add((declaration.Location.Span.StartLine, declaration.Location.Span.EndLine));
+                    if (!symbolIds.TryGetValue(path, out var ids))
+                    {
+                        ids = new HashSet<string>(StringComparer.Ordinal);
+                        symbolIds[path] = ids;
+                    }
+
+                    ids.Add(symbol.SymbolId);
+                }
+            }
+
+            foreach (var remark in snapshot.Remarks.Where(item => item.Location.Path is not null))
+            {
+                GetOrAdd(remarks, DiffSnapshotReader.NormalizePath(remark.Location.Path!))
+                    .Add((remark.Location.Span.Start, remark.Location.Span.Start + remark.Location.Span.Length));
+            }
+        }
+
+        public bool HasDeclarations(string path) => declarationLines.ContainsKey(path);
+
+        public IReadOnlySet<string> SymbolIds(string path) =>
+            symbolIds.TryGetValue(path, out var ids) ? ids : new HashSet<string>(StringComparer.Ordinal);
+
+        public string Residual(string path)
+        {
+            if (residuals.TryGetValue(path, out var cached))
+            {
+                return cached;
+            }
+
+            var text = prepared.Sources[path].Text;
+            var starts = prepared.LineStarts(path);
+            var depth = new int[starts.Count + 2];
+            foreach (var (startLine, endLine) in declarationLines.GetValueOrDefault(path, []))
+            {
+                depth[Math.Clamp(startLine, 1, starts.Count + 1)]++;
+                depth[Math.Clamp(endLine + 1, 1, starts.Count + 1)]--;
+            }
+
+            var remarkSpans = remarks.GetValueOrDefault(path, []).OrderBy(item => item.Start).ToArray();
+            var residual = new StringBuilder();
+            var covered = 0;
+            var remarkIndex = 0;
+            for (var line = 1; line <= starts.Count; line++)
+            {
+                covered += depth[line];
+                if (covered > 0)
                 {
                     continue;
                 }
 
-                if (!string.Equals(
-                        FileLevelResidual(baseSnapshot, path, baseSource.Text, pathComparer).Residual,
-                        FileLevelResidual(targetSnapshot, path, targetSource.Text, pathComparer).Residual,
-                        StringComparison.Ordinal))
+                var end = DiffSnapshotReader.LineContentEnd(text, starts, line);
+                for (var position = starts[line - 1]; position < end; position++)
                 {
-                    return true;
+                    if (char.IsWhiteSpace(text[position]))
+                    {
+                        continue;
+                    }
+
+                    while (remarkIndex < remarkSpans.Length && remarkSpans[remarkIndex].End <= position)
+                    {
+                        remarkIndex++;
+                    }
+
+                    // Remark spans are sorted by start; one starting later can still cover this position only
+                    // if an earlier one does not, so check the remaining ones that start at or before it.
+                    var inRemark = false;
+                    for (var i = remarkIndex; i < remarkSpans.Length && remarkSpans[i].Start <= position; i++)
+                    {
+                        if (position < remarkSpans[i].End)
+                        {
+                            inRemark = true;
+                            break;
+                        }
+                    }
+
+                    if (!inRemark)
+                    {
+                        residual.Append(text[position]);
+                    }
                 }
             }
-            else
-            {
-                var (snapshot, source) = inBase ? (baseSnapshot, baseSource!) : (targetSnapshot, targetSource!);
-                var (residual, hasDeclarations) = FileLevelResidual(snapshot, path, source.Text, pathComparer);
-                if (!hasDeclarations && residual.Length > 0)
-                {
-                    return true;
-                }
-            }
+
+            var result = residual.ToString();
+            residuals[path] = result;
+            return result;
         }
 
-        return false;
-    }
-
-    private static (string Residual, bool HasDeclarations) FileLevelResidual(
-        SymbolDiffSnapshot snapshot, string path, string text, StringComparer pathComparer)
-    {
-        bool InPath(LocationContract location) =>
-            location.Path is not null && pathComparer.Equals(DiffSnapshotReader.NormalizePath(location.Path), path);
-
-        var declarationLines = snapshot.Symbols.SelectMany(symbol => symbol.Declarations)
-            .Where(declaration => InPath(declaration.Location))
-            .Select(declaration => (declaration.Location.Span.StartLine, declaration.Location.Span.EndLine))
-            .ToArray();
-        var remarkSpans = snapshot.Remarks.Where(remark => InPath(remark.Location))
-            .Select(remark => (remark.Location.Span.Start, End: remark.Location.Span.Start + remark.Location.Span.Length))
-            .ToArray();
-
-        var starts = DiffSnapshotReader.LineStarts(text);
-        var residual = new StringBuilder();
-        for (var line = 1; line <= starts.Count; line++)
+        private static List<(int, int)> GetOrAdd(Dictionary<string, List<(int, int)>> map, string path)
         {
-            if (declarationLines.Any(range => line >= range.StartLine && line <= range.EndLine))
+            if (!map.TryGetValue(path, out var list))
             {
-                continue;
+                list = [];
+                map[path] = list;
             }
 
-            var end = DiffSnapshotReader.LineContentEnd(text, starts, line);
-            for (var position = starts[line - 1]; position < end; position++)
-            {
-                if (!char.IsWhiteSpace(text[position]) && !remarkSpans.Any(remark => position >= remark.Start && position < remark.End))
-                {
-                    residual.Append(text[position]);
-                }
-            }
+            return list;
         }
-
-        return (residual.ToString(), declarationLines.Length > 0);
     }
 
     // ----------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Member IDs in declaration order: by the paired declaration (see <see cref="PairDeclarations"/>) that
+    /// contains each member, then by position. Ordering by the declaration pair rather than by file path keeps
+    /// a partial declaration moved to a differently named file from reading as a member reordering.
+    /// </summary>
+    private static string[] MemberOrder(
+        IReadOnlyList<SymbolContract> members, IReadOnlyList<(DeclarationView? Base, DeclarationView? Target)> pairs, bool useBase)
+    {
+        var pathComparer = PathComparer;
+        int PairIndex(LocationContract location)
+        {
+            for (var i = 0; i < pairs.Count; i++)
+            {
+                var declaration = useBase ? pairs[i].Base : pairs[i].Target;
+                if (declaration is not null && location.Path is not null && declaration.Location.Path is not null &&
+                    pathComparer.Equals(DiffSnapshotReader.NormalizePath(location.Path), DiffSnapshotReader.NormalizePath(declaration.Location.Path)) &&
+                    location.Span.Start >= declaration.Location.Span.Start &&
+                    location.Span.Start < declaration.Location.Span.Start + declaration.Location.Span.Length)
+                {
+                    return i;
+                }
+            }
+
+            return int.MaxValue;
+        }
+
+        return members
+            .Select(member => (member.SymbolId, Location: PrimaryLocation(member)))
+            .OrderBy(item => PairIndex(item.Location))
+            .ThenBy(item => item.Location.Path, StringComparer.Ordinal)
+            .ThenBy(item => item.Location.Span.Start)
+            .Select(item => item.SymbolId)
+            .ToArray();
+    }
 
     private static bool OrderChanged(IReadOnlyList<string> baseOrder, IReadOnlyList<string> targetOrder)
     {
@@ -825,30 +999,210 @@ public sealed class SymbolDiffService
         symbol.Declarations.OrderBy(declaration => declaration.Location.Path, StringComparer.Ordinal)
             .ThenBy(declaration => declaration.Location.Span.Start).First().Location;
 
-    private static IReadOnlyDictionary<string, SymbolView> CreateView(
-        SymbolDiffSnapshot snapshot,
+    private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    /// <summary>A snapshot validated once, with its decoded sources, line starts, container index and
+    /// symbol views, shared by validation and comparison.</summary>
+    private sealed class PreparedSnapshot(
         IReadOnlyDictionary<string, DiffSnapshotReader.DecodedSource> sources,
-        IReadOnlyDictionary<string, SymbolContract[]> membersByContainer)
+        IReadOnlyDictionary<string, SymbolContract[]> membersByContainer,
+        IReadOnlyDictionary<string, string[]> order)
     {
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        private readonly Dictionary<string, List<int>> lineStarts = new(PathComparer);
+
+        public IReadOnlyDictionary<string, DiffSnapshotReader.DecodedSource> Sources { get; } = sources;
+
+        public IReadOnlyDictionary<string, SymbolContract[]> MembersByContainer { get; } = membersByContainer;
+
+        public IReadOnlyDictionary<string, string[]> Order { get; } = order;
+
+        public IReadOnlyDictionary<string, SymbolView> View { get; set; } = new Dictionary<string, SymbolView>();
+
+        public List<int> LineStarts(string path)
+        {
+            if (!lineStarts.TryGetValue(path, out var starts))
+            {
+                starts = DiffSnapshotReader.LineStarts(Sources[path].Text);
+                lineStarts[path] = starts;
+            }
+
+            return starts;
+        }
+    }
+
+    /// <summary>One masked span in a self text: the outermost symbol it stands for and that symbol's header
+    /// lines (the lines its added/removed header_only evidence renders).</summary>
+    private readonly record struct MaskedSpan(int Start, int End, string Id, int HeaderFirstLine, int HeaderLastLine);
+
+    /// <summary>
+    /// All declaration spans of one file, sorted by (start, end descending, input order), with each span's
+    /// enclosing span. Declaration spans nest or are disjoint in practice, so the spans intersecting a line
+    /// range are the run starting inside it plus the enclosing chain of the last span starting before it —
+    /// found by binary search in time proportional to the answer, not the file. A file whose spans overlap
+    /// without nesting falls back to a linear scan, so the result is the same either way.
+    /// </summary>
+    private sealed class FileSpanIndex
+    {
+        private readonly (string Id, int Start, int End, int Sequence, int HeaderFirstLine, int HeaderLastLine)[] spans;
+        private readonly int[] parent;
+        private readonly bool laminar;
+
+        public FileSpanIndex(List<(string Id, int Start, int End, int Sequence, int HeaderFirstLine, int HeaderLastLine)> items)
+        {
+            spans = items.OrderBy(item => item.Start).ThenByDescending(item => item.End).ThenBy(item => item.Sequence).ToArray();
+            parent = new int[spans.Length];
+            laminar = true;
+            var stack = new Stack<int>();
+            for (var i = 0; i < spans.Length; i++)
+            {
+                while (stack.Count > 0 && spans[stack.Peek()].End <= spans[i].Start)
+                {
+                    stack.Pop();
+                }
+
+                if (stack.Count > 0 && spans[i].End > spans[stack.Peek()].End)
+                {
+                    laminar = false;
+                }
+
+                parent[i] = stack.Count > 0 ? stack.Peek() : -1;
+                stack.Push(i);
+            }
+        }
+
+        public IEnumerable<(string Id, int Start, int End, int Sequence, int HeaderFirstLine, int HeaderLastLine)> Intersecting(int rangeStart, int rangeEnd)
+        {
+            if (!laminar)
+            {
+                return spans.Where(item => item.Start < rangeEnd && item.End > rangeStart);
+            }
+
+            var result = new List<(string, int, int, int, int, int)>();
+            var low = 0;
+            var high = spans.Length;
+            while (low < high)
+            {
+                var middle = (low + high) / 2;
+                if (spans[middle].Start < rangeStart)
+                {
+                    low = middle + 1;
+                }
+                else
+                {
+                    high = middle;
+                }
+            }
+
+            for (var k = low - 1; k >= 0; k = parent[k])
+            {
+                if (spans[k].End > rangeStart)
+                {
+                    result.Add(spans[k]);
+                }
+            }
+
+            for (var i = low; i < spans.Length && spans[i].Start < rangeEnd; i++)
+            {
+                result.Add(spans[i]);
+            }
+
+            return result;
+        }
+    }
+
+    private static PreparedSnapshot PrepareSnapshot(SymbolDiffSnapshot snapshot, string name)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot.SnapshotId) || string.IsNullOrWhiteSpace(snapshot.InputFingerprint))
+        {
+            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} identity is required.");
+        }
+        snapshot.Coverage.Validate();
+        var symbolIds = new HashSet<string>(StringComparer.Ordinal);
+        if (snapshot.Symbols.Any(symbol => !symbolIds.Add(symbol.SymbolId)))
+        {
+            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} contains duplicate symbol IDs.");
+        }
+        foreach (var symbol in snapshot.Symbols) symbol.Validate();
+        foreach (var remark in snapshot.Remarks)
+        {
+            if (!symbolIds.Contains(remark.SymbolId))
+                throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} contains a remark for an unknown symbol.");
+            remark.Location.Validate();
+        }
+
+        var sources = DiffSnapshotReader.DecodeSources(snapshot);
+        var containers = IndexContainers(snapshot);
+        var prepared = new PreparedSnapshot(sources, containers.MembersByContainer, containers.Order);
+        prepared.View = CreateView(snapshot, prepared);
+        return prepared;
+    }
+
+    private static IReadOnlyDictionary<string, SymbolView> CreateView(SymbolDiffSnapshot snapshot, PreparedSnapshot prepared)
+    {
+        var sources = prepared.Sources;
+        var membersByContainer = prepared.MembersByContainer;
+        var pathComparer = PathComparer;
         var bySymbolId = snapshot.Symbols.ToDictionary(symbol => symbol.SymbolId, StringComparer.Ordinal);
         var snapshotSymbolIds = new HashSet<string>(bySymbolId.Keys, StringComparer.Ordinal);
-        var spansByPath = snapshot.Symbols
-            .SelectMany(symbol => symbol.Declarations.Select(declaration => (
-                Path: DiffSnapshotReader.NormalizePath(declaration.Location.Path!),
-                symbol.SymbolId,
-                declaration.Location.Span.Start,
-                End: declaration.Location.Span.Start + declaration.Location.Span.Length)))
-            .Where(item => item.End > item.Start)
-            .GroupBy(item => item.Path, pathComparer)
-            .ToDictionary(group => group.Key, group => group.OrderBy(item => item.Start).ThenBy(item => item.End).ToArray(), pathComparer);
-        var lineStartsByPath = new Dictionary<string, List<int>>(pathComparer);
+
         var remarksBySymbol = snapshot.Remarks.GroupBy(remark => remark.SymbolId, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderBy(item => item.Location.Path, StringComparer.Ordinal)
                     .ThenBy(item => item.Location.Span.Start).ToArray(),
                 StringComparer.Ordinal);
+
+        // Validate every declaration and remark location first, symbol by symbol in the same order as
+        // before (declarations, then that symbol's remarks), so the same error surfaces first; then index.
+        string ExtractLocation(LocationContract location)
+        {
+            var path = location.Path is null ? null : DiffSnapshotReader.NormalizePath(location.Path);
+            var starts = path is not null && sources.ContainsKey(path) ? prepared.LineStarts(path) : null;
+            return DiffSnapshotReader.Extract(location, sources, starts);
+        }
+
+        var extracted = new Dictionary<DeclarationContract, string>(ReferenceEqualityComparer.Instance);
+        var remarkTexts = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var symbol in snapshot.Symbols)
+        {
+            foreach (var declaration in symbol.Declarations
+                         .OrderBy(item => item.Location.Path, StringComparer.Ordinal).ThenBy(item => item.Location.Span.Start))
+            {
+                extracted[declaration] = ExtractLocation(declaration.Location);
+            }
+
+            if (remarksBySymbol.TryGetValue(symbol.SymbolId, out var symbolRemarks))
+            {
+                remarkTexts[symbol.SymbolId] = string.Join("\n", symbolRemarks.Select(item => ExtractLocation(item.Location)));
+            }
+        }
+
+        var spanItems = new Dictionary<string, List<(string Id, int Start, int End, int Sequence, int HeaderFirstLine, int HeaderLastLine)>>(pathComparer);
+        var sequence = 0;
+        foreach (var symbol in snapshot.Symbols)
+        {
+            foreach (var declaration in symbol.Declarations)
+            {
+                var span = declaration.Location.Span;
+                var path = DiffSnapshotReader.NormalizePath(declaration.Location.Path!);
+                if (span.Length <= 0)
+                {
+                    sequence++;
+                    continue;
+                }
+
+                var (headerFirst, headerLast) = DiffSnapshotReader.HeaderLineRange(sources[path].Text, span, prepared.LineStarts(path));
+                if (!spanItems.TryGetValue(path, out var list))
+                {
+                    list = [];
+                    spanItems[path] = list;
+                }
+
+                list.Add((symbol.SymbolId, span.Start, span.Start + span.Length, sequence++, headerFirst, headerLast));
+            }
+        }
+
+        var spansByPath = spanItems.ToDictionary(pair => pair.Key, pair => new FileSpanIndex(pair.Value), pathComparer);
 
         var views = new Dictionary<string, SymbolView>(StringComparer.Ordinal);
         foreach (var symbol in snapshot.Symbols)
@@ -865,35 +1219,31 @@ public sealed class SymbolDiffService
             foreach (var declaration in orderedDeclarations)
             {
                 var location = declaration.Location;
-                var rawText = DiffSnapshotReader.Extract(location, sources);
+                var rawText = extracted[declaration];
                 var path = DiffSnapshotReader.NormalizePath(location.Path!);
                 var sourceText = sources[path].Text;
-                if (!lineStartsByPath.TryGetValue(path, out var lineStarts))
-                {
-                    lineStarts = DiffSnapshotReader.LineStarts(sourceText);
-                    lineStartsByPath[path] = lineStarts;
-                }
+                var lineStarts = prepared.LineStarts(path);
 
                 // Every other symbol's span on this declaration's lines is masked, except the spans of its
                 // own enclosing types (which contain it): each character of a type's lines then belongs to
                 // exactly one leaf span or to the innermost type's self text.
                 var rangeStart = lineStarts[location.Span.StartLine - 1];
                 var rangeEnd = DiffSnapshotReader.LineContentEnd(sourceText, lineStarts, location.Span.EndLine);
-                var masked = MergeIntervals(spansByPath.GetValueOrDefault(path, [])
-                    .Where(item => item.Start < rangeEnd && item.End > rangeStart &&
-                        !string.Equals(item.SymbolId, symbol.SymbolId, StringComparison.Ordinal) &&
-                        !ancestors.Contains(item.SymbolId))
-                    .Select(item => (item.Start, item.End, item.SymbolId)));
+                var intersecting = spansByPath.TryGetValue(path, out var index)
+                    ? index.Intersecting(rangeStart, rangeEnd)
+                    : [];
+                var masked = MergeIntervals(intersecting
+                    .Where(item => !string.Equals(item.Id, symbol.SymbolId, StringComparison.Ordinal) && !ancestors.Contains(item.Id))
+                    .OrderBy(item => item.Start).ThenBy(item => item.End).ThenBy(item => item.Sequence)
+                    .Select(item => new MaskedSpan(item.Start, item.End, item.Id, item.HeaderFirstLine, item.HeaderLastLine)));
                 var self = BuildSelfText(sourceText, lineStarts, location.Span, nested, masked);
 
-                var lines = DiffSnapshotReader.FullLines(sourceText, location.Span);
-                var headerLines = DiffSnapshotReader.HeaderLines(sourceText, location.Span);
+                var lines = DiffSnapshotReader.FullLines(sourceText, location.Span, lineStarts);
+                var headerLines = DiffSnapshotReader.HeaderLines(sourceText, location.Span, lineStarts);
                 declarationViews.Add(new DeclarationView(location, rawText, lines, headerLines, self.Lines, self.Text, self.TextLines, self.MemberIds));
             }
 
-            var remark = remarksBySymbol.TryGetValue(symbol.SymbolId, out var remarkLocations)
-                ? string.Join("\n", remarkLocations.Select(item => DiffSnapshotReader.Extract(item.Location, sources)))
-                : null;
+            var remark = remarksBySymbol.TryGetValue(symbol.SymbolId, out var remarkLocations) ? remarkTexts[symbol.SymbolId] : null;
             IReadOnlyList<LineHunkBuilder.SourceLine> remarkLines = [];
             string? remarkPath = null;
             var remarkMultiFile = false;
@@ -907,7 +1257,11 @@ public sealed class SymbolDiffService
                 remarkMultiFile = distinctPaths.Length > 1;
                 remarkPath = distinctPaths[0];
                 remarkLines = remarkLocations
-                    .SelectMany(item => DiffSnapshotReader.FullLines(sources[DiffSnapshotReader.NormalizePath(item.Location.Path!)].Text, item.Location.Span))
+                    .SelectMany(item =>
+                    {
+                        var remarkFile = DiffSnapshotReader.NormalizePath(item.Location.Path!);
+                        return DiffSnapshotReader.FullLines(sources[remarkFile].Text, item.Location.Span, prepared.LineStarts(remarkFile));
+                    })
                     .ToArray();
             }
 
@@ -938,43 +1292,22 @@ public sealed class SymbolDiffService
 
     /// <summary>Merges overlapping spans (a member and the members nested in it) into one masked interval,
     /// named after the span that starts first (the outermost one).</summary>
-    private static List<(int Start, int End, string Id)> MergeIntervals(IEnumerable<(int Start, int End, string Id)> intervals)
+    private static List<MaskedSpan> MergeIntervals(IEnumerable<MaskedSpan> intervals)
     {
-        var merged = new List<(int Start, int End, string Id)>();
-        foreach (var (start, end, id) in intervals.OrderBy(item => item.Start).ThenByDescending(item => item.End))
+        var merged = new List<MaskedSpan>();
+        foreach (var item in intervals.OrderBy(item => item.Start).ThenByDescending(item => item.End))
         {
-            if (merged.Count > 0 && start < merged[^1].End)
+            if (merged.Count > 0 && item.Start < merged[^1].End)
             {
-                merged[^1] = (merged[^1].Start, Math.Max(merged[^1].End, end), merged[^1].Id);
+                merged[^1] = merged[^1] with { End = Math.Max(merged[^1].End, item.End) };
             }
             else
             {
-                merged.Add((start, end, id));
+                merged.Add(item);
             }
         }
 
         return merged;
-    }
-
-    private static void ValidateSnapshot(SymbolDiffSnapshot snapshot, string name)
-    {
-        if (string.IsNullOrWhiteSpace(snapshot.SnapshotId) || string.IsNullOrWhiteSpace(snapshot.InputFingerprint))
-        {
-            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} identity is required.");
-        }
-        snapshot.Coverage.Validate();
-        if (snapshot.Symbols.Select(symbol => symbol.SymbolId).Distinct(StringComparer.Ordinal).Count() != snapshot.Symbols.Count)
-        {
-            throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} contains duplicate symbol IDs.");
-        }
-        foreach (var symbol in snapshot.Symbols) symbol.Validate();
-        foreach (var remark in snapshot.Remarks)
-        {
-            if (!snapshot.Symbols.Any(symbol => symbol.SymbolId == remark.SymbolId))
-                throw new DiffException(DiffErrorCodes.InvalidSnapshot, $"{name} contains a remark for an unknown symbol.");
-            remark.Location.Validate();
-        }
-        _ = CreateView(snapshot, DiffSnapshotReader.DecodeSources(snapshot), IndexContainers(snapshot).MembersByContainer);
     }
 
     private static CoverageContract CombineCoverage(CoverageContract before, CoverageContract after, IReadOnlyList<string> limitations)
