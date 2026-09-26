@@ -4,7 +4,7 @@
   "title": "Code Virtualize diff contract",
   "type": "object",
   "additionalProperties": false,
-  "required": ["baseline", "entries", "coverage", "limitations", "truncated", "nextCursor", "schema", "schemaVersion"],
+  "required": ["baseline", "entries", "coverage", "limitations", "truncated", "nextCursor", "evidenceTruncated", "schema", "schemaVersion"],
   "properties": {
     "baseline": { "$ref": "common.schema.json#/$defs/baseline" },
     "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } },
@@ -12,17 +12,33 @@
     "limitations": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" } },
     "truncated": { "type": "boolean" },
     "nextCursor": { "type": ["string", "null"] },
+    "evidenceTruncated": {
+      "type": "boolean",
+      "description": "True when any entry's evidence was downgraded or trimmed by the diff evidence budget; when true, limitations must include diff-evidence-budget-exhausted. Independent of the entry-list truncated/nextCursor pagination."
+    },
     "schema": { "const": "code-virtualize/diff" },
     "schemaVersion": { "const": 1 }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "evidenceTruncated": { "const": true } } },
+      "then": { "properties": { "limitations": { "contains": { "const": "diff-evidence-budget-exhausted" } } } }
+    }
+  ],
   "$defs": {
     "evidence": {
       "type": "object",
+      "description": "textualHunk (when present) is a unified diff using real file line numbers in its @@ hunk headers, not symbol-relative numbering.",
       "additionalProperties": false,
-      "required": ["kind", "textualHunk", "baseContentHash", "targetContentHash"],
+      "required": ["kind", "textMode", "textualHunk", "contextLines", "omittedBaseLines", "omittedTargetLines", "truncated", "baseContentHash", "targetContentHash"],
       "properties": {
         "kind": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "textMode": { "enum": ["line_hunks", "header_only", "fingerprint_only"] },
         "textualHunk": { "type": ["string", "null"] },
+        "contextLines": { "type": "integer", "minimum": 0 },
+        "omittedBaseLines": { "type": "integer", "minimum": 0 },
+        "omittedTargetLines": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
         "baseContentHash": {
           "oneOf": [
             { "$ref": "common.schema.json#/$defs/sha256" },
@@ -35,7 +51,21 @@
             { "type": "null" }
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "textMode": { "const": "fingerprint_only" } } },
+          "then": { "properties": { "textualHunk": { "const": null }, "contextLines": { "const": 0 } } }
+        },
+        {
+          "if": { "properties": { "textMode": { "const": "header_only" } } },
+          "then": { "properties": { "textualHunk": { "type": "string", "minLength": 1 }, "contextLines": { "const": 0 } } }
+        },
+        {
+          "if": { "properties": { "textMode": { "const": "line_hunks" } } },
+          "then": { "properties": { "textualHunk": { "type": "string", "minLength": 1 } } }
+        }
+      ]
     },
     "entry": {
       "type": "object",

@@ -11,10 +11,11 @@ internal static class ResolutionCommands
     {
         var workspace = Required(args, "--workspace");
         var symbol = CliOptions.Read(args, "--symbol") ?? Positional(args) ?? throw new ArgumentException("Missing required option: --symbol.");
-        if (!Enum.TryParse<SourcePart>(CliOptions.Read(args, "--part") ?? "header", true, out var part)) throw new ArgumentException("--part must be header, body, or context.");
+        if (!Enum.TryParse<SourcePart>(CliOptions.Read(args, "--part") ?? "header", true, out var part)) throw new ArgumentException("--part must be header, declaration, body, or context.");
         var response = new SourceResolver().Resolve(new(workspace, CliOptions.StorePath(args, workspace), symbol, part,
             new(Positive(args, "--max-bytes", 65536), Positive(args, "--max-lines", 400)), CliOptions.Read(args, "--generation"),
-            CliOptions.Read(args, "--path"), OptionalNonNegative(args, "--declaration"), NonNegative(args, "--context-lines", 2)));
+            CliOptions.Read(args, "--path"), OptionalNonNegative(args, "--declaration"), NonNegative(args, "--context-lines", 2),
+            null, CliOptions.Read(args, "--if-none-match")));
         Write(response, CliOptions.Format(args), output, error, "resolve"); return Exit(response);
     }, error);
 
@@ -52,7 +53,12 @@ internal static class ResolutionCommands
                 {
                     output.WriteLine($"Range         {response.Source.Span.StartLine}-{response.Source.Span.EndLine} utf16:{response.Source.Span.Start}+{response.Source.Span.Length}");
                     output.WriteLine($"Budget        bytes={response.Source.Usage.Bytes}/{response.Source.Budget.MaxBytes} lines={response.Source.Usage.Lines}/{response.Source.Budget.MaxLines} truncated={response.Source.Truncated.ToString().ToLowerInvariant()}");
-                    output.WriteLine("Source"); output.Write(response.Source.Content); if (!response.Source.Content.EndsWith('\n')) output.WriteLine();
+                    output.WriteLine($"ContentHash   {response.Source.ContentHash}");
+                    output.WriteLine($"NotModified   {response.Source.NotModified.ToString().ToLowerInvariant()}");
+                    if (!response.Source.NotModified)
+                    {
+                        output.WriteLine("Source"); output.Write(response.Source.Content); if (!response.Source.Content.EndsWith('\n')) output.WriteLine();
+                    }
                 }
             }
             else if (command == "validate" && response.Results.Count == 1)

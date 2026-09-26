@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using CodeVirtualize.Core.Contracts;
 
@@ -19,6 +21,7 @@ internal static class ContractTests
         CursorGenerationIsValidated();
         BaselinesRoundTrip();
         SpanAndBudgetInvariantsAreValidated();
+        DiffEvidenceRulesAreValidated();
     }
 
     private static void SchemasAreValidAndConsistent()
@@ -134,12 +137,55 @@ internal static class ContractTests
     private static void SpanAndBudgetInvariantsAreValidated()
     {
         const string content = "A😀\r\nB";
-        var source = new SourceSliceContract(content, new TextSpanContract(12, content.Length, 3, 4), new SourceBudgetContract(8, 2), new SourceUsageContract(8, 2), false, BudgetExhaustion.None);
+        var contentHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)))}";
+        var source = new SourceSliceContract(content, new TextSpanContract(12, content.Length, 3, 4), new SourceBudgetContract(8, 2), new SourceUsageContract(8, 2), false, BudgetExhaustion.None, contentHash, false);
         source.Validate();
         Assert(source.Span.Length == 6, "Emoji must occupy two UTF-16 code units.");
         Throws(() => new TextSpanContract(0, 1, 0, 1).Validate(), "CONTRACT_INVALID");
         Throws(() => (source with { Budget = new SourceBudgetContract(7, 2) }).Validate(), "CONTRACT_INVALID");
         Throws(() => (source with { Truncated = true, ExhaustedBy = BudgetExhaustion.None }).Validate(), "CONTRACT_INVALID");
+
+        var notModified = new SourceSliceContract(string.Empty, source.Span, source.Budget, new SourceUsageContract(0, 0), false, BudgetExhaustion.None, HashA, true);
+        notModified.Validate();
+        Throws(() => (notModified with { Content = "x" }).Validate(), "CONTRACT_INVALID");
+        Throws(() => (notModified with { Usage = new SourceUsageContract(1, 0) }).Validate(), "CONTRACT_INVALID");
+        Throws(() => (source with { ContentHash = "not-a-hash" }).Validate(), "CONTRACT_INVALID");
+
+        // L6: a syntactically valid sha256 that simply does not match the returned content's bytes must be
+        // rejected too, not just malformed hashes — content and contentHash must never silently diverge.
+        Throws(() => (source with { ContentHash = HashA }).Validate(), "CONTRACT_INVALID");
+    }
+
+    private static void DiffEvidenceRulesAreValidated()
+    {
+        var lineHunk = new DiffEvidenceContract("body-changed", DiffEvidenceTextMode.LineHunks, "@@ -1,1 +1,1 @@\n-old\n+new\n", 1, 2, 2, false, HashA, HashB);
+        lineHunk.Validate();
+        Throws(() => (lineHunk with { TextualHunk = null }).Validate(), "CONTRACT_INVALID");
+
+        var headerOnly = new DiffEvidenceContract("symbol-added", DiffEvidenceTextMode.HeaderOnly, "+++ b/x\n@@ -0,0 +1,1 @@\n+new\n", 0, 0, 3, false, null, HashB);
+        headerOnly.Validate();
+        Throws(() => (headerOnly with { TextualHunk = null }).Validate(), "CONTRACT_INVALID");
+        Throws(() => (headerOnly with { ContextLines = 1 }).Validate(), "CONTRACT_INVALID");
+
+        var fingerprintOnly = new DiffEvidenceContract("member-order-changed", DiffEvidenceTextMode.FingerprintOnly, null, 0, 0, 0, false, HashA, HashB);
+        fingerprintOnly.Validate();
+        Throws(() => (fingerprintOnly with { TextualHunk = "not allowed" }).Validate(), "CONTRACT_INVALID");
+        Throws(() => (fingerprintOnly with { ContextLines = 1 }).Validate(), "CONTRACT_INVALID");
+        Throws(() => (fingerprintOnly with { BaseContentHash = null, TargetContentHash = null }).Validate(), "CONTRACT_INVALID");
+
+        var symbolId = DeterministicSymbolId.Create(Identity(1, "System.String", ParameterRefKind.None));
+        var location = Declaration(symbolId, "Catalog.Partial.cs", 10).Location;
+        var truncatedEntry = new DiffEntryContract(DiffKind.BodyChanged, symbolId, symbolId, [location], [location],
+            [lineHunk with { Truncated = true }], 1m);
+        var truncatedContract = new DiffContract(VcsBaseline(), [truncatedEntry], PartialCoverage(false),
+            ["behavioral-equivalence-not-inferred", DiffContract.EvidenceBudgetExhaustedLimitation], false, null, true);
+        truncatedContract.Validate();
+        Throws(() => (truncatedContract with { EvidenceTruncated = false }).Validate(), "CONTRACT_INVALID");
+        Throws(() => (truncatedContract with { Limitations = ["behavioral-equivalence-not-inferred"] }).Validate(), "CONTRACT_INVALID");
+
+        RoundTrip(truncatedContract);
+        var json = ContractJson.Serialize(truncatedContract);
+        Throws(() => ContractJson.Deserialize<DiffContract>(json.Replace("\"line_hunks\"", "\"unknown_text_mode\"", StringComparison.Ordinal)), "CONTRACT_INVALID");
     }
 
     private static T RoundTrip<T>(T contract) where T : IVersionedContract
@@ -170,8 +216,9 @@ internal static class ContractTests
         var symbolId = DeterministicSymbolId.Create(Identity(1, "System.String", ParameterRefKind.None));
         var location = Declaration(symbolId, "Catalog.Partial.cs", 10).Location;
         return new DiffContract(baseline,
-            [new DiffEntryContract(DiffKind.BodyChanged, symbolId, symbolId, [location], [location], [new DiffEvidenceContract("textual-hunk", "@@ body @@", HashA, HashB)], 1m)],
-            PartialCoverage(false), ["behavioral-equivalence-not-inferred"], false, null);
+            [new DiffEntryContract(DiffKind.BodyChanged, symbolId, symbolId, [location], [location],
+                [new DiffEvidenceContract("body-changed", DiffEvidenceTextMode.LineHunks, "@@ -10,1 +10,1 @@\n-old\n+new\n", 1, 0, 0, false, HashA, HashB)], 1m)],
+            PartialCoverage(false), ["behavioral-equivalence-not-inferred"], false, null, false);
     }
 
     private static ResponseContract Response(ResponseStatus status, CoverageContract coverage, bool truncated, IReadOnlyList<ErrorContract> errors, string? cursor = null)

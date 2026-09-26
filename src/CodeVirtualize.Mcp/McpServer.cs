@@ -199,11 +199,11 @@ public static class McpServer
     private static object Get(McpOptions options, JsonElement args)
     {
         var symbolId = RequiredString(args, "symbolId");
-        if (!Enum.TryParse<SourcePart>(String(args, "part") ?? "header", true, out var part)) throw new ArgumentException("part must be header, body, or context.");
+        if (!Enum.TryParse<SourcePart>(String(args, "part") ?? "header", true, out var part)) throw new ArgumentException("part must be header, declaration, body, or context.");
         var response = new SourceResolver().Resolve(new(options.WorkspacePath, options.StorePath, symbolId, part,
             new(Integer(args, "maxBytes", 65536, 1, int.MaxValue), Integer(args, "maxLines", 400, 1, int.MaxValue)),
             String(args, "generationId"), String(args, "path"), NullableInteger(args, "declaration", 0, int.MaxValue),
-            Integer(args, "contextLines", 2, 0, 100)));
+            Integer(args, "contextLines", 2, 0, 100), null, String(args, "ifNoneMatch")));
         return ToolResult(ContractJson.Serialize(response), response, response.Status == ResponseStatus.Error);
     }
 

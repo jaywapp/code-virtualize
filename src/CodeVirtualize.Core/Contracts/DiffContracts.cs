@@ -12,18 +12,55 @@ public enum DiffKind
     FormattingOnly
 }
 
+public enum DiffEvidenceTextMode
+{
+    LineHunks,
+    HeaderOnly,
+    FingerprintOnly
+}
+
 public sealed record DiffEvidenceContract(
     string Kind,
+    DiffEvidenceTextMode TextMode,
     string? TextualHunk,
+    int ContextLines,
+    int OmittedBaseLines,
+    int OmittedTargetLines,
+    bool Truncated,
     string? BaseContentHash,
     string? TargetContentHash) : IContractValidatable
 {
     public void Validate()
     {
         ContractGuard.Required(Kind, nameof(Kind));
-        if (TextualHunk is null && BaseContentHash is null && TargetContentHash is null)
+        ContractGuard.Defined(TextMode, nameof(TextMode));
+        ContractGuard.NonNegative(ContextLines, nameof(ContextLines));
+        ContractGuard.NonNegative(OmittedBaseLines, nameof(OmittedBaseLines));
+        ContractGuard.NonNegative(OmittedTargetLines, nameof(OmittedTargetLines));
+
+        if (TextMode == DiffEvidenceTextMode.FingerprintOnly)
         {
-            throw ContractGuard.Invalid(nameof(TextualHunk), "requires at least one evidence field");
+            if (TextualHunk is not null)
+            {
+                throw ContractGuard.Invalid(nameof(TextualHunk), "must be null for fingerprint_only evidence");
+            }
+
+            if (ContextLines != 0)
+            {
+                throw ContractGuard.Invalid(nameof(ContextLines), "must be zero for fingerprint_only evidence");
+            }
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(TextualHunk))
+            {
+                throw ContractGuard.Invalid(nameof(TextualHunk), "is required for line_hunks and header_only evidence");
+            }
+
+            if (TextMode == DiffEvidenceTextMode.HeaderOnly && ContextLines != 0)
+            {
+                throw ContractGuard.Invalid(nameof(ContextLines), "must be zero for header_only evidence");
+            }
         }
 
         if (BaseContentHash is not null)
@@ -34,6 +71,11 @@ public sealed record DiffEvidenceContract(
         if (TargetContentHash is not null)
         {
             ContractGuard.Sha256(TargetContentHash, nameof(TargetContentHash));
+        }
+
+        if (TextualHunk is null && BaseContentHash is null && TargetContentHash is null)
+        {
+            throw ContractGuard.Invalid(nameof(TextualHunk), "requires at least one evidence field");
         }
     }
 }
@@ -107,9 +149,12 @@ public sealed record DiffContract(
     IReadOnlyList<string> Limitations,
     bool Truncated,
     string? NextCursor,
+    bool EvidenceTruncated,
     string Schema = ContractSchemas.Diff,
     int SchemaVersion = ContractVersions.Current) : IVersionedContract
 {
+    public const string EvidenceBudgetExhaustedLimitation = "diff-evidence-budget-exhausted";
+
     public void Validate()
     {
         ContractGuard.Version(this, ContractSchemas.Diff);
@@ -135,6 +180,17 @@ public sealed record DiffContract(
         if (Truncated && !Coverage.Truncated)
         {
             throw ContractGuard.Invalid(nameof(Coverage), "must also report truncated coverage");
+        }
+
+        var anyEvidenceTruncated = Entries.Any(entry => entry.Evidence.Any(evidence => evidence.Truncated));
+        if (EvidenceTruncated != anyEvidenceTruncated)
+        {
+            throw ContractGuard.Invalid(nameof(EvidenceTruncated), "must equal whether any entry evidence was truncated");
+        }
+
+        if (EvidenceTruncated && !Limitations.Contains(EvidenceBudgetExhaustedLimitation, StringComparer.Ordinal))
+        {
+            throw ContractGuard.Invalid(nameof(Limitations), "must include diff-evidence-budget-exhausted when evidence is truncated");
         }
     }
 }

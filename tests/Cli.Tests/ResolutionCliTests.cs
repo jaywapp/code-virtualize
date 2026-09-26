@@ -36,6 +36,38 @@ internal static class ResolutionCliTests
             Assert(textExit == 3 && textOut.ToString().Contains("Source", StringComparison.Ordinal) && textOut.ToString().Contains("public string Say()", StringComparison.Ordinal), "Piped text output must preserve status and source.");
             Assert(textErr.ToString().Length == 0, "Fresh text output must not emit diagnostics.");
 
+            var declarationOut = new StringWriter(); var declarationErr = new StringWriter();
+            var declarationExit = CliApplication.Run(["cv-resolve", symbol.SymbolId, "--workspace", root, "--part", "declaration", "--format", "json"], declarationOut, declarationErr);
+            Assert(declarationExit == 3 && declarationErr.ToString().Length == 0, "--part declaration must resolve like any other part.");
+            var declarationResponse = ContractJson.Deserialize<ResponseContract>(declarationOut.ToString());
+            Assert(declarationResponse.Source is not null && declarationResponse.Source.Content.Contains("안녕 👋", StringComparison.Ordinal) &&
+                   declarationResponse.Source.Content.Contains("return", StringComparison.Ordinal) && declarationResponse.Source.NotModified == false,
+                "--part declaration must return the whole declaration span, including the body, in one call.");
+            var declarationHash = declarationResponse.Source!.ContentHash;
+
+            var notModifiedOut = new StringWriter(); var notModifiedErr = new StringWriter();
+            var notModifiedExit = CliApplication.Run(
+                ["cv-resolve", symbol.SymbolId, "--workspace", root, "--part", "declaration", "--if-none-match", declarationHash, "--format", "json"],
+                notModifiedOut, notModifiedErr);
+            Assert(notModifiedExit == 3 && notModifiedErr.ToString().Length == 0, "A matching --if-none-match must still resolve successfully.");
+            var notModifiedResponse = ContractJson.Deserialize<ResponseContract>(notModifiedOut.ToString());
+            Assert(notModifiedResponse.Source is { NotModified: true, Content.Length: 0 } && notModifiedResponse.Source.ContentHash == declarationHash,
+                "A matching --if-none-match must return notModified=true with empty content, not the old body again.");
+
+            var notModifiedTextOut = new StringWriter();
+            CliApplication.Run(["cv-resolve", symbol.SymbolId, "--workspace", root, "--part", "declaration", "--if-none-match", declarationHash], notModifiedTextOut, TextWriter.Null);
+            Assert(notModifiedTextOut.ToString().Contains("NotModified   true", StringComparison.Ordinal) && !notModifiedTextOut.ToString().Contains("Source\n", StringComparison.Ordinal),
+                "Text output must surface NotModified and omit the Source block when the body is unchanged.");
+
+            var staleIfNoneMatchOut = new StringWriter(); var staleIfNoneMatchErr = new StringWriter();
+            var staleIfNoneMatchExit = CliApplication.Run(
+                ["cv-resolve", symbol.SymbolId, "--workspace", root, "--part", "declaration", "--if-none-match", $"sha256:{new string('0', 64)}", "--format", "json"],
+                staleIfNoneMatchOut, staleIfNoneMatchErr);
+            Assert(staleIfNoneMatchExit == 3 && staleIfNoneMatchErr.ToString().Length == 0, "A mismatched --if-none-match must still resolve successfully.");
+            var mismatchResponse = ContractJson.Deserialize<ResponseContract>(staleIfNoneMatchOut.ToString());
+            Assert(mismatchResponse.Source is { NotModified: false } && mismatchResponse.Source.Content.Length > 0,
+                "A mismatched --if-none-match must return the full content, not a false notModified.");
+
             var invalidOut = new StringWriter(); var invalidErr = new StringWriter();
             Assert(CliApplication.Run(["cv-resolve", symbol.SymbolId, "--workspace", root, "--max-bytes", "0"], invalidOut, invalidErr) == 2,
                 "Zero budget must be an input error.");

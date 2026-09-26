@@ -136,16 +136,28 @@
     },
     "sourceSlice": {
       "type": "object",
-      "description": "usage.bytes counts UTF-8 bytes of content before JSON escaping; usage.lines counts logical CRLF, LF, or CR lines.",
+      "description": "usage.bytes counts UTF-8 bytes of content before JSON escaping; usage.lines counts logical CRLF, LF, or CR lines. contentHash is the sha256 of the content that this request's part/declaration/contextLines/budget would return; when notModified is true it equals the caller's ifNoneMatch and content/usage are empty.",
       "additionalProperties": false,
-      "required": ["content", "span", "budget", "usage", "truncated", "exhaustedBy"],
+      "required": ["content", "span", "budget", "usage", "truncated", "exhaustedBy", "contentHash", "notModified"],
       "properties": {
         "content": { "type": "string" },
         "span": { "$ref": "#/$defs/span" },
         "budget": { "$ref": "#/$defs/sourceBudget" },
         "usage": { "$ref": "#/$defs/sourceUsage" },
         "truncated": { "type": "boolean" },
-        "exhaustedBy": { "enum": ["none", "bytes", "lines", "bytes_and_lines"] }
+        "exhaustedBy": { "enum": ["none", "bytes", "lines", "bytes_and_lines"] },
+        "contentHash": { "$ref": "#/$defs/sha256" },
+        "notModified": { "type": "boolean" }
+      },
+      "if": { "properties": { "notModified": { "const": true } } },
+      "then": {
+        "properties": {
+          "content": { "const": "" },
+          "usage": {
+            "type": "object",
+            "properties": { "bytes": { "const": 0 }, "lines": { "const": 0 } }
+          }
+        }
       }
     },
     "parameterIdentity": {

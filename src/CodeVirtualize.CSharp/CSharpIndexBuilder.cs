@@ -25,7 +25,12 @@ public sealed record CSharpBuildResult(
 
 public sealed class CSharpIndexBuilder
 {
-    public const string AdapterVersion = "csharp-1";
+    // Bumped from "csharp-1": the extractor now populates SymbolContract.ContainerId for members and
+    // nested types. Bumping AdapterVersion changes analysisKey (SemanticConfigFingerprint.CreateAnalysisKey),
+    // so any on-disk generation built by the old extractor (ContainerId always null) is treated as an
+    // analysis-key mismatch and forces a full rebuild (see CSharpIncrementalIndexBuilder.Build) instead of
+    // reusing stale symbols with a missing containerId alongside freshly extracted ones.
+    public const string AdapterVersion = "csharp-2";
 
     private readonly IWorkspaceTrustPolicy trustPolicy;
 
