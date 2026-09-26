@@ -9,8 +9,14 @@
   "readMe": "tests/fixtures/rev2/medium-quartznet/README.md documents methodology and judgment calls without quoting corpus source text.",
   "conventions": "tests/fixtures/rev2/CONVENTIONS.md (hash rule, declaration-span rule, NAV static-reference rule, DIFF rename/attribute/remark/signatureChanged/preprocessor/nonSymbolChange/local-function/D3-eligibility/anchor rules) applies to this file exactly as written; this file does not restate it. Reviewed and updated 2026-09-25 against commit 7437602's CONVENTIONS.md revision (attribute changes -> signatureChanged, XML-doc changes -> remarkChanged, out-of-span plain-`//` comments not recorded, field/property type and modifier changes -> signatureChanged, and the narrowed D3-eligibility rule) and the same-day user decision that a pair with no D3-eligible member is not judged on D3 (ADR 005 addendum). See judgmentCalls for exactly what changed.",
   "revisions": [
-    { "date": "2026-09-24", "change": "Initial authoring." },
-    { "date": "2026-09-25", "change": "Reclassified D03-D1-18, D03-D1-20 (class-level XML-doc-only changes) and D04-D1-02 (FiringRecorder duplicate-summary addition) from bodyChanged to remarkChanged. Reclassified D05-D1-01 (Build partial-decl attribute change) and D06-D1-01 (OneOffThroughputPostgresBenchmark.Profile attribute change) from bodyChanged to signatureChanged and removed their isD3Target flag. Set DIFF-05's d3_resolve to null with d3NotApplicable:true (no D3-eligible member in that pair, per CONVENTIONS.md 2026-09-25 and the 2026-09-25 user decision). Reassigned DIFF-06's D3 target to D06-D1-02 (CreateEmptyDatabase) and computed its base declaration hash. No entries were added or removed, and no NAV entries changed (NAV-01's nameof-as-static-reference judgment and all N3 classifications were re-checked against the revised CONVENTIONS.md and found already compliant). Total item counts and sample size are unchanged." }
+    {
+      "date": "2026-09-24",
+      "change": "Initial authoring."
+    },
+    {
+      "date": "2026-09-25",
+      "change": "Reclassified D03-D1-18, D03-D1-20 (class-level XML-doc-only changes) and D04-D1-02 (FiringRecorder duplicate-summary addition) from bodyChanged to remarkChanged. Reclassified D05-D1-01 (Build partial-decl attribute change) and D06-D1-01 (OneOffThroughputPostgresBenchmark.Profile attribute change) from bodyChanged to signatureChanged and removed their isD3Target flag. Set DIFF-05's d3_resolve to null with d3NotApplicable:true (no D3-eligible member in that pair, per CONVENTIONS.md 2026-09-25 and the 2026-09-25 user decision). Reassigned DIFF-06's D3 target to D06-D1-02 (CreateEmptyDatabase) and computed its base declaration hash. No entries were added or removed, and no NAV entries changed (NAV-01's nameof-as-static-reference judgment and all N3 classifications were re-checked against the revised CONVENTIONS.md and found already compliant). Total item counts and sample size are unchanged."
+    }
   ],
   "sourceOfTruth": "All positions and hashes were read by hand from quartznet/quartznet at the exact commits below (working tree confirmed byte-identical to pinned blobs per benchmarks/corpora/rev2-manifest.json, after the core.eol=lf fix that manifest records). No CV output, runner command output, or rg/git-diff output was copied into this file; those tools were used only to enumerate candidate lines and hunks, which were then read and judged individually against `git show <commit>:<path>` / working-tree text.",
   "hashConvention": {
@@ -50,12 +56,36 @@
       "rule": "protocol.md R2-2 rule 3 last sentence + TASK-027 spawn step 1: walk benchmarks/corpora/rev2-manifest.json's medium-quartznet.navCandidateOrder.candidates from order 0, keep the first 6 (in order) with >=1 independently-read static reference, skip any with 0.",
       "outcome": "Candidate order 0 (tuning) qualified with 1 static reference (a self-referential nameof, see judgmentCalls). Candidates order 1, 2, 4, 7, 9, 10 were skipped for 0 independently-read static references. Candidates order 3, 5, 6, 8, 11 all qualified on first read, filling the remaining 5 held-out slots. All 12 listed candidates were evaluated (order 11 was needed to reach 6 kept).",
       "skippedCandidates": [
-        { "order": 1, "simpleName": "NotifySchedulerListenersJobDeleted", "reason": "0 static references: the only field/locals of the concrete implementing type `RAMJobStoreTest.SampleSignaler` (`fSignaler`, two unused `var signaler = new SampleSignaler()` locals) never call `.NotifySchedulerListenersJobDeleted(...)`; the only other typed reference (`ISchedulerSignaler schedSignaler = new SampleSignaler()`) is interface-typed. All corpus-wide calls to the simple name go through an `ISchedulerSignaler`-typed receiver (interface method, a different symbol) or a different concrete override entirely." },
-        { "order": 2, "simpleName": "GetEnumerator", "reason": "0 static references: `FakeParameterCollection` (an override of `DbParameterCollection.GetEnumerator()`) is only ever instantiated inline as `protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();`, i.e. immediately upcast to the base type at its only declaration site; no source text anywhere calls `.GetEnumerator()` on a `FakeParameterCollection`-typed reference or `foreach`es over one." },
-        { "order": 4, "simpleName": "JobScheduled", "reason": "0 static references: the only `Qtz205ScheListener`-typed local (`Qtz205ScheListener schedulerListener = new Qtz205ScheListener();`) is only ever passed to `scheduler.ListenerManager.AddSchedulerListener(schedulerListener)` (an implicit upcast to `ISchedulerListener`); `.JobScheduled(...)` is invoked only by the scheduler internally through the interface, never by name against the concrete type in source." },
-        { "order": 7, "simpleName": "GetJobListener", "reason": "0 static references: this candidate is the interface's own declaration (`IListenerManager.GetJobListener`). The sole concrete override (`ListenerManagerImpl.GetJobListener`) is a distinct symbol; all 4 corpus call sites are `_manager.GetJobListener(name)` where `_manager` is declared `private ListenerManagerImpl _manager;` (the concrete type), so they reference the override, not this interface declaration." },
-        { "order": 9, "simpleName": "APreferredNodeOfStarIsAnAutomaticPin", "reason": "0 static references: an NUnit `[Test]` method invoked only by the test runner via reflection; no `nameof`, no direct call, anywhere in the corpus. (A same-named but distinct `[Test]` method exists on an unrelated type, `JsonSchedulingDataProcessorTest`, and does not reference this one.)" },
-        { "order": 10, "simpleName": "ConfigureScope", "reason": "0 static references: the only `TenantSettingJobFactory`-typed local (`var factory = new TenantSettingJobFactory(serviceProvider);`) only ever calls `factory.CreateJob(...)`/`factory.ReturnJob(...)`; `ConfigureScope` is invoked internally by the inherited base method `MicrosoftDependencyInjectionJobFactory.CreateJob`'s own unqualified `ConfigureScope(scope, bundle, scheduler)` call, which — being written inside the base class's own body — binds to the base's own virtual declaration, a distinct symbol from the `TenantSettingJobFactory` override." }
+        {
+          "order": 1,
+          "simpleName": "NotifySchedulerListenersJobDeleted",
+          "reason": "0 static references: the only field/locals of the concrete implementing type `RAMJobStoreTest.SampleSignaler` (`fSignaler`, two unused `var signaler = new SampleSignaler()` locals) never call `.NotifySchedulerListenersJobDeleted(...)`; the only other typed reference (`ISchedulerSignaler schedSignaler = new SampleSignaler()`) is interface-typed. All corpus-wide calls to the simple name go through an `ISchedulerSignaler`-typed receiver (interface method, a different symbol) or a different concrete override entirely."
+        },
+        {
+          "order": 2,
+          "simpleName": "GetEnumerator",
+          "reason": "0 static references: `FakeParameterCollection` (an override of `DbParameterCollection.GetEnumerator()`) is only ever instantiated inline as `protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();`, i.e. immediately upcast to the base type at its only declaration site; no source text anywhere calls `.GetEnumerator()` on a `FakeParameterCollection`-typed reference or `foreach`es over one."
+        },
+        {
+          "order": 4,
+          "simpleName": "JobScheduled",
+          "reason": "0 static references: the only `Qtz205ScheListener`-typed local (`Qtz205ScheListener schedulerListener = new Qtz205ScheListener();`) is only ever passed to `scheduler.ListenerManager.AddSchedulerListener(schedulerListener)` (an implicit upcast to `ISchedulerListener`); `.JobScheduled(...)` is invoked only by the scheduler internally through the interface, never by name against the concrete type in source."
+        },
+        {
+          "order": 7,
+          "simpleName": "GetJobListener",
+          "reason": "0 static references: this candidate is the interface's own declaration (`IListenerManager.GetJobListener`). The sole concrete override (`ListenerManagerImpl.GetJobListener`) is a distinct symbol; all 4 corpus call sites are `_manager.GetJobListener(name)` where `_manager` is declared `private ListenerManagerImpl _manager;` (the concrete type), so they reference the override, not this interface declaration."
+        },
+        {
+          "order": 9,
+          "simpleName": "APreferredNodeOfStarIsAnAutomaticPin",
+          "reason": "0 static references: an NUnit `[Test]` method invoked only by the test runner via reflection; no `nameof`, no direct call, anywhere in the corpus. (A same-named but distinct `[Test]` method exists on an unrelated type, `JsonSchedulingDataProcessorTest`, and does not reference this one.)"
+        },
+        {
+          "order": 10,
+          "simpleName": "ConfigureScope",
+          "reason": "0 static references: the only `TenantSettingJobFactory`-typed local (`var factory = new TenantSettingJobFactory(serviceProvider);`) only ever calls `factory.CreateJob(...)`/`factory.ReturnJob(...)`; `ConfigureScope` is invoked internally by the inherited base method `MicrosoftDependencyInjectionJobFactory.CreateJob`'s own unqualified `ConfigureScope(scope, bundle, scheduler)` call, which — being written inside the base class's own body — binds to the base's own virtual declaration, a distinct symbol from the `TenantSettingJobFactory` override."
+        }
       ]
     },
     "targets": [
@@ -67,17 +97,42 @@
         "qualifiedName": "Quartz.Tests.Unit.Impl.AdoJobStore.UnmigratedSchemaRefusalSqliteTest.TheMigrationsTheMessageNamesAreTheOnesThatMakeTheSchemaStart",
         "parameterTypes": [],
         "n1_declarations": [
-          { "id": "NAV01-N1-1", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs", "line": 203, "note": "sole declaration; public async Task, [Test]-attributed, no overload of this name in UnmigratedSchemaRefusalSqliteTest" }
+          {
+            "id": "NAV01-N1-1",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs",
+            "line": 203,
+            "note": "sole declaration; public async Task, [Test]-attributed, no overload of this name in UnmigratedSchemaRefusalSqliteTest"
+          }
         ],
-        "n2_declaration": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs", "startLine": 203, "endLine": 215, "sha256": "f373c92013470fc2a11787f69b3d7c33a3c473fa00dfa2502858ca4eab2fc3c3" },
+        "n2_declaration": {
+          "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs",
+          "startLine": 203,
+          "endLine": 215,
+          "sha256": "f373c92013470fc2a11787f69b3d7c33a3c473fa00dfa2502858ca4eab2fc3c3"
+        },
         "n3_staticReferences": [
-          { "id": "NAV01-N3-S1", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs", "line": 210, "receiverType": "self-referential `nameof(TheMigrationsTheMessageNamesAreTheOnesThatMakeTheSchemaStart)` inside the method's own body, passed as the scheduler instance name to `GetScheduler(...)` (see judgmentCalls)" }
+          {
+            "id": "NAV01-N3-S1",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/UnmigratedSchemaRefusalSqliteTest.cs",
+            "line": 210,
+            "receiverType": "self-referential `nameof(TheMigrationsTheMessageNamesAreTheOnesThatMakeTheSchemaStart)` inside the method's own body, passed as the scheduler instance name to `GetScheduler(...)` (see judgmentCalls)"
+          }
         ],
         "n3_dynamicCandidates": [],
         "n3_unresolved": [],
         "n4_recovery": {
-          "edit1": { "startLine": 203, "endLine": 215, "sha256": "f373c92013470fc2a11787f69b3d7c33a3c473fa00dfa2502858ca4eab2fc3c3", "note": "identical to N2: edit1 is appended after the file's last line (line 471), well past this declaration" },
-          "edit2": { "description": "first `{` on line 204; comment inserted immediately after it", "startLine": 203, "endLine": 216, "sha256": "f6ff7cd02ca2bd8cefdeae370a53845d70a8100d1e4e1145c68c2fe5dbd55d47" }
+          "edit1": {
+            "startLine": 203,
+            "endLine": 215,
+            "sha256": "f373c92013470fc2a11787f69b3d7c33a3c473fa00dfa2502858ca4eab2fc3c3",
+            "note": "identical to N2: edit1 is appended after the file's last line (line 471), well past this declaration"
+          },
+          "edit2": {
+            "description": "first `{` on line 204; comment inserted immediately after it",
+            "startLine": 203,
+            "endLine": 216,
+            "sha256": "f6ff7cd02ca2bd8cefdeae370a53845d70a8100d1e4e1145c68c2fe5dbd55d47"
+          }
         },
         "crossCheck": null
       },
@@ -87,25 +142,97 @@
         "candidateOrder": 3,
         "simpleName": "CreateHostedService",
         "qualifiedName": "Quartz.Tests.Unit.QuartzHostedServiceTests.CreateHostedService",
-        "parameterTypes": ["Lifetime", "ISchedulerFactory", "bool", "bool", "bool"],
-        "n1_declarations": [
-          { "id": "NAV02-N1-1", "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 976, "note": "sole declaration, private static, no overload" }
+        "parameterTypes": [
+          "Lifetime",
+          "ISchedulerFactory",
+          "bool",
+          "bool",
+          "bool"
         ],
-        "n2_declaration": { "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "startLine": 976, "endLine": 994, "sha256": "b1d5e94493a5fd7ffb13c905e31f1002ac72cb458c08e70dd6b312378b4f4535" },
+        "n1_declarations": [
+          {
+            "id": "NAV02-N1-1",
+            "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+            "line": 976,
+            "note": "sole declaration, private static, no overload"
+          }
+        ],
+        "n2_declaration": {
+          "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+          "startLine": 976,
+          "endLine": 994,
+          "sha256": "b1d5e94493a5fd7ffb13c905e31f1002ac72cb458c08e70dd6b312378b4f4535"
+        },
         "n3_staticReferences": [
-          { "id": "NAV02-N3-S1", "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 398, "receiverType": "unqualified call inside StartAsync_WithStartedApplication_ShouldGetScheduler(), same class QuartzHostedServiceTests" },
-          { "id": "NAV02-N3-S2", "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 425, "receiverType": "unqualified call inside StartAsync_WithStartedApplication_ShouldStartSchedulerDependingOnPotentialDelay(), same class" },
-          { "id": "NAV02-N3-S3", "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 467, "receiverType": "unqualified call inside StartAsync_WithCancelledApplicationStartup_ShouldNotStartSchedulerUnlessNonwaiting(), same class" },
-          { "id": "NAV02-N3-S4", "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 495, "receiverType": "unqualified call inside StopAsync_WithStoppedApplication_ShouldShutDownSchedulerAndNotStartItDelayedAfterwards(), same class" },
-          { "id": "NAV02-N3-S5", "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs", "line": 535, "receiverType": "unqualified call inside StartAsync_WithoutAutoStart_ShouldCreateTheSchedulerAndLeaveTheStartToTheApplication(), same class" }
+          {
+            "id": "NAV02-N3-S1",
+            "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+            "line": 398,
+            "receiverType": "unqualified call inside StartAsync_WithStartedApplication_ShouldGetScheduler(), same class QuartzHostedServiceTests",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 398 of QuartzHostedServiceTests.cs = unqualified `CreateHostedService(` call inside StartAsync_WithStartedApplication_ShouldGetScheduler(), same class as the declaration. Matches."
+            }
+          },
+          {
+            "id": "NAV02-N3-S2",
+            "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+            "line": 425,
+            "receiverType": "unqualified call inside StartAsync_WithStartedApplication_ShouldStartSchedulerDependingOnPotentialDelay(), same class"
+          },
+          {
+            "id": "NAV02-N3-S3",
+            "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+            "line": 467,
+            "receiverType": "unqualified call inside StartAsync_WithCancelledApplicationStartup_ShouldNotStartSchedulerUnlessNonwaiting(), same class",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 467 of QuartzHostedServiceTests.cs = unqualified `CreateHostedService(` call inside StartAsync_WithCancelledApplicationStartup_ShouldNotStartSchedulerUnlessNonwaiting(), same class. Matches."
+            }
+          },
+          {
+            "id": "NAV02-N3-S4",
+            "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+            "line": 495,
+            "receiverType": "unqualified call inside StopAsync_WithStoppedApplication_ShouldShutDownSchedulerAndNotStartItDelayedAfterwards(), same class"
+          },
+          {
+            "id": "NAV02-N3-S5",
+            "path": "src/Quartz.Tests.Unit/QuartzHostedServiceTests.cs",
+            "line": 535,
+            "receiverType": "unqualified call inside StartAsync_WithoutAutoStart_ShouldCreateTheSchedulerAndLeaveTheStartToTheApplication(), same class"
+          }
         ],
         "n3_dynamicCandidates": [],
         "n3_unresolved": [],
         "n4_recovery": {
-          "edit1": { "startLine": 976, "endLine": 994, "sha256": "b1d5e94493a5fd7ffb13c905e31f1002ac72cb458c08e70dd6b312378b4f4535", "note": "identical to N2: edit1 appended at file end (line 1023), well past this declaration" },
-          "edit2": { "description": "first `{` on line 982; comment inserted immediately after it", "startLine": 976, "endLine": 995, "sha256": "e66161c78771c0314dfbb2cf6a46a80727f6a0e87ec142bd571bcf37ba12ec12" }
+          "edit1": {
+            "startLine": 976,
+            "endLine": 994,
+            "sha256": "b1d5e94493a5fd7ffb13c905e31f1002ac72cb458c08e70dd6b312378b4f4535",
+            "note": "identical to N2: edit1 appended at file end (line 1023), well past this declaration"
+          },
+          "edit2": {
+            "description": "first `{` on line 982; comment inserted immediately after it",
+            "startLine": 976,
+            "endLine": 995,
+            "sha256": "e66161c78771c0314dfbb2cf6a46a80727f6a0e87ec142bd571bcf37ba12ec12"
+          }
         },
-        "crossCheck": null
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "NAV02-N3-S1",
+            "NAV02-N3-S3"
+          ],
+          "result": "ok",
+          "note": "All sampled items for this NAV target verified correct against pinned-commit source."
+        }
       },
       {
         "id": "NAV-03",
@@ -115,37 +242,163 @@
         "qualifiedName": "Quartz.Tests.Unit.Impl.AdoJobStore.AdoJobStoreBaseTest.DeadNode",
         "parameterTypes": [],
         "n1_declarations": [
-          { "id": "NAV03-N1-1", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3657, "note": "sole declaration, private static SchedulerStateRecord, no overload" }
+          {
+            "id": "NAV03-N1-1",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3657,
+            "note": "sole declaration, private static SchedulerStateRecord, no overload",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 3657 of AdoJobStoreBaseTest.cs = `private static SchedulerStateRecord DeadNode()`. Sole declaration confirmed. N2 hash independently recomputed and matches."
+            }
+          }
         ],
-        "n2_declaration": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "startLine": 3657, "endLine": 3660, "sha256": "be19b4bfbabb999c53532a4e9ccba494d1e7d5e1017dcf5438b1d883d83596eb" },
+        "n2_declaration": {
+          "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+          "startLine": 3657,
+          "endLine": 3660,
+          "sha256": "be19b4bfbabb999c53532a4e9ccba494d1e7d5e1017dcf5438b1d883d83596eb"
+        },
         "n3_staticReferences": [
-          { "id": "NAV03-N3-S1", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3060, "receiverType": "unqualified `DeadNode()` call, argument of jobStoreSupport.CallClusterRecover(conn, [DeadNode()]), same class AdoJobStoreBaseTest" },
-          { "id": "NAV03-N3-S2", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3095, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S3", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3127, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S4", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3159, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S5", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3220, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S6", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3256, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S7", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3300, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S8", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3464, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S9", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3494, "receiverType": "same pattern as S1" },
-          { "id": "NAV03-N3-S10", "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs", "line": 3645, "receiverType": "same pattern as S1, inside a `Func<Task> act = async () => await ...` lambda, still same class" }
+          {
+            "id": "NAV03-N3-S1",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3060,
+            "receiverType": "unqualified `DeadNode()` call, argument of jobStoreSupport.CallClusterRecover(conn, [DeadNode()]), same class AdoJobStoreBaseTest"
+          },
+          {
+            "id": "NAV03-N3-S2",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3095,
+            "receiverType": "same pattern as S1"
+          },
+          {
+            "id": "NAV03-N3-S3",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3127,
+            "receiverType": "same pattern as S1",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 3127 = `DeadNode()` call, argument of CallClusterRecover, same class AdoJobStoreBaseTest. Matches."
+            }
+          },
+          {
+            "id": "NAV03-N3-S4",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3159,
+            "receiverType": "same pattern as S1"
+          },
+          {
+            "id": "NAV03-N3-S5",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3220,
+            "receiverType": "same pattern as S1"
+          },
+          {
+            "id": "NAV03-N3-S6",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3256,
+            "receiverType": "same pattern as S1"
+          },
+          {
+            "id": "NAV03-N3-S7",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3300,
+            "receiverType": "same pattern as S1"
+          },
+          {
+            "id": "NAV03-N3-S8",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3464,
+            "receiverType": "same pattern as S1"
+          },
+          {
+            "id": "NAV03-N3-S9",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3494,
+            "receiverType": "same pattern as S1",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 3494 = `DeadNode()` call, same pattern, same class. Matches."
+            }
+          },
+          {
+            "id": "NAV03-N3-S10",
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/AdoJobStoreBaseTest.cs",
+            "line": 3645,
+            "receiverType": "same pattern as S1, inside a `Func<Task> act = async () => await ...` lambda, still same class"
+          }
         ],
         "n3_dynamicCandidates": [],
         "n3_unresolved": [],
         "n3_excludedNonReferences": [
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 27, "reason": "`private const string DeadNode = \"killed-node\";` - a distinct field symbol (different kind, different containing type, different project: Quartz.Tests.Integration) that only shares the simple name. Its own declaration, not a reference to the target method." },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 189, "reason": "reference to the unrelated const field above, not the target method" },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 207, "reason": "reference to the unrelated const field above, not the target method" },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 347, "reason": "reference to the unrelated const field above, not the target method" },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 351, "reason": "reference to the unrelated const field above, not the target method" },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 365, "reason": "reference to the unrelated const field above (default parameter value), not the target method" },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs", "line": 392, "reason": "reference to the unrelated const field above, not the target method" }
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 27,
+            "reason": "`private const string DeadNode = \"killed-node\";` - a distinct field symbol (different kind, different containing type, different project: Quartz.Tests.Integration) that only shares the simple name. Its own declaration, not a reference to the target method."
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 189,
+            "reason": "reference to the unrelated const field above, not the target method"
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 207,
+            "reason": "reference to the unrelated const field above, not the target method"
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 347,
+            "reason": "reference to the unrelated const field above, not the target method"
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 351,
+            "reason": "reference to the unrelated const field above, not the target method"
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 365,
+            "reason": "reference to the unrelated const field above (default parameter value), not the target method"
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredHardeningTestBase.cs",
+            "line": 392,
+            "reason": "reference to the unrelated const field above, not the target method"
+          }
         ],
         "n4_recovery": {
-          "edit1": { "startLine": 3657, "endLine": 3660, "sha256": "be19b4bfbabb999c53532a4e9ccba494d1e7d5e1017dcf5438b1d883d83596eb", "note": "identical to N2: edit1 appended at file end (line 3665), well past this declaration" },
-          "edit2": { "description": "first `{` on line 3658; comment inserted immediately after it", "startLine": 3657, "endLine": 3661, "sha256": "93ae062f004e32384c59430130f6edf4df3baac050caa9b9f7a0fa5d68764af8" }
+          "edit1": {
+            "startLine": 3657,
+            "endLine": 3660,
+            "sha256": "be19b4bfbabb999c53532a4e9ccba494d1e7d5e1017dcf5438b1d883d83596eb",
+            "note": "identical to N2: edit1 appended at file end (line 3665), well past this declaration"
+          },
+          "edit2": {
+            "description": "first `{` on line 3658; comment inserted immediately after it",
+            "startLine": 3657,
+            "endLine": 3661,
+            "sha256": "93ae062f004e32384c59430130f6edf4df3baac050caa9b9f7a0fa5d68764af8"
+          }
         },
-        "crossCheck": null
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "NAV03-N1-1",
+            "NAV03-N3-S3",
+            "NAV03-N3-S9"
+          ],
+          "result": "ok",
+          "note": "All sampled items for this NAV target verified correct against pinned-commit source."
+        }
       },
       {
         "id": "NAV-04",
@@ -155,21 +408,70 @@
         "qualifiedName": "Quartz.Benchmark.Competitors.Completion.Disarm",
         "parameterTypes": [],
         "n1_declarations": [
-          { "id": "NAV04-N1-1", "path": "src/Quartz.Benchmark.Competitors/Completion.cs", "line": 122, "note": "sole declaration, public static void, no overload, in internal static class Completion" }
+          {
+            "id": "NAV04-N1-1",
+            "path": "src/Quartz.Benchmark.Competitors/Completion.cs",
+            "line": 122,
+            "note": "sole declaration, public static void, no overload, in internal static class Completion"
+          }
         ],
-        "n2_declaration": { "path": "src/Quartz.Benchmark.Competitors/Completion.cs", "startLine": 122, "endLine": 125, "sha256": "52bdff87532b76fb9ab6858eafee43088cf6ed4bf15fdf6ade1f67d6753e28c9" },
+        "n2_declaration": {
+          "path": "src/Quartz.Benchmark.Competitors/Completion.cs",
+          "startLine": 122,
+          "endLine": 125,
+          "sha256": "52bdff87532b76fb9ab6858eafee43088cf6ed4bf15fdf6ade1f67d6753e28c9"
+        },
         "n3_staticReferences": [
-          { "id": "NAV04-N3-S1", "path": "src/Quartz.Benchmark.Competitors/S1_InMemoryThroughput.cs", "line": 92, "receiverType": "`Completion.Disarm()` - class-qualified static call" },
-          { "id": "NAV04-N3-S2", "path": "src/Quartz.Benchmark.Competitors/S2_CommitCensus.cs", "line": 137, "receiverType": "`Completion.Disarm()` - class-qualified static call" },
-          { "id": "NAV04-N3-S3", "path": "src/Quartz.Benchmark.Competitors/S2_PostgresThroughput.cs", "line": 108, "receiverType": "`Completion.Disarm()` - class-qualified static call" }
+          {
+            "id": "NAV04-N3-S1",
+            "path": "src/Quartz.Benchmark.Competitors/S1_InMemoryThroughput.cs",
+            "line": 92,
+            "receiverType": "`Completion.Disarm()` - class-qualified static call"
+          },
+          {
+            "id": "NAV04-N3-S2",
+            "path": "src/Quartz.Benchmark.Competitors/S2_CommitCensus.cs",
+            "line": 137,
+            "receiverType": "`Completion.Disarm()` - class-qualified static call"
+          },
+          {
+            "id": "NAV04-N3-S3",
+            "path": "src/Quartz.Benchmark.Competitors/S2_PostgresThroughput.cs",
+            "line": 108,
+            "receiverType": "`Completion.Disarm()` - class-qualified static call",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 108 of S2_PostgresThroughput.cs = `Completion.Disarm();` class-qualified static call. Matches."
+            }
+          }
         ],
         "n3_dynamicCandidates": [],
         "n3_unresolved": [],
         "n4_recovery": {
-          "edit1": { "startLine": 122, "endLine": 125, "sha256": "52bdff87532b76fb9ab6858eafee43088cf6ed4bf15fdf6ade1f67d6753e28c9", "note": "identical to N2: edit1 appended at file end (line 134), well past this declaration" },
-          "edit2": { "description": "first `{` on line 123; comment inserted immediately after it", "startLine": 122, "endLine": 126, "sha256": "bb3b12ee78305bbf2369f5be2b5ba9e2a73c6d5b316be933dd738480ac0774d7" }
+          "edit1": {
+            "startLine": 122,
+            "endLine": 125,
+            "sha256": "52bdff87532b76fb9ab6858eafee43088cf6ed4bf15fdf6ade1f67d6753e28c9",
+            "note": "identical to N2: edit1 appended at file end (line 134), well past this declaration"
+          },
+          "edit2": {
+            "description": "first `{` on line 123; comment inserted immediately after it",
+            "startLine": 122,
+            "endLine": 126,
+            "sha256": "bb3b12ee78305bbf2369f5be2b5ba9e2a73c6d5b316be933dd738480ac0774d7"
+          }
         },
-        "crossCheck": null
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "NAV04-N3-S3"
+          ],
+          "result": "ok",
+          "note": "All sampled items for this NAV target verified correct against pinned-commit source."
+        }
       },
       {
         "id": "NAV-05",
@@ -177,25 +479,81 @@
         "candidateOrder": 8,
         "simpleName": "RecordPeak",
         "qualifiedName": "Quartz.Tests.Integration.Impl.AdoJobStore.ClusteredSerialJobTestBase.SerialJob.RecordPeak",
-        "parameterTypes": ["int"],
-        "n1_declarations": [
-          { "id": "NAV05-N1-1", "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs", "line": 146, "note": "sole declaration, private static void, no overload, in the private nested class SerialJob" }
+        "parameterTypes": [
+          "int"
         ],
-        "n2_declaration": { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs", "startLine": 146, "endLine": 159, "sha256": "540b9d4b82c8aa2c23b62d0495a451a43d467ee7c12aa6e50b4361260053c48c" },
+        "n1_declarations": [
+          {
+            "id": "NAV05-N1-1",
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs",
+            "line": 146,
+            "note": "sole declaration, private static void, no overload, in the private nested class SerialJob",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 146 of ClusteredSerialJobTestBase.cs = `private static void RecordPeak(int inside)` inside nested class SerialJob. N2 hash independently recomputed and matches."
+            }
+          }
+        ],
+        "n2_declaration": {
+          "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs",
+          "startLine": 146,
+          "endLine": 159,
+          "sha256": "540b9d4b82c8aa2c23b62d0495a451a43d467ee7c12aa6e50b4361260053c48c"
+        },
         "n3_staticReferences": [
-          { "id": "NAV05-N3-S1", "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs", "line": 130, "receiverType": "unqualified `RecordPeak(inside)` call inside SerialJob.Execute(...), same nested class SerialJob" }
+          {
+            "id": "NAV05-N3-S1",
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredSerialJobTestBase.cs",
+            "line": 130,
+            "receiverType": "unqualified `RecordPeak(inside)` call inside SerialJob.Execute(...), same nested class SerialJob",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 130 = `RecordPeak(inside);` call inside SerialJob.Execute(...). Matches."
+            }
+          }
         ],
         "n3_dynamicCandidates": [],
         "n3_unresolved": [],
         "n3_excludedNonReferences": [
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredExecutionCeilingTestBase.cs", "line": 252, "reason": "`private static void RecordPeak(int observed)` - a distinct method symbol on a different type (ClusteredExecutionCeilingTestBase, not the nested SerialJob of ClusteredSerialJobTestBase). Its own declaration, not the target." },
-          { "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredExecutionCeilingTestBase.cs", "line": 240, "reason": "unqualified call to the unrelated RecordPeak(int) declared at line 252 of the same (different) type, not the target" }
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredExecutionCeilingTestBase.cs",
+            "line": 252,
+            "reason": "`private static void RecordPeak(int observed)` - a distinct method symbol on a different type (ClusteredExecutionCeilingTestBase, not the nested SerialJob of ClusteredSerialJobTestBase). Its own declaration, not the target."
+          },
+          {
+            "path": "src/Quartz.Tests.Integration/Impl/AdoJobStore/ClusteredExecutionCeilingTestBase.cs",
+            "line": 240,
+            "reason": "unqualified call to the unrelated RecordPeak(int) declared at line 252 of the same (different) type, not the target"
+          }
         ],
         "n4_recovery": {
-          "edit1": { "startLine": 146, "endLine": 159, "sha256": "540b9d4b82c8aa2c23b62d0495a451a43d467ee7c12aa6e50b4361260053c48c", "note": "identical to N2: edit1 appended at file end (line 161), well past this declaration" },
-          "edit2": { "description": "first `{` on line 147; comment inserted immediately after it", "startLine": 146, "endLine": 160, "sha256": "1b595afd58837bd42d598b52ea34f71399d7fef91147ecc98957f3e089131da4" }
+          "edit1": {
+            "startLine": 146,
+            "endLine": 159,
+            "sha256": "540b9d4b82c8aa2c23b62d0495a451a43d467ee7c12aa6e50b4361260053c48c",
+            "note": "identical to N2: edit1 appended at file end (line 161), well past this declaration"
+          },
+          "edit2": {
+            "description": "first `{` on line 147; comment inserted immediately after it",
+            "startLine": 146,
+            "endLine": 160,
+            "sha256": "1b595afd58837bd42d598b52ea34f71399d7fef91147ecc98957f3e089131da4"
+          }
         },
-        "crossCheck": null
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "NAV05-N1-1",
+            "NAV05-N3-S1"
+          ],
+          "result": "ok",
+          "note": "All sampled items for this NAV target verified correct against pinned-commit source."
+        }
       },
       {
         "id": "NAV-06",
@@ -203,22 +561,75 @@
         "candidateOrder": 11,
         "simpleName": "AssertRoundTripped",
         "qualifiedName": "Quartz.Tests.Unit.Simpl.BuiltInTriggerSerializerDerivationTest.AssertRoundTripped",
-        "parameterTypes": ["ReportTrigger"],
-        "n1_declarations": [
-          { "id": "NAV06-N1-1", "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs", "line": 75, "note": "sole declaration, private static void, no overload" }
+        "parameterTypes": [
+          "ReportTrigger"
         ],
-        "n2_declaration": { "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs", "startLine": 75, "endLine": 85, "sha256": "7d88ea08ddd16fb11ee5b69f94d1a2daf754010c051270a92824377eaf48e4e2" },
+        "n1_declarations": [
+          {
+            "id": "NAV06-N1-1",
+            "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs",
+            "line": 75,
+            "note": "sole declaration, private static void, no overload",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 75 of BuiltInTriggerSerializerDerivationTest.cs = `private static void AssertRoundTripped(ReportTrigger restored)`. N2 hash independently recomputed and matches."
+            }
+          }
+        ],
+        "n2_declaration": {
+          "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs",
+          "startLine": 75,
+          "endLine": 85,
+          "sha256": "7d88ea08ddd16fb11ee5b69f94d1a2daf754010c051270a92824377eaf48e4e2"
+        },
         "n3_staticReferences": [
-          { "id": "NAV06-N3-S1", "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs", "line": 43, "receiverType": "unqualified call inside ANewtonsoftSerializerDerivesFromTheBuiltInOneAndKeepsItsFields(), same class" },
-          { "id": "NAV06-N3-S2", "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs", "line": 60, "receiverType": "unqualified call inside ASystemTextJsonSerializerDerivesFromTheBuiltInOneAndKeepsItsFields(), same class" }
+          {
+            "id": "NAV06-N3-S1",
+            "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs",
+            "line": 43,
+            "receiverType": "unqualified call inside ANewtonsoftSerializerDerivesFromTheBuiltInOneAndKeepsItsFields(), same class"
+          },
+          {
+            "id": "NAV06-N3-S2",
+            "path": "src/Quartz.Tests.Unit/Simpl/BuiltInTriggerSerializerDerivationTest.cs",
+            "line": 60,
+            "receiverType": "unqualified call inside ASystemTextJsonSerializerDerivesFromTheBuiltInOneAndKeepsItsFields(), same class",
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "line 60 = `AssertRoundTripped(restored);` call inside ASystemTextJsonSerializerDerivesFromTheBuiltInOneAndKeepsItsFields(). Matches."
+            }
+          }
         ],
         "n3_dynamicCandidates": [],
         "n3_unresolved": [],
         "n4_recovery": {
-          "edit1": { "startLine": 75, "endLine": 85, "sha256": "7d88ea08ddd16fb11ee5b69f94d1a2daf754010c051270a92824377eaf48e4e2", "note": "identical to N2: edit1 appended at file end (line 161), well past this declaration" },
-          "edit2": { "description": "first `{` on line 76; comment inserted immediately after it", "startLine": 75, "endLine": 86, "sha256": "a6158e3b936f1b1fd03b0ab30d7cc07f25dee789316e63207b1f8ccf04751c4f" }
+          "edit1": {
+            "startLine": 75,
+            "endLine": 85,
+            "sha256": "7d88ea08ddd16fb11ee5b69f94d1a2daf754010c051270a92824377eaf48e4e2",
+            "note": "identical to N2: edit1 appended at file end (line 161), well past this declaration"
+          },
+          "edit2": {
+            "description": "first `{` on line 76; comment inserted immediately after it",
+            "startLine": 75,
+            "endLine": 86,
+            "sha256": "a6158e3b936f1b1fd03b0ab30d7cc07f25dee789316e63207b1f8ccf04751c4f"
+          }
         },
-        "crossCheck": null
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "NAV06-N1-1",
+            "NAV06-N3-S2"
+          ],
+          "result": "ok",
+          "note": "All sampled items for this NAV target verified correct against pinned-commit source."
+        }
       }
     ]
   },
@@ -232,40 +643,251 @@
         "c": "907c86c8c878d197c44358b3a5728e5025ac3434",
         "cPrime": "1e039471fc457f6efa1d3bf1224324b82236b759",
         "d1_pToCPrime_changes": [
-          { "id": "D01-D1-01", "symbol": "Quartz.Analyzers.Tests.AnalyzerReleaseTrackingTest", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs", "line": 33 } },
-          { "id": "D01-D1-02", "symbol": "Quartz.Analyzers.Tests.AnalyzerReleaseTrackingTest.RulesThatShippedIn420AreRecordedAsShippedIn420()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs", "line": 36 } },
-          { "id": "D01-D1-03", "symbol": "Quartz.Analyzers.Tests.AnalyzerReleaseTrackingTest.AnalyzerProject()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs", "line": 67 } },
-          { "id": "D01-D1-04", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.entryPointsAcceptingNull", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 58 } },
-          { "id": "D01-D1-05", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.EntryPointsRefusingNull()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 63 } },
-          { "id": "D01-D1-06", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.EntryPointsAcceptingNull()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 66 } },
-          { "id": "D01-D1-07", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.NullExpressionIsReportedAsMissing(string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 108 } },
-          { "id": "D01-D1-08", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.NullExpressionIsNotReportedWhereTheParameterAcceptsNull(string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 119 } },
-          { "id": "D01-D1-09", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.EmptyExpressionIsReportedAsMissing(string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 127 } },
-          { "id": "D01-D1-10", "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.MissingExpressionOnTheAttributeIsReported()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 140 } },
-          { "id": "D01-D1-11", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.ScheduleWithNoExpressionIsNotGenerated()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 712 } },
-          { "id": "D01-D1-12", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.JobWhoseOnlyScheduleHasNoExpressionIsStoredDurably()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 734 } },
-          { "id": "D01-D1-13", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.ScheduleMissingItsArgumentIsLeftToTheCompiler()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 752 } },
-          { "id": "D01-D1-14", "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Analyze(OperationAnalysisContext,IMethodSymbol,ImmutableArray<IArgumentOperation>)", "kind": "bodyChanged", "base": { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "line": 108 }, "target": { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "line": 108 }, "isD3Target": true },
-          { "id": "D01-D1-15", "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.ReportMissing(OperationAnalysisContext,IArgumentOperation,string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "line": 154 } },
-          { "id": "D01-D1-16", "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Report(OperationAnalysisContext,IArgumentOperation,string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "line": 164 } },
-          { "id": "D01-D1-17", "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Describe(string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "line": 176 } },
-          { "id": "D01-D1-18", "symbol": "Quartz.Analyzers.Descriptors.InvalidCronExpression", "kind": "bodyChanged", "kindDetail": "messageFormat/description string arguments of the DiagnosticDescriptor initializer changed (field name/type unchanged); the field's <remarks><para> doc block also gained a paragraph in the same hunk, but bodyChanged is kept as the classification because the initializer text itself (in-span) genuinely differs, which is what makes this entry D3-eligible", "base": { "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs", "line": 45 }, "target": { "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs", "line": 51 } },
-          { "id": "D01-D1-19", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.ReadTriggers(INamedTypeSymbol,string,string)", "kind": "bodyChanged", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 227 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 227 } }
+          {
+            "id": "D01-D1-01",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerReleaseTrackingTest",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs",
+              "line": 33
+            }
+          },
+          {
+            "id": "D01-D1-02",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerReleaseTrackingTest.RulesThatShippedIn420AreRecordedAsShippedIn420()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs",
+              "line": 36
+            }
+          },
+          {
+            "id": "D01-D1-03",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerReleaseTrackingTest.AnalyzerProject()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs",
+              "line": 67
+            }
+          },
+          {
+            "id": "D01-D1-04",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.entryPointsAcceptingNull",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 58
+            }
+          },
+          {
+            "id": "D01-D1-05",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.EntryPointsRefusingNull()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 63
+            }
+          },
+          {
+            "id": "D01-D1-06",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.EntryPointsAcceptingNull()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 66
+            }
+          },
+          {
+            "id": "D01-D1-07",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.NullExpressionIsReportedAsMissing(string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 108
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime(=HEAD):CronLiteralAnalyzerTest.cs:108 = `public async Task NullExpressionIsReportedAsMissing(string template)`; absent at p. Matches added/target."
+            }
+          },
+          {
+            "id": "D01-D1-08",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.NullExpressionIsNotReportedWhereTheParameterAcceptsNull(string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 119
+            }
+          },
+          {
+            "id": "D01-D1-09",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.EmptyExpressionIsReportedAsMissing(string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 127
+            }
+          },
+          {
+            "id": "D01-D1-10",
+            "symbol": "Quartz.Analyzers.Tests.CronLiteralAnalyzerTest.MissingExpressionOnTheAttributeIsReported()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+              "line": 140
+            }
+          },
+          {
+            "id": "D01-D1-11",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.ScheduleWithNoExpressionIsNotGenerated()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 712
+            }
+          },
+          {
+            "id": "D01-D1-12",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.JobWhoseOnlyScheduleHasNoExpressionIsStoredDurably()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 734
+            }
+          },
+          {
+            "id": "D01-D1-13",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.ScheduleMissingItsArgumentIsLeftToTheCompiler()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 752
+            }
+          },
+          {
+            "id": "D01-D1-14",
+            "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Analyze(OperationAnalysisContext,IMethodSymbol,ImmutableArray<IArgumentOperation>)",
+            "kind": "bodyChanged",
+            "base": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+              "line": 108
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+              "line": 108
+            },
+            "isD3Target": true
+          },
+          {
+            "id": "D01-D1-15",
+            "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.ReportMissing(OperationAnalysisContext,IArgumentOperation,string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+              "line": 154
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime(=HEAD):CronLiteralAnalyzer.cs:154 = `private static void ReportMissing(OperationAnalysisContext context, IArgumentOperation expressionArgument, string? expression)`. Matches added/target."
+            }
+          },
+          {
+            "id": "D01-D1-16",
+            "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Report(OperationAnalysisContext,IArgumentOperation,string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+              "line": 164
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime(=HEAD):CronLiteralAnalyzer.cs:164 = `private static void Report(OperationAnalysisContext context, IArgumentOperation expressionArgument, string message)`; absent at p. Matches added/target."
+            }
+          },
+          {
+            "id": "D01-D1-17",
+            "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Describe(string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+              "line": 176
+            }
+          },
+          {
+            "id": "D01-D1-18",
+            "symbol": "Quartz.Analyzers.Descriptors.InvalidCronExpression",
+            "kind": "bodyChanged",
+            "kindDetail": "messageFormat/description string arguments of the DiagnosticDescriptor initializer changed (field name/type unchanged); the field's <remarks><para> doc block also gained a paragraph in the same hunk, but bodyChanged is kept as the classification because the initializer text itself (in-span) genuinely differs, which is what makes this entry D3-eligible",
+            "base": {
+              "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs",
+              "line": 45
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs",
+              "line": 51
+            }
+          },
+          {
+            "id": "D01-D1-19",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.ReadTriggers(INamedTypeSymbol,string,string)",
+            "kind": "bodyChanged",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 227
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 227
+            }
+          }
         ],
-        "d2_cToCPrime_changes_ids": ["D01-D1-01", "D01-D1-02", "D01-D1-03"],
+        "d2_cToCPrime_changes_ids": [
+          "D01-D1-01",
+          "D01-D1-02",
+          "D01-D1-03"
+        ],
         "d2_note": "D2 = D1 minus every entry NOT listed above. Confirmed by diffing c->cPrime directly: only src/Quartz.Analyzers.Tests/AnalyzerReleaseTrackingTest.cs (80 lines, a pure addition) changed between c and cPrime; the other 5 files (193 insertions/11 deletions) changed entirely between p and c, i.e. before session start.",
         "d2_exclusionCheckLines": [
-          { "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs", "line": 58, "reason": "entryPointsAcceptingNull field, added p->c only, untouched between c and c' - must NOT appear as a changed line in a correct D2 (Session) report" },
-          { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "line": 108, "reason": "Analyze(...) body change, made entirely p->c, untouched between c and c' - must NOT appear as a changed line in a correct D2 (Session) report" }
+          {
+            "path": "src/Quartz.Analyzers.Tests/CronLiteralAnalyzerTest.cs",
+            "line": 58,
+            "reason": "entryPointsAcceptingNull field, added p->c only, untouched between c and c' - must NOT appear as a changed line in a correct D2 (Session) report"
+          },
+          {
+            "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+            "line": 108,
+            "reason": "Analyze(...) body change, made entirely p->c, untouched between c and c' - must NOT appear as a changed line in a correct D2 (Session) report"
+          }
         ],
         "nonSymbolChange": [],
         "nonSymbolChangeNote": "The new file's own `namespace Quartz.Analyzers.Tests;` (line 22) is not recorded here: CONVENTIONS.md's nonSymbolChange rule is for using/namespace/assembly-attribute-only changes to an EXISTING file, and a brand-new file's own namespace is not a change to an existing file.",
         "d3_resolve": {
           "reason": "no removed member in D1; first entry in (path ordinal, line) order with kind bodyChanged/signatureChanged is D01-D1-14 (Quartz.Analyzers.CronLiteralAnalyzer.Analyze)",
           "symbol": "Quartz.Analyzers.CronLiteralAnalyzer.Analyze(OperationAnalysisContext,IMethodSymbol,ImmutableArray<IArgumentOperation>)",
-          "base": { "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs", "startLine": 108, "endLine": 141, "sha256": "6e44195353c3157698d3eb2d145b8d7f22a261953f02a2779dec83b3b9770095" }
+          "base": {
+            "path": "src/Quartz.Analyzers/Diagnostics/CronLiteralAnalyzer.cs",
+            "startLine": 108,
+            "endLine": 141,
+            "sha256": "6e44195353c3157698d3eb2d145b8d7f22a261953f02a2779dec83b3b9770095"
+          }
         },
-        "crossCheck": null,
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "D01-D1-07",
+            "D01-D1-15",
+            "D01-D1-16"
+          ],
+          "result": "ok",
+          "note": "All sampled D1 items for this pair verified correct against pinned-commit/base-commit source. D3 hash independently recomputed from base commit and matches stated sha256; D3 selection logic (path-ordinal order, first-removed-else-first-in-span-text-differs rule) independently re-derived and matches."
+        },
         "notes": "Adds QZ0001 handling for null/empty/whitespace cron-literal expressions (previously only unparseable non-empty literals were reported) across the analyzer, its Descriptors message, the source generator's silent-skip behavior for such schedules, and three test files (one brand new)."
       },
       {
@@ -276,36 +898,227 @@
         "c": "8699baf26c196c44e50e19fee77c094410f09738",
         "cPrime": "f79b16772a29caf432fcd369f3083649682b5034",
         "d1_pToCPrime_changes": [
-          { "id": "D02-D1-01", "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator<TGenerator>(string,string,IEnumerable<MetadataReference>,IReadOnlyCollection<string>,LanguageVersion)", "kind": "signatureChanged", "kindDetail": "new optional parameter `languageVersion` (default LanguageVersion.Latest) added", "base": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 129 }, "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 133 }, "isD3Target": true },
-          { "id": "D02-D1-02", "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.Compile(string,string,IEnumerable<MetadataReference>,CSharpParseOptions)", "kind": "signatureChanged", "kindDetail": "new optional parameter `parseOptions` added", "base": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 216 }, "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 222 } },
-          { "id": "D02-D1-03", "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.AnOverrideOfAnAbstractBaseJobIsReadTheSameWay()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs", "line": 144 } },
-          { "id": "D02-D1-04", "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.AnOverrideOfAVirtualBaseJobIsReadTheSameWay()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs", "line": 178 } },
-          { "id": "D02-D1-05", "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.APartialImplementationIsReadTheSameWay()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs", "line": 217 } },
-          { "id": "D02-D1-06", "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.AMethodThatHidesTheBaseJobsExecuteIsNotReported()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs", "line": 249 } },
-          { "id": "D02-D1-07", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.GeneratedFileCompilesUnderCSharp8()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 257 } },
-          { "id": "D02-D1-08", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.GeneratedFileCompilesUnderCSharp9()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 303 } },
-          { "id": "D02-D1-09", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssertParsedAt(GeneratorRun,LanguageVersion)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 362 } },
-          { "id": "D02-D1-10", "symbol": "Quartz.Analyzers.CancellationTokenAnalyzer.IsJobExecution(IMethodSymbol,INamedTypeSymbol,INamedTypeSymbol)", "kind": "bodyChanged", "kindDetail": "its <summary> remark text was also expanded, but bodyChanged is kept as the classification because the method body itself (an in-span `if` condition) was genuinely rewritten to call the new IsOrOverrides helper, which is what makes this entry D3-eligible", "base": { "path": "src/Quartz.Analyzers/Diagnostics/CancellationTokenAnalyzer.cs", "line": 125 }, "target": { "path": "src/Quartz.Analyzers/Diagnostics/CancellationTokenAnalyzer.cs", "line": 126 } },
-          { "id": "D02-D1-11", "symbol": "Quartz.Analyzers.CancellationTokenAnalyzer.IsOrOverrides(IMethodSymbol,IMethodSymbol)", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Diagnostics/CancellationTokenAnalyzer.cs", "line": 163 } },
-          { "id": "D02-D1-12", "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.BodyIndent", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 57 } },
-          { "id": "D02-D1-13", "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.Emit(IReadOnlyList<DeclaredJob>,RegistrationName)", "kind": "bodyChanged", "kindDetail": "rewritten to emit a block-scoped `namespace Quartz { ... }` instead of a file-scoped one, with an extra level of indentation throughout, plus a new BodyIndent constant", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 54 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 67 } },
-          { "id": "D02-D1-14", "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.AppendJob(StringBuilder,DeclaredJob)", "kind": "bodyChanged", "kindDetail": "local indent literal replaced with the new BodyIndent constant", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 108 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 122 } }
+          {
+            "id": "D02-D1-01",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator<TGenerator>(string,string,IEnumerable<MetadataReference>,IReadOnlyCollection<string>,LanguageVersion)",
+            "kind": "signatureChanged",
+            "kindDetail": "new optional parameter `languageVersion` (default LanguageVersion.Latest) added",
+            "base": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 129
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 133
+            },
+            "isD3Target": true
+          },
+          {
+            "id": "D02-D1-02",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.Compile(string,string,IEnumerable<MetadataReference>,CSharpParseOptions)",
+            "kind": "signatureChanged",
+            "kindDetail": "new optional parameter `parseOptions` added",
+            "base": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 216
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 222
+            }
+          },
+          {
+            "id": "D02-D1-03",
+            "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.AnOverrideOfAnAbstractBaseJobIsReadTheSameWay()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs",
+              "line": 144
+            }
+          },
+          {
+            "id": "D02-D1-04",
+            "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.AnOverrideOfAVirtualBaseJobIsReadTheSameWay()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs",
+              "line": 178
+            }
+          },
+          {
+            "id": "D02-D1-05",
+            "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.APartialImplementationIsReadTheSameWay()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs",
+              "line": 217
+            }
+          },
+          {
+            "id": "D02-D1-06",
+            "symbol": "Quartz.Analyzers.Tests.CancellationTokenAnalyzerTest.AMethodThatHidesTheBaseJobsExecuteIsNotReported()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/CancellationTokenAnalyzerTest.cs",
+              "line": 249
+            }
+          },
+          {
+            "id": "D02-D1-07",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.GeneratedFileCompilesUnderCSharp8()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 257
+            }
+          },
+          {
+            "id": "D02-D1-08",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.GeneratedFileCompilesUnderCSharp9()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 303
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:DeclaredJobsGeneratorTest.cs:303 = `public void GeneratedFileCompilesUnderCSharp9()`. Matches added/target."
+            }
+          },
+          {
+            "id": "D02-D1-09",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssertParsedAt(GeneratorRun,LanguageVersion)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 362
+            }
+          },
+          {
+            "id": "D02-D1-10",
+            "symbol": "Quartz.Analyzers.CancellationTokenAnalyzer.IsJobExecution(IMethodSymbol,INamedTypeSymbol,INamedTypeSymbol)",
+            "kind": "bodyChanged",
+            "kindDetail": "its <summary> remark text was also expanded, but bodyChanged is kept as the classification because the method body itself (an in-span `if` condition) was genuinely rewritten to call the new IsOrOverrides helper, which is what makes this entry D3-eligible",
+            "base": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CancellationTokenAnalyzer.cs",
+              "line": 125
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CancellationTokenAnalyzer.cs",
+              "line": 126
+            }
+          },
+          {
+            "id": "D02-D1-11",
+            "symbol": "Quartz.Analyzers.CancellationTokenAnalyzer.IsOrOverrides(IMethodSymbol,IMethodSymbol)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/CancellationTokenAnalyzer.cs",
+              "line": 163
+            }
+          },
+          {
+            "id": "D02-D1-12",
+            "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.BodyIndent",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 57
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:DeclaredJobsEmitter.cs:57 = `private const string BodyIndent = \"            \";`. Matches added/target."
+            }
+          },
+          {
+            "id": "D02-D1-13",
+            "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.Emit(IReadOnlyList<DeclaredJob>,RegistrationName)",
+            "kind": "bodyChanged",
+            "kindDetail": "rewritten to emit a block-scoped `namespace Quartz { ... }` instead of a file-scoped one, with an extra level of indentation throughout, plus a new BodyIndent constant",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 54
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 67
+            }
+          },
+          {
+            "id": "D02-D1-14",
+            "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.AppendJob(StringBuilder,DeclaredJob)",
+            "kind": "bodyChanged",
+            "kindDetail": "local indent literal replaced with the new BodyIndent constant",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 108
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 122
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "base@p:108 = `string indent = \"        \";`, target@cPrime:122 = `string indent = BodyIndent;` inside AppendJob. Matches bodyChanged/kindDetail exactly."
+            }
+          }
         ],
-        "d2_cToCPrime_changes_ids": ["D02-D1-03", "D02-D1-04", "D02-D1-05", "D02-D1-06", "D02-D1-10", "D02-D1-11"],
+        "d2_cToCPrime_changes_ids": [
+          "D02-D1-03",
+          "D02-D1-04",
+          "D02-D1-05",
+          "D02-D1-06",
+          "D02-D1-10",
+          "D02-D1-11"
+        ],
         "d2_note": "D2 = D1 minus every entry NOT listed above. Confirmed by diffing c->cPrime directly: only CancellationTokenAnalyzerTest.cs (+133) and CancellationTokenAnalyzer.cs (+29/-2) changed between c and cPrime; AnalyzerRunner.cs, DeclaredJobsGeneratorTest.cs and DeclaredJobsEmitter.cs changed entirely between p and c.",
         "d2_exclusionCheckLines": [
-          { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 129, "reason": "RunGenerator<TGenerator> signature change, made entirely p->c, untouched between c and c'" },
-          { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 67, "reason": "Emit(...) body rewrite, made entirely p->c, untouched between c and c'" }
+          {
+            "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+            "line": 129,
+            "reason": "RunGenerator<TGenerator> signature change, made entirely p->c, untouched between c and c'"
+          },
+          {
+            "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+            "line": 67,
+            "reason": "Emit(...) body rewrite, made entirely p->c, untouched between c and c'"
+          }
         ],
         "nonSymbolChange": [
-          { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 25, "description": "`using Microsoft.CodeAnalysis.CSharp;` added to an existing file", "d2Excluded": true }
+          {
+            "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+            "line": 25,
+            "description": "`using Microsoft.CodeAnalysis.CSharp;` added to an existing file",
+            "d2Excluded": true
+          }
         ],
         "d3_resolve": {
           "reason": "no removed member in D1; first entry in (path ordinal, line) order with kind bodyChanged/signatureChanged is D02-D1-01 (Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator)",
           "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator<TGenerator>(string,string,IEnumerable<MetadataReference>,IReadOnlyCollection<string>,LanguageVersion)",
-          "base": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "startLine": 129, "endLine": 166, "sha256": "69199eb6950ddeb9c48ab7a7255dbceb8d6a1a3145ed6117469808f8ad519a9f" }
+          "base": {
+            "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+            "startLine": 129,
+            "endLine": 166,
+            "sha256": "69199eb6950ddeb9c48ab7a7255dbceb8d6a1a3145ed6117469808f8ad519a9f"
+          }
         },
-        "crossCheck": null,
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "D02-D1-08",
+            "D02-D1-12",
+            "D02-D1-14"
+          ],
+          "result": "ok",
+          "note": "All sampled D1 items for this pair verified correct against pinned-commit/base-commit source. D3 hash independently recomputed from base commit and matches stated sha256; D3 selection logic (path-ordinal order, first-removed-else-first-in-span-text-differs rule) independently re-derived and matches."
+        },
         "notes": "Adds override/virtual/partial-method awareness to CancellationTokenAnalyzer's IJob.Execute detection (a new IsOrOverrides helper walks the override chain and partial-method definition part) and reworks the generated file's namespace from file-scoped to block-scoped so it compiles under older LangVersions, with matching AnalyzerRunner/test support for choosing a LanguageVersion per run."
       },
       {
@@ -316,51 +1129,372 @@
         "c": "b6651cd26ee35830dde06c3cb18871b325c5d0b8",
         "cPrime": "85211444d47e36c0dcb51fe8814ffa3a1a1fc53a",
         "d1_pToCPrime_changes": [
-          { "id": "D03-D1-01", "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.DefaultAssemblyName", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 57 } },
-          { "id": "D03-D1-02", "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator<TGenerator>(string,string,IEnumerable<MetadataReference>,IReadOnlyCollection<string>)", "kind": "signatureChanged", "kindDetail": "new optional parameters `assemblyName`, `references`, `toleratedErrors` added (was single-parameter `RunGenerator<TGenerator>(string source)`)", "base": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 114 }, "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 129 }, "isD3Target": true },
-          { "id": "D03-D1-03", "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.Compile(string,string,IEnumerable<MetadataReference>)", "kind": "signatureChanged", "kindDetail": "new optional parameters `assemblyName`, `additionalReferences` added (was single-parameter `Compile(string source)`)", "base": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 197 }, "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 216 } },
-          { "id": "D03-D1-04", "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.ToReference()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 295 } },
-          { "id": "D03-D1-05", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AttributesOnAMethodAreLeftToTheCompiler()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 191 } },
-          { "id": "D03-D1-06", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AttributesOnTheAssemblyAreLeftToTheCompiler()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 211 } },
-          { "id": "D03-D1-07", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssemblyThatSeesAnotherAssemblysDeclaredJobsNamesItsOwnAfterItself(string,string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 264 } },
-          { "id": "D03-D1-08", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssemblyThatCannotSeeAnotherAssemblysDeclaredJobsKeepsTheOrdinaryName()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 319 } },
-          { "id": "D03-D1-09", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssemblyThatDeclaresNoJobReachesALibrarysThroughInternalsVisibleTo()", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 345 } },
-          { "id": "D03-D1-10", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.RenameWarningNamesTheSameAssemblyWhateverOrderTheReferencesArriveIn(string,string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 370 } },
-          { "id": "D03-D1-11", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.Resolve(GeneratorRun,string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 606 } },
-          { "id": "D03-D1-12", "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.Library(string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 621 } },
-          { "id": "D03-D1-13", "symbol": "Quartz.Analyzers.Descriptors.DeclaredJobsRegistrationRenamed", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs", "line": 159 } },
-          { "id": "D03-D1-14", "symbol": "Quartz.Analyzers.RegistrationName", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs", "line": 93 } },
-          { "id": "D03-D1-15", "symbol": "Quartz.Analyzers.RegistrationName.OrdinaryClassName", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs", "line": 95 } },
-          { "id": "D03-D1-16", "symbol": "Quartz.Analyzers.RegistrationName.OrdinaryMethodName", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs", "line": 97 } },
-          { "id": "D03-D1-17", "symbol": "Quartz.Analyzers.RegistrationName.Ordinary", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs", "line": 99 } },
-          { "id": "D03-D1-18", "symbol": "Quartz.Analyzers.DeclaredJobsEmitter", "kind": "remarkChanged", "kindDetail": "class-level <remarks><para> text extended (CONVENTIONS.md 2026-09-25: XML doc comment change is remarkChanged); no other change to this partial declaration's own class-decl line, so not D3-eligible", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 47 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 48 } },
-          { "id": "D03-D1-19", "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.Emit(IReadOnlyList<DeclaredJob>,RegistrationName)", "kind": "signatureChanged", "kindDetail": "new required parameter `registration` added (was `Emit(IReadOnlyList<DeclaredJob> jobs)`); body also grows a conditional remark block using it", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 53 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs", "line": 54 } },
-          { "id": "D03-D1-20", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator", "kind": "remarkChanged", "kindDetail": "class-level <remarks><para> text extended (CONVENTIONS.md 2026-09-25: XML doc comment change is remarkChanged); no other change to this partial declaration's own class-decl line, so not D3-eligible", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 48 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 53 } },
-          { "id": "D03-D1-21", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.GeneratedTypeName", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 55 } },
-          { "id": "D03-D1-22", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.Initialize(IncrementalGeneratorInitializationContext)", "kind": "bodyChanged", "kindDetail": "predicate for both providers narrowed to TypeDeclarationSyntax nodes only, a comment explaining why, and a new registration provider combined into the output pipeline", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 65 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 72 } },
-          { "id": "D03-D1-23", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.NameRegistration(Compilation)", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 118 } },
-          { "id": "D03-D1-24", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.Identifier(string)", "kind": "added", "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 156 } },
-          { "id": "D03-D1-25", "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.Execute(SourceProductionContext,ImmutableArray<DeclaredJob>,ImmutableArray<OrphanTrigger>,RegistrationName)", "kind": "signatureChanged", "kindDetail": "new required parameter `registration` added; body grows a conditional QZ1004 report and passes registration into Emit", "base": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 204 }, "target": { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 291 } }
+          {
+            "id": "D03-D1-01",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.DefaultAssemblyName",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 57
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:AnalyzerRunner.cs:57 = `private const string DefaultAssemblyName = \"Snippet\";`. Matches added/target."
+            }
+          },
+          {
+            "id": "D03-D1-02",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator<TGenerator>(string,string,IEnumerable<MetadataReference>,IReadOnlyCollection<string>)",
+            "kind": "signatureChanged",
+            "kindDetail": "new optional parameters `assemblyName`, `references`, `toleratedErrors` added (was single-parameter `RunGenerator<TGenerator>(string source)`)",
+            "base": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 114
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 129
+            },
+            "isD3Target": true
+          },
+          {
+            "id": "D03-D1-03",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.Compile(string,string,IEnumerable<MetadataReference>)",
+            "kind": "signatureChanged",
+            "kindDetail": "new optional parameters `assemblyName`, `additionalReferences` added (was single-parameter `Compile(string source)`)",
+            "base": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 197
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 216
+            }
+          },
+          {
+            "id": "D03-D1-04",
+            "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.ToReference()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+              "line": 295
+            }
+          },
+          {
+            "id": "D03-D1-05",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AttributesOnAMethodAreLeftToTheCompiler()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 191
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:DeclaredJobsGeneratorTest.cs:191 = `public void AttributesOnAMethodAreLeftToTheCompiler()`. Matches added/target."
+            }
+          },
+          {
+            "id": "D03-D1-06",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AttributesOnTheAssemblyAreLeftToTheCompiler()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 211
+            }
+          },
+          {
+            "id": "D03-D1-07",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssemblyThatSeesAnotherAssemblysDeclaredJobsNamesItsOwnAfterItself(string,string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 264
+            }
+          },
+          {
+            "id": "D03-D1-08",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssemblyThatCannotSeeAnotherAssemblysDeclaredJobsKeepsTheOrdinaryName()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 319
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:DeclaredJobsGeneratorTest.cs:319 = `public void AssemblyThatCannotSeeAnotherAssemblysDeclaredJobsKeepsTheOrdinaryName()`. Matches added/target."
+            }
+          },
+          {
+            "id": "D03-D1-09",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.AssemblyThatDeclaresNoJobReachesALibrarysThroughInternalsVisibleTo()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 345
+            }
+          },
+          {
+            "id": "D03-D1-10",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.RenameWarningNamesTheSameAssemblyWhateverOrderTheReferencesArriveIn(string,string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 370
+            }
+          },
+          {
+            "id": "D03-D1-11",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.Resolve(GeneratorRun,string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 606
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:DeclaredJobsGeneratorTest.cs:606 = `private static IMethodSymbol Resolve(GeneratorRun run, string methodName)`. Matches added/target."
+            }
+          },
+          {
+            "id": "D03-D1-12",
+            "symbol": "Quartz.Analyzers.Tests.DeclaredJobsGeneratorTest.Library(string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+              "line": 621
+            }
+          },
+          {
+            "id": "D03-D1-13",
+            "symbol": "Quartz.Analyzers.Descriptors.DeclaredJobsRegistrationRenamed",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs",
+              "line": 159
+            }
+          },
+          {
+            "id": "D03-D1-14",
+            "symbol": "Quartz.Analyzers.RegistrationName",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs",
+              "line": 93
+            }
+          },
+          {
+            "id": "D03-D1-15",
+            "symbol": "Quartz.Analyzers.RegistrationName.OrdinaryClassName",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs",
+              "line": 95
+            }
+          },
+          {
+            "id": "D03-D1-16",
+            "symbol": "Quartz.Analyzers.RegistrationName.OrdinaryMethodName",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs",
+              "line": 97
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:DeclaredJobModel.cs:97 = `internal const string OrdinaryMethodName = \"AddDeclaredJobs\";`. Matches added/target; confirms primary-constructor-parameter judgment call (ClassName/MethodName/VisibleAssembly correctly not recorded as separate entries)."
+            }
+          },
+          {
+            "id": "D03-D1-17",
+            "symbol": "Quartz.Analyzers.RegistrationName.Ordinary",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobModel.cs",
+              "line": 99
+            }
+          },
+          {
+            "id": "D03-D1-18",
+            "symbol": "Quartz.Analyzers.DeclaredJobsEmitter",
+            "kind": "remarkChanged",
+            "kindDetail": "class-level <remarks><para> text extended (CONVENTIONS.md 2026-09-25: XML doc comment change is remarkChanged); no other change to this partial declaration's own class-decl line, so not D3-eligible",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 47
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 48
+            }
+          },
+          {
+            "id": "D03-D1-19",
+            "symbol": "Quartz.Analyzers.DeclaredJobsEmitter.Emit(IReadOnlyList<DeclaredJob>,RegistrationName)",
+            "kind": "signatureChanged",
+            "kindDetail": "new required parameter `registration` added (was `Emit(IReadOnlyList<DeclaredJob> jobs)`); body also grows a conditional remark block using it",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 53
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsEmitter.cs",
+              "line": 54
+            }
+          },
+          {
+            "id": "D03-D1-20",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator",
+            "kind": "remarkChanged",
+            "kindDetail": "class-level <remarks><para> text extended (CONVENTIONS.md 2026-09-25: XML doc comment change is remarkChanged); no other change to this partial declaration's own class-decl line, so not D3-eligible",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 48
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 53
+            }
+          },
+          {
+            "id": "D03-D1-21",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.GeneratedTypeName",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 55
+            }
+          },
+          {
+            "id": "D03-D1-22",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.Initialize(IncrementalGeneratorInitializationContext)",
+            "kind": "bodyChanged",
+            "kindDetail": "predicate for both providers narrowed to TypeDeclarationSyntax nodes only, a comment explaining why, and a new registration provider combined into the output pipeline",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 65
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 72
+            }
+          },
+          {
+            "id": "D03-D1-23",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.NameRegistration(Compilation)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 118
+            }
+          },
+          {
+            "id": "D03-D1-24",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.Identifier(string)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 156
+            }
+          },
+          {
+            "id": "D03-D1-25",
+            "symbol": "Quartz.Analyzers.DeclaredJobsGenerator.Execute(SourceProductionContext,ImmutableArray<DeclaredJob>,ImmutableArray<OrphanTrigger>,RegistrationName)",
+            "kind": "signatureChanged",
+            "kindDetail": "new required parameter `registration` added; body grows a conditional QZ1004 report and passes registration into Emit",
+            "base": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 204
+            },
+            "target": {
+              "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+              "line": 291
+            }
+          }
         ],
-        "d2_cToCPrime_changes_ids": ["D03-D1-02", "D03-D1-05", "D03-D1-06", "D03-D1-22"],
+        "d2_cToCPrime_changes_ids": [
+          "D03-D1-02",
+          "D03-D1-05",
+          "D03-D1-06",
+          "D03-D1-22"
+        ],
         "d2_note": "D2 = D1 minus every entry NOT listed above. Confirmed by diffing c->cPrime directly (70 insertions/4 deletions across only AnalyzerRunner.cs, DeclaredJobsGeneratorTest.cs and DeclaredJobsGenerator.cs): D03-D1-02 (RunGenerator) is included because its signature kept changing during the session (`toleratedErrors` added c->cPrime, on top of `assemblyName`/`references` already present at c) - same symbol/entry as D1, not a new one; D03-D1-05/06 (the two AttributesOn...AreLeftToTheCompiler test methods) are pure additions made entirely c->cPrime; D03-D1-22 (Initialize) gains the TypeDeclarationSyntax predicate narrowing and its comment on top of the registration-provider wiring it already had at c. Every other D1 entry (including D03-D1-19, DeclaredJobsEmitter's class-level remark change) was made entirely p->c and is d2Excluded.",
         "d2_exclusionCheckLines": [
-          { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 57, "reason": "DefaultAssemblyName const, added p->c only, untouched between c and c'" },
-          { "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs", "line": 159, "reason": "DeclaredJobsRegistrationRenamed field, added p->c only, untouched between c and c'" }
+          {
+            "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+            "line": 57,
+            "reason": "DefaultAssemblyName const, added p->c only, untouched between c and c'"
+          },
+          {
+            "path": "src/Quartz.Analyzers/Diagnostics/Descriptors.cs",
+            "line": 159,
+            "reason": "DeclaredJobsRegistrationRenamed field, added p->c only, untouched between c and c'"
+          }
         ],
         "nonSymbolChange": [
-          { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "line": 27, "description": "`using Microsoft.CodeAnalysis.Emit;` added to an existing file", "d2Excluded": true },
-          { "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs", "line": 25, "description": "`using Microsoft.CodeAnalysis.CSharp.Syntax;` added to an existing file", "d2Excluded": true },
-          { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 26, "description": "`using System.Text;` added to an existing file", "d2Excluded": true },
-          { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 29, "description": "`using Microsoft.CodeAnalysis.CSharp;` added to an existing file", "d2Excluded": true },
-          { "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs", "line": 30, "description": "`using Microsoft.CodeAnalysis.CSharp.Syntax;` added to an existing file, during the session (c->cPrime)", "d2Excluded": false }
+          {
+            "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+            "line": 27,
+            "description": "`using Microsoft.CodeAnalysis.Emit;` added to an existing file",
+            "d2Excluded": true
+          },
+          {
+            "path": "src/Quartz.Analyzers.Tests/DeclaredJobsGeneratorTest.cs",
+            "line": 25,
+            "description": "`using Microsoft.CodeAnalysis.CSharp.Syntax;` added to an existing file",
+            "d2Excluded": true
+          },
+          {
+            "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+            "line": 26,
+            "description": "`using System.Text;` added to an existing file",
+            "d2Excluded": true
+          },
+          {
+            "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+            "line": 29,
+            "description": "`using Microsoft.CodeAnalysis.CSharp;` added to an existing file",
+            "d2Excluded": true
+          },
+          {
+            "path": "src/Quartz.Analyzers/Generators/DeclaredJobsGenerator.cs",
+            "line": 30,
+            "description": "`using Microsoft.CodeAnalysis.CSharp.Syntax;` added to an existing file, during the session (c->cPrime)",
+            "d2Excluded": false
+          }
         ],
         "d3_resolve": {
           "reason": "no removed member in D1; first entry in (path ordinal, line) order with kind bodyChanged/signatureChanged is D03-D1-02 (Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator)",
           "symbol": "Quartz.Analyzers.Tests.AnalyzerRunner.RunGenerator<TGenerator>(string,string,IEnumerable<MetadataReference>,IReadOnlyCollection<string>)",
-          "base": { "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs", "startLine": 114, "endLine": 147, "sha256": "b6b197e6237b363aa3a934b4327270c60675fa058281277cc4a612b865612b08" }
+          "base": {
+            "path": "src/Quartz.Analyzers.Tests/AnalyzerRunner.cs",
+            "startLine": 114,
+            "endLine": 147,
+            "sha256": "b6b197e6237b363aa3a934b4327270c60675fa058281277cc4a612b865612b08"
+          }
         },
-        "crossCheck": null,
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "D03-D1-01",
+            "D03-D1-05",
+            "D03-D1-08",
+            "D03-D1-11",
+            "D03-D1-16"
+          ],
+          "result": "ok",
+          "note": "All sampled D1 items for this pair verified correct against pinned-commit/base-commit source. D3 hash independently recomputed from base commit and matches stated sha256; D3 selection logic (path-ordinal order, first-removed-else-first-in-span-text-differs rule) independently re-derived and matches."
+        },
         "notes": "The largest pair (25 D1 entries): adds cross-assembly InternalsVisibleTo-aware naming for the generated QuartzDeclaredJobs class/method (new RegistrationName record, QZ1004 warning, NameRegistration/Identifier helpers), plumbs it through Emit/Execute/Initialize, adds ToReference()/richer RunGenerator/Compile overload parameters to the test harness, and adds matching test coverage plus attribute-misplacement coverage."
       },
       {
@@ -371,27 +1505,140 @@
         "c": "0cc34e335097dff1d5b6646b4eac4c1acd1e7e81",
         "cPrime": "10bdb516f3c7d927a81456769900f50245a606b0",
         "d1_pToCPrime_changes": [
-          { "id": "D04-D1-01", "symbol": "Quartz.Tests.AspNetCore.Dashboard.DashboardDatabaseHistoryTest.TheHistoryPageReadsEveryNodesExecutionsAndCanNarrowToOne()", "kind": "bodyChanged", "kindDetail": "adds `quartz.UseTimeProvider(new FakeTimeProvider(Start));` so the store's retention window is measured from a fixed clock instead of the real one", "base": { "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs", "line": 69 }, "target": { "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs", "line": 70 }, "isD3Target": true },
-          { "id": "D04-D1-02", "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder", "kind": "remarkChanged", "kindDetail": "a second, separate XML-doc <summary> block plus a new <remarks> block added directly above the pre-existing (unchanged) <summary> block that already preceded the class (CONVENTIONS.md 2026-09-25: XML doc comment change is remarkChanged); the class-decl line itself is unchanged, so not D3-eligible", "base": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 252 }, "target": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 263 } },
-          { "id": "D04-D1-03", "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.scheduledFireTimes", "kind": "signatureChanged", "kindDetail": "declared type changed List<DateTimeOffset> -> SortedSet<DateTimeOffset>", "base": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 257 }, "target": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 268 } },
-          { "id": "D04-D1-04", "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.reported", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 270 } },
-          { "id": "D04-D1-05", "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.JobWasExecuted(IJobExecutionContext,JobExecutionException,CancellationToken)", "kind": "bodyChanged", "kindDetail": "rewritten to sort the earliest N fire times and require either an on-interval run or 3x overrun before completing, instead of completing on the Nth report in arrival order", "base": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 267 }, "target": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 279 } },
-          { "id": "D04-D1-06", "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.OnTheInterval(DateTimeOffset[])", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 299 } }
+          {
+            "id": "D04-D1-01",
+            "symbol": "Quartz.Tests.AspNetCore.Dashboard.DashboardDatabaseHistoryTest.TheHistoryPageReadsEveryNodesExecutionsAndCanNarrowToOne()",
+            "kind": "bodyChanged",
+            "kindDetail": "adds `quartz.UseTimeProvider(new FakeTimeProvider(Start));` so the store's retention window is measured from a fixed clock instead of the real one",
+            "base": {
+              "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs",
+              "line": 69
+            },
+            "target": {
+              "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs",
+              "line": 70
+            },
+            "isD3Target": true,
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "base@p:69 and target@cPrime:70 both = `public async Task TheHistoryPageReadsEveryNodesExecutionsAndCanNarrowToOne()` (1-line shift from an earlier unrelated insertion). D3 target for this pair; base hash independently recomputed and matches stated sha256."
+            }
+          },
+          {
+            "id": "D04-D1-02",
+            "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder",
+            "kind": "remarkChanged",
+            "kindDetail": "a second, separate XML-doc <summary> block plus a new <remarks> block added directly above the pre-existing (unchanged) <summary> block that already preceded the class (CONVENTIONS.md 2026-09-25: XML doc comment change is remarkChanged); the class-decl line itself is unchanged, so not D3-eligible",
+            "base": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 252
+            },
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 263
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "base@p:252 and target@cPrime:263 both = `private sealed class FiringRecorder : IJobListener` (byte-identical decl line; only the preceding XML doc changed, an added <remarks> block). Confirms remarkChanged classification and non-D3-eligibility."
+            }
+          },
+          {
+            "id": "D04-D1-03",
+            "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.scheduledFireTimes",
+            "kind": "signatureChanged",
+            "kindDetail": "declared type changed List<DateTimeOffset> -> SortedSet<DateTimeOffset>",
+            "base": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 257
+            },
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 268
+            }
+          },
+          {
+            "id": "D04-D1-04",
+            "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.reported",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 270
+            }
+          },
+          {
+            "id": "D04-D1-05",
+            "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.JobWasExecuted(IJobExecutionContext,JobExecutionException,CancellationToken)",
+            "kind": "bodyChanged",
+            "kindDetail": "rewritten to sort the earliest N fire times and require either an on-interval run or 3x overrun before completing, instead of completing on the Nth report in arrival order",
+            "base": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 267
+            },
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 279
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "target@cPrime:279 = `public ValueTask JobWasExecuted(` inside FiringRecorder. Matches bodyChanged/kindDetail (sorted-times rewrite visible in surrounding body)."
+            }
+          },
+          {
+            "id": "D04-D1-06",
+            "symbol": "Quartz.Tests.Unit.Xml.TriggerScheduledOnceTest.FiringRecorder.OnTheInterval(DateTimeOffset[])",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+              "line": 299
+            }
+          }
         ],
-        "d2_cToCPrime_changes_ids": ["D04-D1-01"],
+        "d2_cToCPrime_changes_ids": [
+          "D04-D1-01"
+        ],
         "d2_note": "D2 = D1 minus every entry NOT listed above. Confirmed by diffing c->cPrime directly: only DashboardDatabaseHistoryTest.cs (+6) changed between c and cPrime; TriggerScheduledOnceTest.cs (31 insertions/3 deletions) changed entirely between p and c.",
         "d2_exclusionCheckLines": [
-          { "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs", "line": 268, "reason": "scheduledFireTimes type change, made entirely p->c, untouched between c and c'" }
+          {
+            "path": "src/Quartz.Tests.Unit/Xml/TriggerScheduledOnceTest.cs",
+            "line": 268,
+            "reason": "scheduledFireTimes type change, made entirely p->c, untouched between c and c'"
+          }
         ],
         "nonSymbolChange": [
-          { "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs", "line": 24, "description": "`using Microsoft.Extensions.Time.Testing;` added to an existing file, during the session (c->cPrime)", "d2Excluded": false }
+          {
+            "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs",
+            "line": 24,
+            "description": "`using Microsoft.Extensions.Time.Testing;` added to an existing file, during the session (c->cPrime)",
+            "d2Excluded": false
+          }
         ],
         "d3_resolve": {
           "reason": "no removed member in D1; first entry in (path ordinal, line) order with kind bodyChanged/signatureChanged is D04-D1-01 (DashboardDatabaseHistoryTest.TheHistoryPageReadsEveryNodesExecutionsAndCanNarrowToOne)",
           "symbol": "Quartz.Tests.AspNetCore.Dashboard.DashboardDatabaseHistoryTest.TheHistoryPageReadsEveryNodesExecutionsAndCanNarrowToOne()",
-          "base": { "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs", "startLine": 69, "endLine": 123, "sha256": "f02caf2ca9282bbc704aacb147dff5b4099747e6a76f8689acc8be54749a6a10" }
+          "base": {
+            "path": "src/Quartz.Tests.AspNetCore/Dashboard/DashboardDatabaseHistoryTest.cs",
+            "startLine": 69,
+            "endLine": 123,
+            "sha256": "f02caf2ca9282bbc704aacb147dff5b4099747e6a76f8689acc8be54749a6a10"
+          }
         },
-        "crossCheck": null,
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "D04-D1-01",
+            "D04-D1-02",
+            "D04-D1-05"
+          ],
+          "result": "ok",
+          "note": "All sampled D1 items for this pair verified correct against pinned-commit/base-commit source. D3 hash independently recomputed from base commit and matches stated sha256; D3 selection logic (path-ordinal order, first-removed-else-first-in-span-text-differs rule) independently re-derived and matches."
+        },
         "notes": "Smallest-by-file-count pair (2 files, 6 symbol entries): fixes a real-clock flake in a dashboard history test by pinning a FakeTimeProvider, and hardens an XML-scheduling flake test's fire-time recorder against out-of-order completion callbacks."
       },
       {
@@ -402,35 +1649,222 @@
         "c": "0fedf8557e8b1263043c767a3ead26d95c08d866",
         "cPrime": "e5b0c8499ee1d5c7e333d269d06e1071b4326f3f",
         "d1_pToCPrime_changes": [
-          { "id": "D05-D1-01", "symbol": "Build (build/Build.CI.GitHubActions.cs partial declaration)", "kind": "signatureChanged", "kindDetail": "[GitHubActions(...)] attribute arguments changed (InvokedTargets gains DraftRelease; WritePermissions/ReadPermissions replaced with EnableGitHubToken=true + a combined WritePermissions) - CONVENTIONS.md 2026-09-25: attribute change is signatureChanged. A preceding plain `//` block comment also gained a paragraph, but that comment is outside the declaration span (it precedes the attribute, which itself precedes the `;`-terminated `public partial class Build;` line) and is therefore not separately recorded. The declaration span itself (just the one class-decl line) is byte-identical base/target, so this entry is not D3-eligible (CONVENTIONS.md 2026-09-25 D3 rule; 2026-09-25 user decision, ADR 005 addendum) - see d3NotApplicable below and judgmentCalls", "base": { "path": "build/Build.CI.GitHubActions.cs", "line": 85 }, "target": { "path": "build/Build.CI.GitHubActions.cs", "line": 95 } },
-          { "id": "D05-D1-02", "symbol": "Build.GitHubApiUrl", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 61 } },
-          { "id": "D05-D1-03", "symbol": "Build.GitHubApiVersion", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 64 } },
-          { "id": "D05-D1-04", "symbol": "Build.ReleasePageSize", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 66 } },
-          { "id": "D05-D1-05", "symbol": "Build.ReleasePageLimit", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 70 } },
-          { "id": "D05-D1-06", "symbol": "Build.GitHubToken", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 73 } },
-          { "id": "D05-D1-07", "symbol": "Build.GitHubRepository", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 76 } },
-          { "id": "D05-D1-08", "symbol": "Build.ReleaseToken", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 78 } },
-          { "id": "D05-D1-09", "symbol": "Build.ReleaseRepository", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 80 } },
-          { "id": "D05-D1-10", "symbol": "Build.ReleaseTagName", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 85 } },
-          { "id": "D05-D1-11", "symbol": "Build.ReleaseAssetFiles", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 90 } },
-          { "id": "D05-D1-12", "symbol": "Build.DraftRelease", "kind": "added", "kindDetail": "a NUKE-DSL Target property (expression-bodied, type Target)", "target": { "path": "build/Build.Release.cs", "line": 113 } },
-          { "id": "D05-D1-13", "symbol": "Build.CreateGitHubClient(string)", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 149 } },
-          { "id": "D05-D1-14", "symbol": "Build.GetReleaseForTag(HttpClient,string,string)", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 173 } },
-          { "id": "D05-D1-15", "symbol": "Build.CreateDraftRelease(HttpClient,string)", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 217 } },
-          { "id": "D05-D1-16", "symbol": "Build.FillEmptyDraftNotes(HttpClient,string,JsonObject)", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 254 } },
-          { "id": "D05-D1-17", "symbol": "Build.AttachAsset(HttpClient,string,JsonObject,AbsolutePath)", "kind": "added", "target": { "path": "build/Build.Release.cs", "line": 293 } }
+          {
+            "id": "D05-D1-01",
+            "symbol": "Build (build/Build.CI.GitHubActions.cs partial declaration)",
+            "kind": "signatureChanged",
+            "kindDetail": "[GitHubActions(...)] attribute arguments changed (InvokedTargets gains DraftRelease; WritePermissions/ReadPermissions replaced with EnableGitHubToken=true + a combined WritePermissions) - CONVENTIONS.md 2026-09-25: attribute change is signatureChanged. A preceding plain `//` block comment also gained a paragraph, but that comment is outside the declaration span (it precedes the attribute, which itself precedes the `;`-terminated `public partial class Build;` line) and is therefore not separately recorded. The declaration span itself (just the one class-decl line) is byte-identical base/target, so this entry is not D3-eligible (CONVENTIONS.md 2026-09-25 D3 rule; 2026-09-25 user decision, ADR 005 addendum) - see d3NotApplicable below and judgmentCalls",
+            "base": {
+              "path": "build/Build.CI.GitHubActions.cs",
+              "line": 85
+            },
+            "target": {
+              "path": "build/Build.CI.GitHubActions.cs",
+              "line": 95
+            }
+          },
+          {
+            "id": "D05-D1-02",
+            "symbol": "Build.GitHubApiUrl",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 61
+            }
+          },
+          {
+            "id": "D05-D1-03",
+            "symbol": "Build.GitHubApiVersion",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 64
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "error",
+              "basis": "Line-number error: expected.json states target.line=64 for Build.GitHubApiVersion in build/Build.Release.cs at cPrime, but that line actually contains: a doc-comment line inside the unrelated DraftRelease target (\"/// Triggered by <see cref=Publish> ...\"), not the GitHubApiVersion declaration. The real declaration is at line 25 (confirmed identical at commit c, commit cPrime, and the pinned HEAD commit, since the file's content there is unchanged after this pair). stated_line - actual_line = 39. An automated re-check of all 16 D1 entries in this pair that target build/Build.Release.cs (D05-D1-02 through D05-D1-17) found the exact same +39 offset on every single one (each entry's simple-name check against its stated cPrime line failed the same way). D05-D1-01 (a different file, build/Build.CI.GitHubActions.cs) and the D2/D3 SET-MEMBERSHIP decisions for this pair (which entries are added/changed, which belong in D2, that D3 is correctly not-applicable) are unaffected and were independently re-verified as correct - only the recorded line NUMBERS for these 16 entries are wrong."
+            }
+          },
+          {
+            "id": "D05-D1-04",
+            "symbol": "Build.ReleasePageSize",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 66
+            }
+          },
+          {
+            "id": "D05-D1-05",
+            "symbol": "Build.ReleasePageLimit",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 70
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "error",
+              "basis": "Line-number error: expected.json states target.line=70 for Build.ReleasePageLimit in build/Build.Release.cs at cPrime, but that line actually contains: a doc-comment line inside DraftRelease (\"/// to recover a release does not rebuild the archive...\"), not the ReleasePageLimit declaration. The real declaration is at line 31 (confirmed identical at commit c, commit cPrime, and the pinned HEAD commit, since the file's content there is unchanged after this pair). stated_line - actual_line = 39. An automated re-check of all 16 D1 entries in this pair that target build/Build.Release.cs (D05-D1-02 through D05-D1-17) found the exact same +39 offset on every single one (each entry's simple-name check against its stated cPrime line failed the same way). D05-D1-01 (a different file, build/Build.CI.GitHubActions.cs) and the D2/D3 SET-MEMBERSHIP decisions for this pair (which entries are added/changed, which belong in D2, that D3 is correctly not-applicable) are unaffected and were independently re-verified as correct - only the recorded line NUMBERS for these 16 entries are wrong."
+            }
+          },
+          {
+            "id": "D05-D1-06",
+            "symbol": "Build.GitHubToken",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 73
+            }
+          },
+          {
+            "id": "D05-D1-07",
+            "symbol": "Build.GitHubRepository",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 76
+            }
+          },
+          {
+            "id": "D05-D1-08",
+            "symbol": "Build.ReleaseToken",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 78
+            }
+          },
+          {
+            "id": "D05-D1-09",
+            "symbol": "Build.ReleaseRepository",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 80
+            }
+          },
+          {
+            "id": "D05-D1-10",
+            "symbol": "Build.ReleaseTagName",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 85
+            }
+          },
+          {
+            "id": "D05-D1-11",
+            "symbol": "Build.ReleaseAssetFiles",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 90
+            }
+          },
+          {
+            "id": "D05-D1-12",
+            "symbol": "Build.DraftRelease",
+            "kind": "added",
+            "kindDetail": "a NUKE-DSL Target property (expression-bodied, type Target)",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 113
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "error",
+              "basis": "Line-number error: expected.json states target.line=113 for Build.DraftRelease in build/Build.Release.cs at cPrime, but that line actually contains: the opening brace `{` of CreateGitHubClient(string), not the `Target DraftRelease => _ => _` line. The real declaration is at line 74 (confirmed identical at commit c, commit cPrime, and the pinned HEAD commit, since the file's content there is unchanged after this pair). stated_line - actual_line = 39. An automated re-check of all 16 D1 entries in this pair that target build/Build.Release.cs (D05-D1-02 through D05-D1-17) found the exact same +39 offset on every single one (each entry's simple-name check against its stated cPrime line failed the same way). D05-D1-01 (a different file, build/Build.CI.GitHubActions.cs) and the D2/D3 SET-MEMBERSHIP decisions for this pair (which entries are added/changed, which belong in D2, that D3 is correctly not-applicable) are unaffected and were independently re-verified as correct - only the recorded line NUMBERS for these 16 entries are wrong."
+            }
+          },
+          {
+            "id": "D05-D1-13",
+            "symbol": "Build.CreateGitHubClient(string)",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 149
+            }
+          },
+          {
+            "id": "D05-D1-14",
+            "symbol": "Build.GetReleaseForTag(HttpClient,string,string)",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 173
+            }
+          },
+          {
+            "id": "D05-D1-15",
+            "symbol": "Build.CreateDraftRelease(HttpClient,string)",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 217
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "error",
+              "basis": "Line-number error: expected.json states target.line=217 for Build.CreateDraftRelease(HttpClient,string) in build/Build.Release.cs at cPrime, but that line actually contains: an `if (release[\"draft\"]?.GetValue<bool>() != true)` line inside FillEmptyDraftNotes, not the CreateDraftRelease declaration. The real declaration is at line 178 (confirmed identical at commit c, commit cPrime, and the pinned HEAD commit, since the file's content there is unchanged after this pair). stated_line - actual_line = 39. An automated re-check of all 16 D1 entries in this pair that target build/Build.Release.cs (D05-D1-02 through D05-D1-17) found the exact same +39 offset on every single one (each entry's simple-name check against its stated cPrime line failed the same way). D05-D1-01 (a different file, build/Build.CI.GitHubActions.cs) and the D2/D3 SET-MEMBERSHIP decisions for this pair (which entries are added/changed, which belong in D2, that D3 is correctly not-applicable) are unaffected and were independently re-verified as correct - only the recorded line NUMBERS for these 16 entries are wrong."
+            }
+          },
+          {
+            "id": "D05-D1-16",
+            "symbol": "Build.FillEmptyDraftNotes(HttpClient,string,JsonObject)",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 254
+            }
+          },
+          {
+            "id": "D05-D1-17",
+            "symbol": "Build.AttachAsset(HttpClient,string,JsonObject,AbsolutePath)",
+            "kind": "added",
+            "target": {
+              "path": "build/Build.Release.cs",
+              "line": 293
+            }
+          }
         ],
-        "d2_cToCPrime_changes_ids": ["D05-D1-12"],
+        "d2_cToCPrime_changes_ids": [
+          "D05-D1-12"
+        ],
         "d2_note": "D2 = D1 minus every entry NOT listed above. Confirmed by diffing c->cPrime directly (9 insertions/3 deletions, only build/Build.Release.cs): only DraftRelease's remark grows and its body gains a `.After(PackZip)` call plus a reworded assert message; Build.Release.cs (286 of its 292 lines) and the Build.CI.GitHubActions.cs attribute change were both already present at c, i.e. made entirely p->c.",
         "d2_exclusionCheckLines": [
-          { "path": "build/Build.Release.cs", "line": 61, "reason": "GitHubApiUrl const, added p->c only, untouched between c and c'" },
-          { "path": "build/Build.CI.GitHubActions.cs", "line": 95, "reason": "Build partial-declaration attribute change, made entirely p->c, untouched between c and c'" }
+          {
+            "path": "build/Build.Release.cs",
+            "line": 61,
+            "reason": "GitHubApiUrl const, added p->c only, untouched between c and c'"
+          },
+          {
+            "path": "build/Build.CI.GitHubActions.cs",
+            "line": 95,
+            "reason": "Build partial-declaration attribute change, made entirely p->c, untouched between c and c'"
+          }
         ],
         "nonSymbolChange": [],
         "d3_resolve": null,
         "d3NotApplicable": true,
         "d3NotApplicableReason": "No removed member in D1. The only non-'added' entry, D05-D1-01 (Build partial declaration in Build.CI.GitHubActions.cs), is an attribute-only change (signatureChanged) whose declaration span (the single `public partial class Build;` line) is byte-identical base/target; CONVENTIONS.md 2026-09-25's D3 rule excludes attribute/remark/out-of-span-comment-only members and type declarations from D3 eligibility, since D3 requires the in-span text to actually differ between p and c'. Every other D1 entry is a pure addition in the new build/Build.Release.cs, which is likewise not D3-eligible (added members have no p-side text to differ from). Per the 2026-09-25 user decision (ADR 005 addendum), a pair with no D3-eligible member is not judged on D3 at all, under any condition.",
-        "crossCheck": null,
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "D05-D1-03",
+            "D05-D1-05",
+            "D05-D1-12",
+            "D05-D1-15"
+          ],
+          "result": "error",
+          "note": "Sampled items with errors: ['D05-D1-03', 'D05-D1-05', 'D05-D1-12', 'D05-D1-15'] (line-number errors in build/Build.Release.cs entries, see each item's crossCheck.basis; an automated full re-check found the same error in all 16 D1 entries referencing that file - D05-D1-02..D05-D1-17 - all off by a consistent +39 line offset; D2/D3 set-membership decisions for this pair are unaffected). d3_resolve is null / d3NotApplicable:true independently re-verified: no removed member in D1, and the only non-added entries' declaration-range text is byte-identical base/target (confirmed by direct read), so no D3-eligible member exists for this pair."
+        },
         "notes": "Adds a whole new build/Build.Release.cs NUKE target (DraftRelease) that opens/reuses a draft GitHub release for a tag via the REST API and attaches the PackZip archive, triggered by Publish; the companion CI workflow file gains 'contents: write' (via EnableGitHubToken) and DraftRelease in InvokedTargets. This pair has no D3-eligible member (see d3NotApplicableReason) - D3 is not judged for this pair."
       },
       {
@@ -441,37 +1875,244 @@
         "c": "add7809473c62aa7d83639947e06acd5f733f31e",
         "cPrime": "59d9a58a0a25df31ab901f680188fbd03d4fdaaf",
         "d1_pToCPrime_changes": [
-          { "id": "D06-D1-01", "symbol": "Quartz.Benchmark.OneOffThroughputPostgresBenchmark.Profile", "kind": "signatureChanged", "kindDetail": "[Params(...)] attribute gains OneOffProfile.BatchOnly between the two existing values (CONVENTIONS.md 2026-09-25: attribute change is signatureChanged); its XML-doc <summary> was also rewritten (a remark change, not separately recorded since attribute change already classifies this entry) but the property-decl line itself (`public OneOffProfile Profile { get; set; }`) is unchanged, so this entry is not D3-eligible", "base": { "path": "src/Quartz.Benchmark/OneOffThroughputPostgresBenchmark.cs", "line": 58 }, "target": { "path": "src/Quartz.Benchmark/OneOffThroughputPostgresBenchmark.cs", "line": 61 } },
-          { "id": "D06-D1-02", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CreateEmptyDatabase()", "kind": "bodyChanged", "kindDetail": "adds a `RepeatingJob.Reset();` call alongside the existing Reset() calls", "base": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 70 }, "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 70 }, "isD3Target": true },
-          { "id": "D06-D1-03", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.ACompletionThatDeletesItsTriggerDeletesTheFiredRowWithIt()", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 112 } },
-          { "id": "D06-D1-04", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.ACompletionThatKeepsItsTriggerStillDeletesTheFiredRowByEntryId()", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 136 } },
-          { "id": "D06-D1-05", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.firedTriggerDeletesByEntryId", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 278 } },
-          { "id": "D06-D1-06", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.firedTriggerDeletesByQuery", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 279 } },
-          { "id": "D06-D1-07", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.FiredTriggerDeletesByEntryId", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 283 } },
-          { "id": "D06-D1-08", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.FiredTriggerDeletesByQuery", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 285 } },
-          { "id": "D06-D1-09", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.Reset()", "kind": "bodyChanged", "kindDetail": "adds Volatile.Write resets for the two new counters", "base": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 224 }, "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 287 } },
-          { "id": "D06-D1-10", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.DeleteFiredTrigger(ConnectionAndTransactionHolder,string,CancellationToken)", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 303 } },
-          { "id": "D06-D1-11", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.DeleteFiredTriggers(ConnectionAndTransactionHolder,FiredTriggerQuery,CancellationToken)", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 312 } },
-          { "id": "D06-D1-12", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 323 } },
-          { "id": "D06-D1-13", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.runs", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 325 } },
-          { "id": "D06-D1-14", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.Ran", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 327 } },
-          { "id": "D06-D1-15", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.Reset()", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 329 } },
-          { "id": "D06-D1-16", "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.Execute(IJobExecutionContext,CancellationToken)", "kind": "added", "target": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 334 } },
-          { "id": "D06-D1-17", "symbol": "Quartz.Impl.AdoJobStore.AdoJobStoreBase.TriggeredJobComplete(IJobExecutionContext,SchedulerInstruction,IServiceProvider)", "kind": "bodyChanged", "kindDetail": "adds a `triggerDeleted` local set at all 3 DeleteTrigger call sites, and an early return that skips the by-entry-id DeleteFiredTrigger call when the trigger's own deletion already swept the row; also rewords a nearby line-comment", "base": { "path": "src/Quartz/Impl/AdoJobStore/AdoJobStoreBase.Completion.cs", "line": 126 }, "target": { "path": "src/Quartz/Impl/AdoJobStore/AdoJobStoreBase.Completion.cs", "line": 126 } }
+          {
+            "id": "D06-D1-01",
+            "symbol": "Quartz.Benchmark.OneOffThroughputPostgresBenchmark.Profile",
+            "kind": "signatureChanged",
+            "kindDetail": "[Params(...)] attribute gains OneOffProfile.BatchOnly between the two existing values (CONVENTIONS.md 2026-09-25: attribute change is signatureChanged); its XML-doc <summary> was also rewritten (a remark change, not separately recorded since attribute change already classifies this entry) but the property-decl line itself (`public OneOffProfile Profile { get; set; }`) is unchanged, so this entry is not D3-eligible",
+            "base": {
+              "path": "src/Quartz.Benchmark/OneOffThroughputPostgresBenchmark.cs",
+              "line": 58
+            },
+            "target": {
+              "path": "src/Quartz.Benchmark/OneOffThroughputPostgresBenchmark.cs",
+              "line": 61
+            }
+          },
+          {
+            "id": "D06-D1-02",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CreateEmptyDatabase()",
+            "kind": "bodyChanged",
+            "kindDetail": "adds a `RepeatingJob.Reset();` call alongside the existing Reset() calls",
+            "base": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 70
+            },
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 70
+            },
+            "isD3Target": true
+          },
+          {
+            "id": "D06-D1-03",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.ACompletionThatDeletesItsTriggerDeletesTheFiredRowWithIt()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 112
+            }
+          },
+          {
+            "id": "D06-D1-04",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.ACompletionThatKeepsItsTriggerStillDeletesTheFiredRowByEntryId()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 136
+            }
+          },
+          {
+            "id": "D06-D1-05",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.firedTriggerDeletesByEntryId",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 278
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:OneOffFiringStatementCountSqliteTest.cs:278 (nested class CountingSqliteDelegate) = `firedTriggerDeletesByEntryId` field declaration. Matches added/target."
+            }
+          },
+          {
+            "id": "D06-D1-06",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.firedTriggerDeletesByQuery",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 279
+            }
+          },
+          {
+            "id": "D06-D1-07",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.FiredTriggerDeletesByEntryId",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 283
+            }
+          },
+          {
+            "id": "D06-D1-08",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.FiredTriggerDeletesByQuery",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 285
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:OneOffFiringStatementCountSqliteTest.cs:285 = `FiredTriggerDeletesByQuery` property declaration. Matches added/target."
+            }
+          },
+          {
+            "id": "D06-D1-09",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.Reset()",
+            "kind": "bodyChanged",
+            "kindDetail": "adds Volatile.Write resets for the two new counters",
+            "base": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 224
+            },
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 287
+            }
+          },
+          {
+            "id": "D06-D1-10",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.DeleteFiredTrigger(ConnectionAndTransactionHolder,string,CancellationToken)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 303
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:OneOffFiringStatementCountSqliteTest.cs:303 = `DeleteFiredTrigger(ConnectionAndTransactionHolder,...)` declaration. Matches added/target."
+            }
+          },
+          {
+            "id": "D06-D1-11",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CountingSqliteDelegate.DeleteFiredTriggers(ConnectionAndTransactionHolder,FiredTriggerQuery,CancellationToken)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 312
+            },
+            "crossCheck": {
+              "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+              "reviewedAt": "2026-09-25",
+              "result": "ok",
+              "basis": "git show cPrime:OneOffFiringStatementCountSqliteTest.cs:312 = `DeleteFiredTriggers(ConnectionAndTransactionHolder,...)` declaration. Matches added/target."
+            }
+          },
+          {
+            "id": "D06-D1-12",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 323
+            }
+          },
+          {
+            "id": "D06-D1-13",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.runs",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 325
+            }
+          },
+          {
+            "id": "D06-D1-14",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.Ran",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 327
+            }
+          },
+          {
+            "id": "D06-D1-15",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.Reset()",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 329
+            }
+          },
+          {
+            "id": "D06-D1-16",
+            "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.RepeatingJob.Execute(IJobExecutionContext,CancellationToken)",
+            "kind": "added",
+            "target": {
+              "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+              "line": 334
+            }
+          },
+          {
+            "id": "D06-D1-17",
+            "symbol": "Quartz.Impl.AdoJobStore.AdoJobStoreBase.TriggeredJobComplete(IJobExecutionContext,SchedulerInstruction,IServiceProvider)",
+            "kind": "bodyChanged",
+            "kindDetail": "adds a `triggerDeleted` local set at all 3 DeleteTrigger call sites, and an early return that skips the by-entry-id DeleteFiredTrigger call when the trigger's own deletion already swept the row; also rewords a nearby line-comment",
+            "base": {
+              "path": "src/Quartz/Impl/AdoJobStore/AdoJobStoreBase.Completion.cs",
+              "line": 126
+            },
+            "target": {
+              "path": "src/Quartz/Impl/AdoJobStore/AdoJobStoreBase.Completion.cs",
+              "line": 126
+            }
+          }
         ],
-        "d2_cToCPrime_changes_ids": ["D06-D1-01"],
+        "d2_cToCPrime_changes_ids": [
+          "D06-D1-01"
+        ],
         "d2_note": "D2 = D1 minus every entry NOT listed above. Confirmed by diffing c->cPrime directly: only OneOffThroughputPostgresBenchmark.cs (+5/-2) changed between c and cPrime; OneOffFiringStatementCountSqliteTest.cs and AdoJobStoreBase.Completion.cs (123 insertions/7 deletions together) changed entirely between p and c.",
         "d2_exclusionCheckLines": [
-          { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "line": 112, "reason": "ACompletionThatDeletesItsTriggerDeletesTheFiredRowWithIt(), added p->c only, untouched between c and c'" },
-          { "path": "src/Quartz/Impl/AdoJobStore/AdoJobStoreBase.Completion.cs", "line": 126, "reason": "TriggeredJobComplete body rewrite, made entirely p->c, untouched between c and c'" }
+          {
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+            "line": 112,
+            "reason": "ACompletionThatDeletesItsTriggerDeletesTheFiredRowWithIt(), added p->c only, untouched between c and c'"
+          },
+          {
+            "path": "src/Quartz/Impl/AdoJobStore/AdoJobStoreBase.Completion.cs",
+            "line": 126,
+            "reason": "TriggeredJobComplete body rewrite, made entirely p->c, untouched between c and c'"
+          }
         ],
         "nonSymbolChange": [],
         "d3_resolve": {
           "reason": "no removed member in D1; D06-D1-01 (OneOffThroughputPostgresBenchmark.Profile) is first in (path ordinal, line) order but is attribute/remark-only (signatureChanged from the [Params(...)] change alone) with a byte-identical property-decl line base/target, so per CONVENTIONS.md 2026-09-25's D3 rule it is not D3-eligible (in-span text does not actually differ). The next entry in path order whose in-span declaration text genuinely differs is D06-D1-02 (CreateEmptyDatabase, bodyChanged: a `RepeatingJob.Reset();` statement was added inside the method body).",
           "symbol": "Quartz.Tests.Unit.Impl.AdoJobStore.OneOffFiringStatementCountSqliteTest.CreateEmptyDatabase()",
-          "base": { "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs", "startLine": 70, "endLine": 75, "sha256": "777441a35f34fdba08e09e79e499ee8d446a5d3a975616ed8320b06d7c8e86b2" }
+          "base": {
+            "path": "src/Quartz.Tests.Unit/Impl/AdoJobStore/OneOffFiringStatementCountSqliteTest.cs",
+            "startLine": 70,
+            "endLine": 75,
+            "sha256": "777441a35f34fdba08e09e79e499ee8d446a5d3a975616ed8320b06d7c8e86b2"
+          }
         },
-        "crossCheck": null,
+        "crossCheck": {
+          "reviewedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+          "reviewedAt": "2026-09-25",
+          "sampledItemIds": [
+            "D06-D1-05",
+            "D06-D1-08",
+            "D06-D1-10",
+            "D06-D1-11"
+          ],
+          "result": "ok",
+          "note": "All sampled D1 items for this pair verified correct against pinned-commit/base-commit source. D3 hash independently recomputed from base commit and matches stated sha256; D3 selection logic (path-ordinal order, first-removed-else-first-in-span-text-differs rule) independently re-derived and matches."
+        },
         "notes": "Adds a BatchOnly benchmark profile arm, a repeating-trigger test job and CountingSqliteDelegate override-counters to verify a fired-trigger-row-deletion optimization, and implements that optimization: AdoJobStoreBase.TriggeredJobComplete now skips the by-entry-id DeleteFiredTrigger statement when the trigger's own deletion (which sweeps by trigger key) already removed the row. D3 target changed from D06-D1-01 to D06-D1-02 in the 2026-09-25 CONVENTIONS.md revision (see d3_resolve.reason)."
       }
     ]
@@ -483,6 +2124,57 @@
     "diffItemCount": 98,
     "totalItemCount": 126,
     "sampleSizeMin": "max(10, ceil(0.25 * 126)) = 32",
-    "status": "not_yet_performed - left for a different session per TASK-027 spawn instructions ('교차 확인 기록 칸은 비워 둠'); every item's `crossCheck` field is null pending that pass."
+    "status": "performed 2026-09-25; errors found (see result) - per protocol this corpus answer set needs the author to fix the 16 identified line-number errors and then a fresh cross-check pass",
+    "executedBy": "qa-verifier (TASK-027 Phase C cross-check session, different session from the medium-quartznet author)",
+    "executedAt": "2026-09-25",
+    "sampleMethod": "All 126 item IDs from itemPopulation (navItemCount 28 + diffItemCount 98) were listed, sorted by StringComparer.Ordinal (C ordinal / byte-value string comparison of the ID strings themselves), then shuffled in place with the exact algorithm CorpusSyntaxTool's select-nav uses: `var rng = new Random(20260920); for (int i = n-1; i >= 1; i--) { int j = rng.Next(i+1); swap(sorted[i], sorted[j]); }`. The first ceil(0.25*126)=32 (>= the 10 minimum) elements of the shuffled order were taken as the sample. Computed with a throwaway .NET 9 console program (`dotnet run`) in the task scratchpad, not with CV or the runner. Full shuffled order and sample were captured to scratchpad files for reproducibility.",
+    "sampleIds": [
+      "D01-D1-07",
+      "D01-D1-15",
+      "D01-D1-16",
+      "D02-D1-08",
+      "D02-D1-12",
+      "D02-D1-14",
+      "D03-D1-01",
+      "D03-D1-05",
+      "D03-D1-08",
+      "D03-D1-11",
+      "D03-D1-16",
+      "D04-D1-01",
+      "D04-D1-02",
+      "D04-D1-05",
+      "D05-D1-03",
+      "D05-D1-05",
+      "D05-D1-12",
+      "D05-D1-15",
+      "D06-D1-05",
+      "D06-D1-08",
+      "D06-D1-10",
+      "D06-D1-11",
+      "NAV02-N3-S1",
+      "NAV02-N3-S3",
+      "NAV03-N1-1",
+      "NAV03-N3-S3",
+      "NAV03-N3-S9",
+      "NAV04-N3-S3",
+      "NAV05-N1-1",
+      "NAV05-N3-S1",
+      "NAV06-N1-1",
+      "NAV06-N3-S2"
+    ],
+    "sampleSize": 32,
+    "result": {
+      "itemsChecked": 32,
+      "itemsOk": 28,
+      "itemsError": 4,
+      "errorIds": [
+        "D05-D1-03",
+        "D05-D1-05",
+        "D05-D1-12",
+        "D05-D1-15"
+      ],
+      "errorSummary": "All 4 sample errors are in DIFF-05 and share one root cause: every D1 entry that targets build/Build.Release.cs (D05-D1-02 through D05-D1-17, 16 entries total, not just the 4 sampled) has a target.line value exactly 39 lines higher than the symbol's real line at commit cPrime (confirmed identical at c and at the pinned HEAD too, since the file is unchanged after this pair). This was found by an automated full re-check (not just the sample): every D1 base/target line in all 6 pairs (122 base/target checks) and every NAV N1/N3 line in all 6 targets (28 checks) was fetched from the exact commit via `git show <commit>:<path>` and checked for the symbol's simple name; the only failures anywhere in the corpus were these 16 build/Build.Release.cs entries. D05-D1-01 (the other file in this pair) and every other pair/target are unaffected.",
+      "protocolConsequence": "protocol.md R2-2's cross-check rule requires that if even one sampled item errors, the whole corpus answer set must be re-checked. This session therefore extended verification beyond the 32-item sample to a full automated position check of every DIFF D1 base/target line (122 checks) and every NAV N1/N3 line (28 checks) in medium-quartznet, plus a full manual re-derivation of the D3 selection logic and an independent SHA-256 recomputation of the D3 base-declaration hash for all 6 pairs and the N2 declaration hash for all 6 NAV targets. Outcome: the ONLY errors found anywhere are the 16 build/Build.Release.cs line-number errors in DIFF-05 (D05-D1-02 through D05-D1-17); every other line, hash, D2 set-membership decision, and D3 selection/hash in the file is correct. This session did not fix the errors (out of scope - data fixes are the author's/leader's job); see the report handed back to the coordinator for the full list with corrected line numbers."
+    }
   }
 }

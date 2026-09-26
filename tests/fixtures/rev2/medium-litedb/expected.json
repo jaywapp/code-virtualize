@@ -185,7 +185,7 @@
           "edit1": { "startLine": 64, "endLine": 77, "sha256": "952610396f7402c7713532f222c614305b84f2c6953550f5c2cf67b5596a5619" },
           "edit2": { "description": "first `{` on line 65; comment inserted immediately after it", "startLine": 64, "endLine": 78, "sha256": "6293cdc671c3875f9dca0b2892b59be5db1fc3fb25a35a4c25db2f0510a88de5" }
         },
-        "crossCheck": null
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledItemIds": ["NAV05-N1-1"], "result": "ok", "note": "Re-read StringScanner.cs:56 directly from the corpus clone; confirms `public string Scan(string pattern)`, matching the claimed 'overload Scan(string pattern) - not the target' note. NAV05-N1-1 is the only sampled item for this target." }
       },
       {
         "id": "NAV-06",
@@ -220,7 +220,7 @@
           "edit1": { "startLine": 41, "endLine": 63, "sha256": "a56c21402f70cb54b159b2a7619634a31679021f5e1f9ca3facec575b9c8a1b7" },
           "edit2": { "description": "first `{` on line 42; comment inserted immediately after it", "startLine": 41, "endLine": 64, "sha256": "68ad26b2db4cbfb41fa364805e303b5c838554352dd452720d60c98430f568f8" }
         },
-        "crossCheck": null
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledItemIds": ["NAV06-N3-S4", "NAV06-N3-S5", "NAV06-N3-S9", "NAV06-N3-S10"], "result": "ok", "note": "Re-read WalTransactionBoundary_Tests.cs lines 79/80/119/142 directly; each is `test.Recover(...)` with `test` a local WalTestDatabase declared exactly at the claimed line (56, 56, 95, 133 respectively). All 4 sampled static references confirmed correct." }
       }
     ]
   },
@@ -269,7 +269,7 @@
           "base": { "path": "LiteDB/Client/Shared/SharedEngine.cs", "startLine": 44, "endLine": 74, "sha256": "8ceeb257bbe17cc7cb0966d8f2ffa33f7ff1c602ff99f4258f246a77a10098dc" },
           "d3NotApplicable": false
         },
-        "crossCheck": null,
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledD1ItemIds": ["D01-D1-06", "D01-D1-12", "D01-D1-17", "D01-D1-20"], "sampleResult": "ok", "d3FullCensus": { "result": "ok", "selectionReverified": true, "hashRecomputed": true, "note": "Files 1-2 (Issue2965_Tests.cs, Issue2968_Tests.cs) and SharedEngine.cs's own first entry (SimulateOpenEngine, line 19) are all `added`; SharedEngine.OpenDatabase (line 44/47) is correctly the first entry with real base-vs-target text difference. Recomputed sha256 8ceeb257bbe17cc7cb0966d8f2ffa33f7ff1c602ff99f4258f246a77a10098dc from `p` blob lines 44-74: matches exactly." } },
         "notes": "Large refactor adding cooperative Rebuild()/exclusive-admission signalling plus 3 new Issue-repro test files. All D1 changes are either brand-new members or genuine body edits; no renames or removals in this pair."
       },
       {
@@ -305,7 +305,7 @@
           "base": { "path": "LiteDB/Engine/Services/IndexService.cs", "startLine": 309, "endLine": 344, "sha256": "3262edccc92e1ab5843ab7f1c576ab8e7658d2c04a8028bc4ce9c7b870e6a1d6" },
           "d3NotApplicable": false
         },
-        "crossCheck": null,
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledD1ItemIds": ["D02-D1-01", "D02-D1-05", "D02-D1-08", "D02-D1-09"], "sampledD3ResolveId": "DIFF-02-D3-resolve", "sampleResult": "ok", "d3FullCensus": { "result": "ok", "selectionReverified": true, "hashRecomputed": true, "note": "Files 1-2 (DropIndexReclamation_Tests.cs, FreePage_Tests.cs) are all `added`; IndexService.DropIndex (line 309) is correctly the first entry with real text difference. Recomputed sha256 3262edccc92e1ab5843ab7f1c576ab8e7658d2c04a8028bc4ce9c7b870e6a1d6 from `p` blob lines 309-344: matches exactly. Also confirmed FreePage_Tests.cs's `c`->`cPrime` diff is empty (file changed only p->c), consistent with D02-D1-08/09's d2Excluded:true." } },
         "notes": "DropIndex now reclaims sentinel-only head/tail index pages after deleting nodes; PersistDirtyPages gained a local var only (p->c, excluded from D2)."
       },
       {
@@ -383,7 +383,7 @@
           "base": { "path": "LiteDB.Tests/Issues/Issue2818_Tests.cs", "startLine": 14, "endLine": 93, "sha256": "ddf8240b87ae8a6ef2470ad511727f6e5cb23daee6826377d68a5c7953b17fdd" },
           "d3NotApplicable": false
         },
-        "crossCheck": null,
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledD1ItemIds": ["D03-D1-01", "D03-D1-03", "D03-D1-05", "D03-D1-07", "D03-D1-11", "D03-D1-15", "D03-D1-17", "D03-D1-18", "D03-D1-25", "D03-D1-30", "D03-D1-33", "D03-D1-36", "D03-D1-37", "D03-D1-42", "D03-D1-49"], "sampleResult": "ok", "d3FullCensus": { "result": "ok", "selectionReverified": true, "hashRecomputed": true, "note": "Files 1-5 (Issue2790ReaderLease_Tests.cs .. Issue2818ReaderStall_Tests.cs) are all `added`; Issue2818_Tests.GatedDurableFile (line 14, private->internal) is correctly the first entry with real text difference; re-confirmed the exact byte difference by reading line 14 in both p and c' blobs directly. Recomputed sha256 ddf8240b87ae8a6ef2470ad511727f6e5cb23daee6826377d68a5c7953b17fdd from `p` blob lines 14-93: matches exactly. This is the largest pair sampled (15 of 53 D1 entries, ~28%); all 15 confirmed correct including 2 signatureChanged field-type entries (D03-D1-25) and several bodyChanged HeaderPage.cs anchors whose base/target line numbers both differ due to earlier insertions in the same file." } },
         "notes": "Large concurrency refactor: HeaderPage gains a dedicated PublicationLock so collection-map reads/writes are consistently guarded instead of `lock(this)`; LockService's ReaderWriterLockSlim is replaced by a custom TransactionGate that supports owner-thread-scoped read-lock release (fixing cross-thread cursor disposal); TransactionService.Commit only takes the header lock across persist+confirm when the transaction has header callbacks. This is the largest of the 6 pairs (53 D1 / 21 D2 entries)."
       },
       {
@@ -471,7 +471,7 @@
           "base": { "path": "LiteDB.Tests/Issues/Issue2052DateBounds_Tests.cs", "startLine": 12, "endLine": 18, "sha256": "9b5febf877c8a43c049c3d97a51d5f686d39c2395ce0f03d085d2983c589564b" },
           "d3NotApplicable": false
         },
-        "crossCheck": null,
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledD1ItemIds": ["D04-D1-02", "D04-D1-04", "D04-D1-09", "D04-D1-15", "D04-D1-17", "D04-D1-18", "D04-D1-19", "D04-D1-22", "D04-D1-23", "D04-D1-28", "D04-D1-36", "D04-D1-38", "D04-D1-39", "D04-D1-48", "D04-D1-51", "D04-D1-52", "D04-D1-56", "D04-D1-61", "D04-D1-62"], "sampleResult": "ok", "d3FullCensus": { "result": "ok", "selectionReverified": true, "hashRecomputed": true, "note": "D04-D1-01 is the very first D1 entry (path-ordinal-first file, line 12) and is a `removed` rename target, so it is trivially D3 without needing to consider any other entry. Recomputed sha256 9b5febf877c8a43c049c3d97a51d5f686d39c2395ce0f03d085d2983c589564b from `p` blob lines 12-18: matches exactly. This is the largest pair by entry count (19 of 63 D1 entries sampled, ~30%); all 19 confirmed correct, including the 2 renamed-method entries' sibling ADDED counterparts (D04-D1-02/04) and 4 bodyChanged reader-method anchors (BsonReader.ReadElement, ByteReader.ReadDateTime, BufferSliceExtensions.ReadDateTime) whose base==target line (no shift, unlike DIFF-03's HeaderPage.cs cases)." } },
         "notes": "Fixes issue #2930/#19: BSON millisecond and index-tick DateTime deserialization now clamps out-of-range values to DateTime.MinValue/MaxValue instead of throwing (4 reader call sites) or silently overflowing (index-seek type-mismatch warning added via new IndexKeyTypeWarning + QueryExecutor.ExplainPlan, gated behind EXPLAIN so normal execution pays nothing extra). Both pre-existing #2052 tests were renamed to match the new clamping behavior (not merely reworded assertions - the InlineData values and assertion logic changed too), which is why this pair has 2 removed+2 added entries instead of 2 bodyChanged. Largest pair by entry count (63 D1 / 22 D2)."
       },
       {
@@ -515,7 +515,7 @@
           "base": { "path": "LiteDB/Client/Database/LiteQueryable.cs", "startLine": 411, "endLine": 426, "sha256": "a617e3051196f410420f51ee07d20366c86153f7277649ad39cd4b97d87dd0f0" },
           "d3NotApplicable": false
         },
-        "crossCheck": null,
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledD1ItemIds": ["D05-D1-04", "D05-D1-08", "D05-D1-10", "D05-D1-17"], "sampleResult": "ok", "d3FullCensus": { "result": "ok", "selectionReverified": true, "hashRecomputed": true, "note": "Files 1-2 (Issue2932_Tests.cs, Issue2933_Tests.cs) are all `added`; LiteQueryable<T>.Count (line 411) is correctly the first entry with real text difference. Recomputed sha256 a617e3051196f410420f51ee07d20366c86153f7277649ad39cd4b97d87dd0f0 from `p` blob lines 411-426: matches exactly." } },
         "notes": "Fixes #2932 (Count() overflow beyond Int32.MaxValue now throws OverflowException with a LongCount() hint, and COUNT(...) in expressions returns Int64 once the value exceeds Int32) and #2933 (DATEADD/DATEDIFF date-part matching now uses ToLowerInvariant instead of culture-sensitive ToLower, fixing Turkish-locale 'MINUTE' mismatches)."
       },
       {
@@ -551,7 +551,7 @@
           "base": { "path": "LiteDB/Document/Expression/Parser/BsonExpressionOperators.cs", "startLine": 278, "endLine": 303, "sha256": "de7a2bab1fbd83715689ef766c1ee5fa64803709dd392f9f0b4d4a761bd3b051" },
           "d3NotApplicable": false
         },
-        "crossCheck": null,
+        "crossCheck": { "verifiedBy": "qa-verifier cross-check (TASK-027 Phase C, 2026-09-25, independent session from the medium-litedb author)", "date": "2026-09-25", "sampledD1ItemIds": ["D06-D1-04", "D06-D1-11"], "sampleResult": "ok", "d3FullCensus": { "result": "ok", "selectionReverified": true, "hashRecomputed": true, "note": "Files 1-2 (Issue2928_Tests.cs, Issue2931_Tests.cs) are all `added`; BsonExpressionOperators.ARRAY_INDEX (line 278) is correctly the first entry with real text difference. Recomputed sha256 de7a2bab1fbd83715689ef766c1ee5fa64803709dd392f9f0b4d4a761bd3b051 from `p` blob lines 278-303: matches exactly. Also independently confirmed D06-D1-11's `rigth`->`right` parameter-name typo fix by reading Collation.cs:73 in both p and c'." } },
         "notes": "Smallest pair (11 D1 / 4 D2 entries). Fixes #2928 (ARRAY_INDEX's negative-index bound check `arr.Count > idx` could pass for a still-negative idx when |negative index| > array length; replaced with an explicit `idx >= 0 && idx < arr.Count`) and #2931 (Collation.Compare's 2nd parameter had a `rigth` typo, breaking C# named-argument call sites like `Compare(left: ..., right: ...)`)."
       }
     ]
@@ -562,6 +562,28 @@
     "totalItemCountExact": 214,
     "totalItemCountFormula": "sum over nav.targets of (len(n1_declarations)+len(n3_staticReferences)+len(n3_dynamicCandidates)+len(n3_unresolved)) + sum over diff.pairs of (len(d1_pToCPrime_changes) + 1 for d3_resolve)",
     "sampleSizeMin": "max(10, ceil(0.25 * 214)) = 54",
-    "status": "not_yet_performed - left for a different session per TASK-027 spawn instructions ('교차 확인 기록 칸은 비워 둠'); every item's `crossCheck` field is null pending that pass."
+    "status": "performed 2026-09-25 by an independent qa-verifier session (this task's author, the large-aspnetcore rev2 answer author, cross-checking medium-litedb per protocol.md R2-2 and TASK-027 Phase C). Zero errors found across the 54-item random sample, a full 6-pair D3 re-derivation + hash recomputation, and an independent re-scan of all 6 pairs' full diffs for missed attribute/XML-doc changes.",
+    "sampling": {
+      "method": "d3_resolve objects have no own `id` field, so each pair's was given a synthetic id `<pairId>-D3-resolve` (e.g. `DIFF-01-D3-resolve`) for ordinal sorting and shuffling purposes only (not written back into d3_resolve). All 214 ids (208 real + 6 synthetic) were sorted with C `string.CompareOrdinal` (byte-value ordinal), then shuffled with a small .NET 10 console program implementing Fisher-Yates exactly as benchmarks/corpora/tools/CorpusSyntaxTool/Program.cs:577-583 does it (`var random = new Random(20260920); for (int i = array.Length-1; i > 0; i--) { int j = random.Next(0, i+1); swap(array[i], array[j]); }`), then the first `max(10, ceil(0.25*214))=54` of the shuffled order were kept. Program source and full 214-id shuffled output saved under the task scratchpad (`...\\scratchpad\\task027-crosscheck-litedb\\Sampler.cs`, `all_ids.txt`, `shuffled_all.txt`, `sample_ids.txt`) for reproducibility; not committed to the repo.",
+      "seed": 20260920,
+      "sampleSize": 54,
+      "sampleIdsSorted": [
+        "D01-D1-06", "D01-D1-12", "D01-D1-17", "D01-D1-20",
+        "D02-D1-01", "D02-D1-05", "D02-D1-08", "D02-D1-09",
+        "D03-D1-01", "D03-D1-03", "D03-D1-05", "D03-D1-07", "D03-D1-11", "D03-D1-15", "D03-D1-17", "D03-D1-18", "D03-D1-25", "D03-D1-30", "D03-D1-33", "D03-D1-36", "D03-D1-37", "D03-D1-42", "D03-D1-49",
+        "D04-D1-02", "D04-D1-04", "D04-D1-09", "D04-D1-15", "D04-D1-17", "D04-D1-18", "D04-D1-19", "D04-D1-22", "D04-D1-23", "D04-D1-28", "D04-D1-36", "D04-D1-38", "D04-D1-39", "D04-D1-48", "D04-D1-51", "D04-D1-52", "D04-D1-56", "D04-D1-61", "D04-D1-62",
+        "D05-D1-04", "D05-D1-08", "D05-D1-10", "D05-D1-17",
+        "D06-D1-04", "D06-D1-11",
+        "DIFF-02-D3-resolve",
+        "NAV05-N1-1", "NAV06-N3-S4", "NAV06-N3-S5", "NAV06-N3-S9", "NAV06-N3-S10"
+      ]
+    },
+    "verificationMethod": "For every sampled `id`, read the exact stated `path`/`line` (or `startLine..endLine`) directly from `git show <commit>:<path>` at the corpus clone D:\\worktrees\\corpus\\medium-litedb (pinned commit confirmed via `git rev-parse HEAD`, clean working tree, `core.autocrlf=false`), independent of this file's own text and of any CV/runner output. Checked: the stated line's actual content matches the claimed symbol/kind; for N3 entries, the receiver's declared/inferred type (re-derived from the enclosing method, matching CONVENTIONS.md's N3 rule) matches the claimed `receiverType`; for D2Excluded flags, `git diff --numstat` between `c` and `cPrime` for the entry's file was independently re-run and compared to the `p`->`cPrime` numstat. Additionally (leader instruction, full census not sampling): for all 6 pairs' `d3_resolve`, independently re-derived the D3 selection by walking each pair's D1 list in (path ordinal, line) order per CONVENTIONS.md's D3 rule (first `removed`, else first non-`added` entry with real declaration-range text difference) and recomputed each `sha256` from the stated `base` blob with `sed -n 'start,endp' <file> | sed 's/\\r$//' | head -c -1 | sha256sum`. Additionally (leader instruction #2): independently re-scanned all 6 pairs' full `git diff -U0` output (not just the sampled subset) with `grep -E '^[+-]\\s*\\[|^[+-]\\s*///'` for attribute-line and XML-doc-comment changes not captured in D1, to check the author's 'zero attribute/remark changes' claim rather than trust it.",
+    "results": {
+      "sampleErrorCount": 0,
+      "d3CensusErrorCount": 0,
+      "attributeRemarkRescanErrorCount": 0,
+      "summary": "All 54 sampled items match the corpus exactly (symbol, kind, path, line, d2Excluded/d2 membership all confirmed correct). All 6 pairs' D3 selections are the correct first-eligible-member per CONVENTIONS.md's rule (verified by walking each pair's full path-ordered D1 list by hand: DIFF-01/02/05/06 correctly skip files 1-2 of pure `added` entries and land on the first genuine `bodyChanged`; DIFF-03 correctly skips files 1-5 of pure additions and lands on the first `signatureChanged` (private->internal); DIFF-04 correctly picks the very-first-entry `removed` rename target) and all 6 `sha256` hashes were recomputed independently and match byte-for-byte. The independent re-scan of all 6 pairs' full diffs for attribute-line (`^[+-]\\s*\\[`) and XML-doc (`^[+-]\\s*///`) changes found only: (a) attributes on brand-new (`added`-kind) declarations, already correctly excluded from needing a separate signatureChanged/remarkChanged entry since the whole declaration is new; (b) DIFF-04's 2 `[InlineData]` attribute changes, which belong to the already-modeled REMOVED+ADDED rename pair (D04-D1-01/02) per CONVENTIONS.md's rename rule, not a separate entry; (c) new `///` doc comments, individually traced to specific target lines and confirmed each one sits on a brand-new (`added`-kind) member (HeaderPage.PublicationLock, TransactionGate class, TransactionPages.HasCommitCallbacks, QueryExecutor.ExplainPlan, IndexKeyTypeWarning class, IndexKeyTypeWarning.GetFamily, DateExtensions.ToUtcDateTime), never a remark added/changed on a pre-existing member. No case of a same-name existing member's attribute or XML-doc changing alone (which would need a new signatureChanged/remarkChanged entry under the 2026-09-25 convention) was found anywhere in the 6 pairs. No corrections were made to this file's answer data; only `crossCheck`/`crossCheckPlan` fields were written, per this cross-check task's scope."
+    }
   }
 }
